@@ -1,11 +1,12 @@
 # Release pipeline for the Komm client.
 #
-# Tag flow (git tag v0.0.3 && git push --tags):
-#   1. jar        — sets the Maven version from the tag (the tag is the single
-#                   source of truth; app.properties' client.version is filtered
-#                   from it), builds the fat jar, creates the GitHub release
-#                   with the jar attached, and deploys it to the hub over SSH
-#                   (atomic: upload to a temp name, then rename).
+# Release flow (create a GitHub release with tag e.g. 0.0.3):
+#   1. jar        — sets the Maven version from the release tag (the tag is the
+#                   single source of truth; app.properties' client.version is
+#                   filtered from it; a leading "v" is tolerated and stripped),
+#                   builds the fat jar, attaches it to the release, and deploys
+#                   it to the hub over SSH (atomic: upload to a temp name, then
+#                   rename).
 #   2. installer / appimage — check out komm-launcher@main, bundle the exact
 #                   jar built in step 1 as the seed, and attach the resulting
 #                   Komm-Setup-<v>.exe / Komm-<v>-x86_64.AppImage to the SAME
@@ -13,7 +14,7 @@
 #                   are uploaded too so `releases/latest/download/...` links on
 #                   the hub site never change.
 #
-# Manual flow (Actions tab -> Run workflow, version = existing release e.g. 0.0.3):
+# Manual flow (Actions tab -> Run workflow, tag = existing release e.g. 0.0.3):
 #   Skips the jar build and hub deploy; rebuilds only the installers from the
 #   CURRENT komm-launcher main against that release's already-published jar and
 #   replaces the installer assets on it. Use this after launcher-only changes.
@@ -27,12 +28,12 @@
 name: Release
 
 on:
-  push:
-    tags: ["v*"]
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
-      version:
-        description: "Existing release version (e.g. 0.0.3) — rebuilds only the exe/AppImage from current launcher main and replaces them on that release"
+      tag:
+        description: "Existing release tag (e.g. 0.0.3) — rebuilds only the exe/AppImage from current launcher main and replaces them on that release"
         required: true
 
 permissions:
@@ -43,7 +44,7 @@ env:
 
 jobs:
   jar:
-    if: github.event_name == 'push'
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
     env:
       # Mirrored from secrets so the deploy step's `if` can test it — the
@@ -58,9 +59,13 @@ jobs:
           java-version: "21"
           cache: maven
 
-      - name: Resolve version from tag
+      - name: Resolve version from release tag
         id: v
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
       - name: Build fat jar (version from tag)
         run: |
@@ -74,14 +79,13 @@ jobs:
           path: target/komm-${{ steps.v.outputs.version }}.jar
           if-no-files-found: error
 
-      - name: Create GitHub release
+      - name: Attach jar to the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
+          gh release upload "${{ steps.v.outputs.tag }}" \
             "target/komm-${{ steps.v.outputs.version }}.jar" \
-            --title "Komm ${{ steps.v.outputs.version }}" \
-            --generate-notes
+            --clobber -R "$GITHUB_REPOSITORY"
 
       - name: Deploy jar to hub (atomic swap)
         if: ${{ env.HUB_SSH_HOST != '' }}
@@ -108,7 +112,7 @@ jobs:
   installer:
     name: Windows installer
     needs: jar
-    # Runs after a successful jar build (tag flow) or standalone when the jar
+    # Runs after a successful jar build (release flow) or standalone when the jar
     # job was skipped (manual installers-only flow).
     if: ${{ !cancelled() && (needs.jar.result == 'success' || needs.jar.result == 'skipped') }}
     runs-on: windows-latest
@@ -134,16 +138,16 @@ jobs:
       - name: Resolve version
         id: v
         run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
-            V="${GITHUB_REF_NAME#v}"
+          if [ "${{ github.event_name }}" = "release" ]; then
+            TAG="${{ github.event.release.tag_name }}"
           else
-            V="${{ inputs.version }}"
-            V="${V#v}"
+            TAG="${{ inputs.tag }}"
           fi
-          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
       - name: Get client jar (from this run)
-        if: github.event_name == 'push'
+        if: github.event_name == 'release'
         uses: actions/download-artifact@v4
         with:
           name: client-jar
@@ -152,7 +156,7 @@ jobs:
       - name: Get client jar (from existing release)
         if: github.event_name == 'workflow_dispatch'
         run: |
-          gh release download "v${{ steps.v.outputs.version }}" \
+          gh release download "${{ steps.v.outputs.tag }}" \
             --pattern "komm-${{ steps.v.outputs.version }}.jar" \
             --dir client-jar -R "$GITHUB_REPOSITORY"
 
@@ -169,7 +173,7 @@ jobs:
           V="${{ steps.v.outputs.version }}"
           # Stable alias so the hub site's releases/latest/download link never changes.
           cp "target/installer/Komm-Setup-$V.exe" "target/installer/Komm-Setup.exe"
-          gh release upload "v$V" \
+          gh release upload "${{ steps.v.outputs.tag }}" \
             "target/installer/Komm-Setup-$V.exe" \
             "target/installer/Komm-Setup.exe" \
             --clobber -R "$GITHUB_REPOSITORY"
@@ -198,16 +202,16 @@ jobs:
       - name: Resolve version
         id: v
         run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
-            V="${GITHUB_REF_NAME#v}"
+          if [ "${{ github.event_name }}" = "release" ]; then
+            TAG="${{ github.event.release.tag_name }}"
           else
-            V="${{ inputs.version }}"
-            V="${V#v}"
+            TAG="${{ inputs.tag }}"
           fi
-          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
       - name: Get client jar (from this run)
-        if: github.event_name == 'push'
+        if: github.event_name == 'release'
         uses: actions/download-artifact@v4
         with:
           name: client-jar
@@ -216,7 +220,7 @@ jobs:
       - name: Get client jar (from existing release)
         if: github.event_name == 'workflow_dispatch'
         run: |
-          gh release download "v${{ steps.v.outputs.version }}" \
+          gh release download "${{ steps.v.outputs.tag }}" \
             --pattern "komm-${{ steps.v.outputs.version }}.jar" \
             --dir client-jar -R "$GITHUB_REPOSITORY"
 
@@ -239,7 +243,7 @@ jobs:
           V="${{ steps.v.outputs.version }}"
           # Stable alias so the hub site's releases/latest/download link never changes.
           cp "target/appimage/Komm-$V-x86_64.AppImage" "target/appimage/Komm.AppImage"
-          gh release upload "v$V" \
+          gh release upload "${{ steps.v.outputs.tag }}" \
             "target/appimage/Komm-$V-x86_64.AppImage" \
             "target/appimage/Komm.AppImage" \
             --clobber -R "$GITHUB_REPOSITORY"
