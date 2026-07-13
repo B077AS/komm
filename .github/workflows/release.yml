@@ -1,0 +1,245 @@
+# Release pipeline for the Komm client.
+#
+# Tag flow (git tag v0.0.3 && git push --tags):
+#   1. jar        — sets the Maven version from the tag (the tag is the single
+#                   source of truth; app.properties' client.version is filtered
+#                   from it), builds the fat jar, creates the GitHub release
+#                   with the jar attached, and deploys it to the hub over SSH
+#                   (atomic: upload to a temp name, then rename).
+#   2. installer / appimage — check out komm-launcher@main, bundle the exact
+#                   jar built in step 1 as the seed, and attach the resulting
+#                   Komm-Setup-<v>.exe / Komm-<v>-x86_64.AppImage to the SAME
+#                   release. Stable-named aliases (Komm-Setup.exe, Komm.AppImage)
+#                   are uploaded too so `releases/latest/download/...` links on
+#                   the hub site never change.
+#
+# Manual flow (Actions tab -> Run workflow, version = existing release e.g. 0.0.3):
+#   Skips the jar build and hub deploy; rebuilds only the installers from the
+#   CURRENT komm-launcher main against that release's already-published jar and
+#   replaces the installer assets on it. Use this after launcher-only changes.
+#
+# Secrets:
+#   HUB_SSH_HOST / HUB_SSH_USER / HUB_SSH_KEY / HUB_CLIENT_JAR_PATH (+ optional
+#   HUB_SSH_PORT, default 22) — hub deploy; the step is skipped when HUB_SSH_HOST
+#   is unset. HUB_CLIENT_JAR_PATH is the absolute path of kommhub.client.jar.path.
+#   LAUNCHER_REPO_TOKEN (optional) — only needed if komm-launcher is private.
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Existing release version (e.g. 0.0.3) — rebuilds only the exe/AppImage from current launcher main and replaces them on that release"
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  LAUNCHER_REPO: B077AS/komm-launcher
+
+jobs:
+  jar:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    env:
+      # Mirrored from secrets so the deploy step's `if` can test it — the
+      # secrets context is not allowed in step-level if expressions.
+      HUB_SSH_HOST: ${{ secrets.HUB_SSH_HOST }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Resolve version from tag
+        id: v
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build fat jar (version from tag)
+        run: |
+          mvn -B versions:set -DnewVersion="${{ steps.v.outputs.version }}" -DgenerateBackupPoms=false
+          mvn -B clean package -Ppackage,prod
+
+      # Hands the exact released jar to the installer jobs of this run.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: client-jar
+          path: target/komm-${{ steps.v.outputs.version }}.jar
+          if-no-files-found: error
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            "target/komm-${{ steps.v.outputs.version }}.jar" \
+            --title "Komm ${{ steps.v.outputs.version }}" \
+            --generate-notes
+
+      - name: Deploy jar to hub (atomic swap)
+        if: ${{ env.HUB_SSH_HOST != '' }}
+        env:
+          HUB_SSH_PORT: ${{ secrets.HUB_SSH_PORT }}
+          HUB_SSH_USER: ${{ secrets.HUB_SSH_USER }}
+          HUB_SSH_KEY: ${{ secrets.HUB_SSH_KEY }}
+          HUB_CLIENT_JAR_PATH: ${{ secrets.HUB_CLIENT_JAR_PATH }}
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          PORT="${HUB_SSH_PORT:-22}"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$HUB_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "$PORT" "$HUB_SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          # Upload beside the live jar, then rename over it: clients polling
+          # /api/client/download can never see a half-written file.
+          scp -i ~/.ssh/deploy_key -P "$PORT" \
+            "target/komm-$VERSION.jar" \
+            "$HUB_SSH_USER@$HUB_SSH_HOST:$HUB_CLIENT_JAR_PATH.tmp"
+          ssh -i ~/.ssh/deploy_key -p "$PORT" "$HUB_SSH_USER@$HUB_SSH_HOST" \
+            "mv -f '$HUB_CLIENT_JAR_PATH.tmp' '$HUB_CLIENT_JAR_PATH'"
+
+  installer:
+    name: Windows installer
+    needs: jar
+    # Runs after a successful jar build (tag flow) or standalone when the jar
+    # job was skipped (manual installers-only flow).
+    if: ${{ !cancelled() && (needs.jar.result == 'success' || needs.jar.result == 'skipped') }}
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out komm-launcher (main)
+        uses: actions/checkout@v4
+        with:
+          repository: B077AS/komm-launcher
+          ref: main
+          token: ${{ secrets.LAUNCHER_REPO_TOKEN || github.token }}
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Resolve version
+        id: v
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            V="${GITHUB_REF_NAME#v}"
+          else
+            V="${{ inputs.version }}"
+            V="${V#v}"
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+
+      - name: Get client jar (from this run)
+        if: github.event_name == 'push'
+        uses: actions/download-artifact@v4
+        with:
+          name: client-jar
+          path: client-jar
+
+      - name: Get client jar (from existing release)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          gh release download "v${{ steps.v.outputs.version }}" \
+            --pattern "komm-${{ steps.v.outputs.version }}.jar" \
+            --dir client-jar -R "$GITHUB_REPOSITORY"
+
+      - name: Build installer
+        run: |
+          echo "Building installers from komm-launcher@$(git rev-parse HEAD)"
+          mvn -B clean package -Pinstaller,prod \
+            "-Dclient.version=${{ steps.v.outputs.version }}" \
+            "-Dclient.jar=${{ github.workspace }}\client-jar\komm-${{ steps.v.outputs.version }}.jar" \
+            "-Discc.path=C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+
+      - name: Upload installer to the client release
+        run: |
+          V="${{ steps.v.outputs.version }}"
+          # Stable alias so the hub site's releases/latest/download link never changes.
+          cp "target/installer/Komm-Setup-$V.exe" "target/installer/Komm-Setup.exe"
+          gh release upload "v$V" \
+            "target/installer/Komm-Setup-$V.exe" \
+            "target/installer/Komm-Setup.exe" \
+            --clobber -R "$GITHUB_REPOSITORY"
+
+  appimage:
+    name: Linux AppImage
+    needs: jar
+    if: ${{ !cancelled() && (needs.jar.result == 'success' || needs.jar.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out komm-launcher (main)
+        uses: actions/checkout@v4
+        with:
+          repository: B077AS/komm-launcher
+          ref: main
+          token: ${{ secrets.LAUNCHER_REPO_TOKEN || github.token }}
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Resolve version
+        id: v
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            V="${GITHUB_REF_NAME#v}"
+          else
+            V="${{ inputs.version }}"
+            V="${V#v}"
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+
+      - name: Get client jar (from this run)
+        if: github.event_name == 'push'
+        uses: actions/download-artifact@v4
+        with:
+          name: client-jar
+          path: client-jar
+
+      - name: Get client jar (from existing release)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          gh release download "v${{ steps.v.outputs.version }}" \
+            --pattern "komm-${{ steps.v.outputs.version }}.jar" \
+            --dir client-jar -R "$GITHUB_REPOSITORY"
+
+      - name: Install appimagetool
+        run: |
+          mkdir -p ~/.local/bin
+          curl -Lo ~/.local/bin/appimagetool \
+            https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x ~/.local/bin/appimagetool
+
+      - name: Build AppImage
+        run: |
+          echo "Building installers from komm-launcher@$(git rev-parse HEAD)"
+          mvn -B clean package -Pappimage,prod \
+            "-Dclient.version=${{ steps.v.outputs.version }}" \
+            "-Dclient.jar=$GITHUB_WORKSPACE/client-jar/komm-${{ steps.v.outputs.version }}.jar"
+
+      - name: Upload AppImage to the client release
+        run: |
+          V="${{ steps.v.outputs.version }}"
+          # Stable alias so the hub site's releases/latest/download link never changes.
+          cp "target/appimage/Komm-$V-x86_64.AppImage" "target/appimage/Komm.AppImage"
+          gh release upload "v$V" \
+            "target/appimage/Komm-$V-x86_64.AppImage" \
+            "target/appimage/Komm.AppImage" \
+            --clobber -R "$GITHUB_REPOSITORY"
