@@ -647,19 +647,35 @@ public class App extends Application {
     @Override
     public void stop() throws Exception {
         log.info("Application shutting down");
-        exitStreamFullscreen();
-        komm.ui.screenshare.StreamPopOutWindow.closeAll();
-        disconnectFromVoice();
-        stopWebRTC();
-        stopWebSocket();
-        GlobalHotkeyManager.getInstance().stop();
-        ServiceContainer.reset();
-        String refreshToken = services.hub().getTokenManager().getRefreshToken();
-        if (refreshToken != null) KommUtils.saveRefreshToken(refreshToken);
-        super.stop();
-        // Force-exit to kill non-daemon threads left by Grizzly (WebSocket transport),
-        // webrtc-java native threads, and jnativehook that survive explicit cleanup.
-        System.exit(0);
+        // Each step is isolated so a failure in one can never skip voice teardown or
+        // the final System.exit — otherwise a closed (Alt-F4) instance survives as a
+        // background process that keeps publishing mic audio to the voice channel.
+        try {
+            shutdownStep(App::exitStreamFullscreen, "exit stream fullscreen");
+            shutdownStep(komm.ui.screenshare.StreamPopOutWindow::closeAll, "close pop-out windows");
+            shutdownStep(App::disconnectFromVoice, "disconnect from voice");
+            shutdownStep(App::stopWebRTC, "stop WebRTC");
+            shutdownStep(App::stopWebSocket, "stop WebSocket");
+            shutdownStep(() -> GlobalHotkeyManager.getInstance().stop(), "stop global hotkeys");
+            shutdownStep(() -> {
+                String refreshToken = services.hub().getTokenManager().getRefreshToken();
+                if (refreshToken != null) KommUtils.saveRefreshToken(refreshToken);
+            }, "save refresh token");
+            shutdownStep(ServiceContainer::reset, "reset services");
+            super.stop();
+        } finally {
+            // Force-exit to kill non-daemon threads left by Grizzly (WebSocket transport),
+            // webrtc-java native threads, and jnativehook that survive explicit cleanup.
+            System.exit(0);
+        }
+    }
+
+    private static void shutdownStep(Runnable step, String name) {
+        try {
+            step.run();
+        } catch (Throwable t) {
+            log.warn("Shutdown step failed ({}): {}", name, t.toString());
+        }
     }
 
     public static void appStart(String[] args) {
