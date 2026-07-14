@@ -49,7 +49,7 @@ import java.util.UUID;
  */
 public class CreateChannelModal extends HBox {
 
-    private static final double MODAL_WIDTH = 850;
+    private static final double MODAL_WIDTH = 900;
     private static final double MODAL_HEIGHT = 580;
     private static final double NAV_WIDTH = 200;
 

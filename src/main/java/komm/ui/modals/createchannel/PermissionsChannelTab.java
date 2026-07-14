@@ -49,7 +49,9 @@ public class PermissionsChannelTab implements ChannelSettingsTab {
     private VBox permHeaderArea;
     private VBox permContentArea;
     private VBox permSelectedRoleBtn;
-    private int baseRoleNavItemCount = 0;
+    private VBox customRolesListBox;
+    private ScrollPane customRolesScrollPane;
+    private Label customRolesLabel;
 
     private ServerSummary.Role selectedPermRole = ServerSummary.Role.MEMBER;
     private UUID selectedCustomPermRoleId = null;
@@ -195,6 +197,7 @@ public class PermissionsChannelTab implements ChannelSettingsTab {
         this.pane = buildPane();
 
         if (ctx.isEditMode()) {
+            loadPermsService.runningProperty().addListener((obs, was, isRunning) -> ctx.refreshSaveButton());
             savePermsService.runningProperty().addListener((obs, was, isRunning) -> {
                 ctx.setSaving(isRunning);
                 ctx.refreshSaveButton();
@@ -241,9 +244,9 @@ public class PermissionsChannelTab implements ChannelSettingsTab {
 
     private VBox buildPane() {
         permRoleListBox = new VBox(2);
-        permRoleListBox.setPrefWidth(200);
-        permRoleListBox.setMinWidth(200);
-        permRoleListBox.setMaxWidth(200);
+        permRoleListBox.setPrefWidth(230);
+        permRoleListBox.setMinWidth(230);
+        permRoleListBox.setMaxWidth(230);
         permRoleListBox.setPadding(new Insets(8, 8, 8, 8));
 
         Label rolesLabel = new Label("ROLES");
@@ -268,7 +271,18 @@ public class PermissionsChannelTab implements ChannelSettingsTab {
             }
         }
 
-        baseRoleNavItemCount = permRoleListBox.getChildren().size();
+        customRolesLabel = new Label("CUSTOM ROLES");
+        customRolesLabel.setStyle("-fx-font-size: 10px; -fx-font-weight: bold;" +
+                "-fx-text-fill: -color-fg-subtle; -fx-padding: 8px 0 4px 10px;");
+
+        customRolesListBox = new VBox(2);
+        customRolesScrollPane = new ScrollPane(customRolesListBox);
+        customRolesScrollPane.setFitToWidth(true);
+        customRolesScrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        customRolesScrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        customRolesScrollPane.setStyle("-fx-background-color: transparent; -fx-background: transparent;");
+        customRolesScrollPane.setMinHeight(0);
+        VBox.setVgrow(customRolesScrollPane, Priority.ALWAYS);
 
         permHeaderArea = new VBox();
         permHeaderArea.setPadding(new Insets(12, 16, 0, 16));
@@ -302,24 +316,19 @@ public class PermissionsChannelTab implements ChannelSettingsTab {
 
     private void refreshCustomRoleNavItems() {
         if (permRoleListBox == null) return;
-        // Clear everything past the base role items
-        while (permRoleListBox.getChildren().size() > baseRoleNavItemCount)
-            permRoleListBox.getChildren().remove(baseRoleNavItemCount);
+        permRoleListBox.getChildren().removeAll(customRolesLabel, customRolesScrollPane);
+        customRolesListBox.getChildren().clear();
 
         List<komm.model.dto.summary.CustomRoleSummary> customRoles =
                 App.getPermissionManager().getCustomRoles();
         if (customRoles.isEmpty()) return;
 
-        Label customLabel = new Label("CUSTOM ROLES");
-        customLabel.setStyle("-fx-font-size: 10px; -fx-font-weight: bold;" +
-                "-fx-text-fill: -color-fg-subtle; -fx-padding: 8px 0 4px 10px;");
-        permRoleListBox.getChildren().add(customLabel);
-
         for (komm.model.dto.summary.CustomRoleSummary cr : customRoles) {
             VBox btn = buildCustomRoleNavItem(cr.getRoleName(), cr.getColor());
             btn.setOnMouseClicked(e -> selectCustomPermRole(cr.getRoleId(), btn));
-            permRoleListBox.getChildren().add(btn);
+            customRolesListBox.getChildren().add(btn);
         }
+        permRoleListBox.getChildren().addAll(customRolesLabel, customRolesScrollPane);
     }
 
     private int roleRank(ServerSummary.Role role) {
