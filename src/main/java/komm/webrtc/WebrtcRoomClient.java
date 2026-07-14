@@ -132,10 +132,27 @@ public class WebrtcRoomClient {
     private volatile Runnable onScreenShareStateChanged;
 
     private final CopyOnWriteArrayList<Runnable>     deviceListListeners    = new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<AudioTrack>   remoteAudioTracks      = new CopyOnWriteArrayList<>();
-    private final ConcurrentHashMap<AudioTrack, SoundboardReceiver> remoteSoundboardTracks = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<AudioTrack, UserVoiceReceiver> remoteUserMicReceivers = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<AudioTrack, UserVoiceReceiver> remoteScreenAudioReceivers = new ConcurrentHashMap<>();
+
+    /** Playback kind bound to a subscriber audio m-line. ADM = raw hardware fallback (no sink). */
+    private enum AudioSlotKind { MIC, SOUNDBOARD, SCREEN_AUDIO, ADM }
+
+    /**
+     * One subscriber audio m-line: the latest track wrapper and the sink playing it.
+     * Keyed by transceiver mid — NOT by AudioTrack object or track id — because
+     * webrtc-java hands out a fresh wrapper per onTrack (no equals/hashCode), and the
+     * native track id is frozen at first negotiation, so neither survives the SFU
+     * reusing an m-line when a user reconnects and re-publishes.
+     */
+    private record AudioSlot(AudioTrack track, AudioTrackSink sink, AudioSlotKind kind, UUID userId) {}
+    private final ConcurrentHashMap<String, AudioSlot> audioSlotsByMid = new ConcurrentHashMap<>();
+
+    /**
+     * Audio m-lines whose current track SID → participant mapping had not arrived yet
+     * when onTrack fired (the subscriber offer can beat the participant UPDATE when a
+     * user reconnects). Re-processed when the UPDATE lands; ADM fallback after 3s.
+     */
+    private final ConcurrentHashMap<String, AudioTrack> pendingAudioTracksByMid = new ConcurrentHashMap<>();
+
     /** userId → that user's screen-audio receiver. Active only while we are watching their stream. */
     private final ConcurrentHashMap<UUID, UserVoiceReceiver> userIdToScreenAudioReceiver = new ConcurrentHashMap<>();
     /** Users whose stream audio has been locally muted via the per-stream pill button. */
@@ -144,6 +161,12 @@ public class WebrtcRoomClient {
     private final ConcurrentHashMap<String, VideoTrack>     remoteVideoTracks = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, VideoTrackSink> pendingSinks       = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, String>         activeSinkByUser   = new ConcurrentHashMap<>();
+
+    /** LiveKit can send subscriber offers back-to-back; they must be applied one at a
+     *  time or the overlapping setRemoteDescription calls fail with wrong-state errors
+     *  and that renegotiation (i.e. someone's new track) is silently lost. */
+    private final java.util.ArrayDeque<RTCSessionDescription> subscriberOfferQueue = new java.util.ArrayDeque<>();
+    private boolean subscriberOfferInFlight = false; // guarded by subscriberOfferQueue
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -296,16 +319,7 @@ public class WebrtcRoomClient {
         // Tear down any existing session before setting up the new one.
         // This handles channel switches where disconnectFromChannel() was not
         // called explicitly (e.g. server-forced move to another channel).
-        remoteSoundboardTracks.forEach((track, receiver) -> { track.removeSink(receiver); receiver.close(); });
-        remoteSoundboardTracks.clear();
-        remoteUserMicReceivers.forEach((track, receiver) -> { track.removeSink(receiver); receiver.close(); });
-        remoteUserMicReceivers.clear();
-        remoteScreenAudioReceivers.forEach((track, receiver) -> { track.removeSink(receiver); receiver.close(); });
-        remoteScreenAudioReceivers.clear();
-        userIdToScreenAudioReceiver.clear();
-        mutedStreamAudioUsers.clear();
-        userIdToMicReceiver.clear();
-        remoteAudioTracks.clear();
+        clearRemoteAudio();
         pendingSinks.clear();
         activeSinkByUser.clear();
         remoteVideoTracks.clear();
@@ -348,25 +362,41 @@ public class WebrtcRoomClient {
 
         livekitSignaling = new LiveKitSignalingClient();
 
+        // Wait for all three tracks to be acknowledged before creating the publisher offer,
+        // so all are included in the initial SDP.
+        java.util.Set<String> publishedCids = java.util.Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap<>());
+        java.util.concurrent.atomic.AtomicBoolean publisherOfferSent = new java.util.concurrent.atomic.AtomicBoolean(false);
+        LiveKitSignalingClient signalingRef = livekitSignaling;
+
         livekitSignaling.setOnJoined(() -> {
             log.info("[Voice] LiveKit join complete — sending AddTrackRequests (mic + soundboard)");
-            livekitSignaling.sendAddTrackRequest(AUDIO_TRACK_CID, "microphone",
+            signalingRef.sendAddTrackRequest(AUDIO_TRACK_CID, "microphone",
                     LivekitModels.TrackType.AUDIO, LivekitModels.TrackSource.MICROPHONE);
-            livekitSignaling.sendAddTrackRequest(SOUNDBOARD_TRACK_CID, "soundboard",
+            signalingRef.sendAddTrackRequest(SOUNDBOARD_TRACK_CID, "soundboard",
                     LivekitModels.TrackType.AUDIO, LivekitModels.TrackSource.MICROPHONE);
-            livekitSignaling.sendAddTrackRequest(SCREEN_AUDIO_TRACK_CID, "screen_audio",
+            signalingRef.sendAddTrackRequest(SCREEN_AUDIO_TRACK_CID, "screen_audio",
                     LivekitModels.TrackType.AUDIO, LivekitModels.TrackSource.SCREEN_SHARE_AUDIO);
+
+            // Watchdog: if a TRACK_PUBLISHED ack is lost (e.g. it races the SFU cleaning
+            // up a kicked duplicate session after an unclean reconnect), the all-acks
+            // gate below never fires and this user would publish NOTHING — everyone else
+            // can't hear them even though they hear everyone. Send the offer anyway.
+            Thread.ofVirtual().start(() -> {
+                try { Thread.sleep(5000); } catch (InterruptedException e) { return; }
+                if (livekitSignaling == signalingRef && publisherOfferSent.compareAndSet(false, true)) {
+                    log.warn("[Voice] Track publish acks incomplete after 5s (got {}) — sending publisher offer anyway",
+                            publishedCids);
+                    createAndSendPublisherOffer();
+                }
+            });
         });
 
-        // Wait for both tracks to be acknowledged before creating the publisher offer,
-        // so both are included in the initial SDP.
-        java.util.Set<String> publishedCids = java.util.Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap<>());
         livekitSignaling.setOnTrackPublished(cid -> {
             publishedCids.add(cid);
             if (publishedCids.containsAll(java.util.Set.of(
                     AUDIO_TRACK_CID, SOUNDBOARD_TRACK_CID, SCREEN_AUDIO_TRACK_CID))) {
-                livekitSignaling.setOnTrackPublished(null); // one-shot: prevents spurious re-trigger on screen0 ack
-                createAndSendPublisherOffer();
+                signalingRef.setOnTrackPublished(null); // one-shot: prevents spurious re-trigger on screen0 ack
+                if (publisherOfferSent.compareAndSet(false, true)) createAndSendPublisherOffer();
             }
         });
 
@@ -394,6 +424,20 @@ public class WebrtcRoomClient {
         });
 
         livekitSignaling.setOnError(err -> log.error("[LiveKit] Signaling error: {}", err));
+
+        // A participant UPDATE just landed — re-process any audio m-lines that arrived
+        // before their track SID → participant mapping (see handleRemoteAudioTrack).
+        livekitSignaling.setOnParticipantsUpdated(() -> pendingAudioTracksByMid.forEach((mid, t) -> {
+            LiveKitSignalingClient s = livekitSignaling;
+            if (s == null) return;
+            String sid = s.getTrackSidForMid(mid);
+            if (sid == null) sid = t.getId();
+            boolean resolvable = s.getTrackParticipantId(sid) != null
+                    || "soundboard".equals(s.getTrackName(sid));
+            if (resolvable && pendingAudioTracksByMid.remove(mid) != null) {
+                handleRemoteAudioTrack(mid, t, false);
+            }
+        }));
 
         livekitSignaling.liveKitConnect(livekitUrl, token);
 
@@ -442,15 +486,7 @@ public class WebrtcRoomClient {
             // Disconnect the soundboard WebRTC publish path before tearing down the PC.
             audioPipeline.getSoundboardMixer().setPublishCallback(null);
         }
-        remoteSoundboardTracks.forEach((track, receiver) -> { track.removeSink(receiver); receiver.close(); });
-        remoteSoundboardTracks.clear();
-        remoteUserMicReceivers.forEach((track, receiver) -> { track.removeSink(receiver); receiver.close(); });
-        remoteUserMicReceivers.clear();
-        remoteScreenAudioReceivers.forEach((track, receiver) -> { track.removeSink(receiver); receiver.close(); });
-        remoteScreenAudioReceivers.clear();
-        userIdToScreenAudioReceiver.clear();
-        mutedStreamAudioUsers.clear();
-        userIdToMicReceiver.clear();
+        clearRemoteAudio();
 
         // Detach remote video sinks
         pendingSinks.clear();
@@ -490,8 +526,6 @@ public class WebrtcRoomClient {
         // pattern already used in changeOutputDevice().
         try { audioDeviceModule.stopPlayout(); } catch (Throwable ignored) {}
         try { audioDeviceModule.initPlayout(); } catch (Throwable ignored) {}
-
-        remoteAudioTracks.clear();
 
         Runnable cb = onConnectionStateChanged;
         if (cb != null) cb.run();
@@ -629,29 +663,63 @@ public class WebrtcRoomClient {
     }
 
     private void handleSubscriberOffer(RTCSessionDescription offer) {
-        if (subscriberPc == null) return;
-        subscriberPc.setRemoteDescription(offer, new SetSessionDescriptionObserver() {
+        // Serialize offers: LiveKit sends one per subscription change and they can
+        // arrive back-to-back (e.g. a user rejoining = old tracks removed + three new
+        // tracks published). Overlapping setRemoteDescription/createAnswer cycles fail
+        // with wrong-state errors and the lost renegotiation means someone's new track
+        // never plays ("I can hear them but they can't hear me").
+        synchronized (subscriberOfferQueue) {
+            subscriberOfferQueue.add(offer);
+            if (subscriberOfferInFlight) return;
+            subscriberOfferInFlight = true;
+        }
+        processNextSubscriberOffer();
+    }
+
+    private void processNextSubscriberOffer() {
+        RTCSessionDescription offer;
+        synchronized (subscriberOfferQueue) {
+            offer = subscriberOfferQueue.poll();
+            if (offer == null) {
+                subscriberOfferInFlight = false;
+                return;
+            }
+        }
+        RTCPeerConnection pc = subscriberPc;
+        if (pc == null) {
+            synchronized (subscriberOfferQueue) {
+                subscriberOfferQueue.clear();
+                subscriberOfferInFlight = false;
+            }
+            return;
+        }
+        pc.setRemoteDescription(offer, new SetSessionDescriptionObserver() {
             @Override
             public void onSuccess() {
-                subscriberPc.createAnswer(new RTCAnswerOptions(), new CreateSessionDescriptionObserver() {
+                pc.createAnswer(new RTCAnswerOptions(), new CreateSessionDescriptionObserver() {
                     @Override
                     public void onSuccess(RTCSessionDescription answer) {
-                        subscriberPc.setLocalDescription(answer, new SetSessionDescriptionObserver() {
+                        pc.setLocalDescription(answer, new SetSessionDescriptionObserver() {
                             @Override public void onSuccess() {
-                                livekitSignaling.sendSubscriberAnswer(answer);
+                                LiveKitSignalingClient s = livekitSignaling;
+                                if (s != null) s.sendSubscriberAnswer(answer);
+                                processNextSubscriberOffer();
                             }
                             @Override public void onFailure(String e) {
                                 log.error("[Subscriber] setLocalDescription (answer) failed: {}", e);
+                                processNextSubscriberOffer();
                             }
                         });
                     }
                     @Override public void onFailure(String e) {
                         log.error("[Subscriber] createAnswer failed: {}", e);
+                        processNextSubscriberOffer();
                     }
                 });
             }
             @Override public void onFailure(String e) {
                 log.error("[Subscriber] setRemoteDescription failed: {}", e);
+                processNextSubscriberOffer();
             }
         });
     }
@@ -687,76 +755,18 @@ public class WebrtcRoomClient {
         }
         @Override public void onTrack(RTCRtpTransceiver transceiver) {
             MediaStreamTrack track = transceiver.getReceiver().getTrack();
-            log.debug("[Subscriber] onTrack: kind={} id={}", track.getKind(), track.getId());
+            String mid = transceiver.getMid();
+            log.debug("[Subscriber] onTrack: kind={} mid={} id={}", track.getKind(), mid, track.getId());
 
             if (track instanceof AudioTrack remoteTrack) {
-                String trackName = livekitSignaling != null
-                        ? livekitSignaling.getTrackName(remoteTrack.getId()) : null;
-                if ("soundboard".equals(trackName)) {
-                    // Play soundboard audio through the WebRTC track just like mic audio —
-                    // this keeps all listeners in perfect sync with the sender's real-time
-                    // stream. The sender hears their own sound locally via SoundboardMixer
-                    // (LiveKit never echoes a publisher's own tracks back to them).
-                    SoundboardReceiver receiver = new SoundboardReceiver(
-                            UserSettings.getInstance().getSoundboardVolume(),
-                            UserSettings.getInstance().getOutputDevice());
-                    if (speakerMuted) receiver.setActive(false);
-                    remoteTrack.addSink(receiver);
-                    remoteTrack.setEnabled(false); // ADM is bypassed; sink handles scaled playback
-                    remoteSoundboardTracks.put(remoteTrack, receiver);
-                    log.info("[Subscriber] Remote soundboard track connected: {}", remoteTrack.getId());
-                } else if ("screen_audio".equals(trackName)) {
-                    // System audio from a remote user's full-screen share. Like the video stream,
-                    // this only plays while we are actually WATCHING that user's stream — it stays
-                    // muted for channel members who haven't opened the stream. Activated/deactivated
-                    // by subscribeToRemoteVideo / unsubscribeRemoteVideo.
-                    String identity = livekitSignaling != null
-                            ? livekitSignaling.getTrackParticipantId(remoteTrack.getId()) : null;
-                    UUID participantId = null;
-                    if (identity != null) {
-                        try { participantId = UUID.fromString(identity); } catch (IllegalArgumentException ignored) {}
-                    }
-                    boolean watching = identity != null && pendingSinks.containsKey(identity);
-                    boolean streamMuted = participantId != null && mutedStreamAudioUsers.contains(participantId);
-                    float savedStreamVol = participantId != null
-                            ? UserSettings.getInstance().getStreamVolume(participantId) : 1.0f;
-                    UserVoiceReceiver receiver = new UserVoiceReceiver(
-                            savedStreamVol, UserSettings.getInstance().getOutputDevice());
-                    receiver.setActive(watching && !streamMuted);
-                    remoteTrack.addSink(receiver);
-                    remoteTrack.setEnabled(false); // ADM bypassed; sink handles playback
-                    remoteScreenAudioReceivers.put(remoteTrack, receiver);
-                    if (participantId != null) userIdToScreenAudioReceiver.put(participantId, receiver);
-                    log.info("[Subscriber] Remote screen-audio track connected: userId={} watching={}",
-                            participantId, watching);
-                } else {
-                    // Route mic track through UserVoiceReceiver for per-user volume control.
-                    String identity = livekitSignaling != null
-                            ? livekitSignaling.getTrackParticipantId(remoteTrack.getId()) : null;
-                    UUID participantId = null;
-                    if (identity != null) {
-                        try { participantId = UUID.fromString(identity); } catch (IllegalArgumentException ignored) {}
-                    }
-                    if (participantId != null) {
-                        float savedVol = UserSettings.getInstance().getUserVolume(participantId);
-                        UserVoiceReceiver receiver = new UserVoiceReceiver(
-                                savedVol, UserSettings.getInstance().getOutputDevice());
-                        if (speakerMuted) receiver.setActive(false);
-                        remoteTrack.addSink(receiver);
-                        remoteTrack.setEnabled(false); // ADM bypassed; sink handles scaled playback
-                        remoteUserMicReceivers.put(remoteTrack, receiver);
-                        userIdToMicReceiver.put(participantId, receiver);
-                        log.info("[Subscriber] Remote mic track connected: userId={} volume={}", participantId, savedVol);
-                    } else {
-                        // Fallback when participant mapping is unavailable: let the hardware ADM handle it.
-                        remoteTrack.setEnabled(!speakerMuted);
-                        log.warn("[Subscriber] Remote mic track has no participant mapping, using ADM: {}", remoteTrack.getId());
-                    }
-                    remoteAudioTracks.add(remoteTrack);
-                }
+                handleRemoteAudioTrack(mid != null ? mid : "track:" + remoteTrack.getId(), remoteTrack, false);
 
             } else if (track instanceof VideoTrack videoTrack) {
-                String trackId = videoTrack.getId();
+                // Prefer the SID negotiated on this m-line: track.getId() goes stale when
+                // the SFU reuses the m-line for a re-published stream.
+                String sidForMid = livekitSignaling != null && mid != null
+                        ? livekitSignaling.getTrackSidForMid(mid) : null;
+                String trackId = sidForMid != null ? sidForMid : videoTrack.getId();
                 remoteVideoTracks.put(trackId, videoTrack);
                 log.info("[Subscriber] Remote video track arrived: id={}", trackId);
 
@@ -790,6 +800,170 @@ public class WebrtcRoomClient {
         @Override public void onAddTrack(RTCRtpReceiver r, MediaStream[] s) {}
     }
 
+    // ── Remote audio routing ──────────────────────────────────────────────────
+
+    /**
+     * Classifies the audio track on a subscriber m-line (soundboard / screen audio /
+     * mic) and attaches the appropriate volume-controlled receiver, replacing whatever
+     * receiver the m-line previously had (m-lines get reused by the SFU when a user
+     * reconnects and re-publishes — leaving the old receiver attached plays the voice
+     * doubled).
+     *
+     * The current track SID is resolved via mid → msid from the latest subscriber
+     * offer, never via remoteTrack.getId() (frozen at first negotiation, goes stale on
+     * m-line reuse). The SID → participant mapping arrives over the signal WebSocket
+     * (JOIN / participant UPDATE) and can land after the track does; in that case the
+     * m-line is parked in {@link #pendingAudioTracksByMid} and re-processed once the
+     * mapping arrives, so the listener's saved per-user volume is always applied.
+     *
+     * @param allowUnmapped when true (timeout fallback), an unmappable track is played
+     *                      through the hardware ADM instead of being parked again.
+     */
+    private void handleRemoteAudioTrack(String mid, AudioTrack remoteTrack, boolean allowUnmapped) {
+        LiveKitSignalingClient signaling = livekitSignaling;
+        String trackSid = signaling != null ? signaling.getTrackSidForMid(mid) : null;
+        if (trackSid == null) trackSid = remoteTrack.getId();
+        String trackName = signaling != null ? signaling.getTrackName(trackSid) : null;
+        String identity  = signaling != null ? signaling.getTrackParticipantId(trackSid) : null;
+
+        if (identity == null && !"soundboard".equals(trackName) && !allowUnmapped) {
+            // Mapping hasn't arrived yet — park the m-line until the participant UPDATE
+            // lands. If it still has a receiver from its previous track, keep playing
+            // through it (almost always the same user re-publishing); otherwise keep the
+            // track out of the ADM so nothing blasts at 100% while we wait. A timeout
+            // guards against the mapping never arriving so audio is never lost.
+            AudioSlot existing = audioSlotsByMid.get(mid);
+            if (existing == null || existing.sink() == null) remoteTrack.setEnabled(false);
+            pendingAudioTracksByMid.put(mid, remoteTrack);
+            log.info("[Subscriber] Audio m-line {} (sid={}) has no participant mapping yet — deferring", mid, trackSid);
+            Thread.ofVirtual().start(() -> {
+                try { Thread.sleep(3000); } catch (InterruptedException e) { return; }
+                AudioTrack pending = pendingAudioTracksByMid.remove(mid);
+                if (pending != null) {
+                    log.warn("[Subscriber] Participant mapping for m-line {} never arrived — falling back", mid);
+                    handleRemoteAudioTrack(mid, pending, true);
+                }
+            });
+            return;
+        }
+
+        UUID participantId = null;
+        if (identity != null) {
+            try { participantId = UUID.fromString(identity); } catch (IllegalArgumentException ignored) {}
+        }
+
+        AudioSlot newSlot;
+        if ("soundboard".equals(trackName)) {
+            // Play soundboard audio through the WebRTC track just like mic audio —
+            // this keeps all listeners in perfect sync with the sender's real-time
+            // stream. The sender hears their own sound locally via SoundboardMixer
+            // (LiveKit never echoes a publisher's own tracks back to them).
+            SoundboardReceiver receiver = new SoundboardReceiver(
+                    UserSettings.getInstance().getSoundboardVolume(),
+                    UserSettings.getInstance().getOutputDevice());
+            if (speakerMuted) receiver.setActive(false);
+            remoteTrack.addSink(receiver);
+            remoteTrack.setEnabled(false); // ADM is bypassed; sink handles scaled playback
+            newSlot = new AudioSlot(remoteTrack, receiver, AudioSlotKind.SOUNDBOARD, participantId);
+            log.info("[Subscriber] Remote soundboard track connected: mid={} sid={}", mid, trackSid);
+        } else if ("screen_audio".equals(trackName)) {
+            // System audio from a remote user's full-screen share. Like the video stream,
+            // this only plays while we are actually WATCHING that user's stream — it stays
+            // muted for channel members who haven't opened the stream. Activated/deactivated
+            // by subscribeToRemoteVideo / unsubscribeRemoteVideo.
+            boolean watching = identity != null && pendingSinks.containsKey(identity);
+            boolean streamMuted = participantId != null && mutedStreamAudioUsers.contains(participantId);
+            float savedStreamVol = participantId != null
+                    ? UserSettings.getInstance().getStreamVolume(participantId) : 1.0f;
+            UserVoiceReceiver receiver = new UserVoiceReceiver(
+                    savedStreamVol, UserSettings.getInstance().getOutputDevice());
+            receiver.setActive(watching && !streamMuted);
+            remoteTrack.addSink(receiver);
+            remoteTrack.setEnabled(false); // ADM bypassed; sink handles playback
+            if (participantId != null) {
+                UserVoiceReceiver old = userIdToScreenAudioReceiver.put(participantId, receiver);
+                closeReplacedUserReceiver(old, receiver);
+            }
+            newSlot = new AudioSlot(remoteTrack, receiver, AudioSlotKind.SCREEN_AUDIO, participantId);
+            log.info("[Subscriber] Remote screen-audio track connected: mid={} userId={} watching={}",
+                    mid, participantId, watching);
+        } else if (participantId != null) {
+            // Route mic track through UserVoiceReceiver for per-user volume control.
+            float savedVol = UserSettings.getInstance().getUserVolume(participantId);
+            UserVoiceReceiver receiver = new UserVoiceReceiver(
+                    savedVol, UserSettings.getInstance().getOutputDevice());
+            if (speakerMuted) receiver.setActive(false);
+            remoteTrack.addSink(receiver);
+            remoteTrack.setEnabled(false); // ADM bypassed; sink handles scaled playback
+            UserVoiceReceiver old = userIdToMicReceiver.put(participantId, receiver);
+            closeReplacedUserReceiver(old, receiver);
+            newSlot = new AudioSlot(remoteTrack, receiver, AudioSlotKind.MIC, participantId);
+            log.info("[Subscriber] Remote mic track connected: mid={} userId={} volume={}",
+                    mid, participantId, savedVol);
+        } else {
+            AudioSlot existing = audioSlotsByMid.get(mid);
+            if (existing != null && existing.sink() != null) {
+                // Reused m-line that still has a volume-controlled receiver — keep it
+                // rather than double-playing the track through the ADM at 100%.
+                log.warn("[Subscriber] Unmapped audio m-line {} already has a receiver — keeping it", mid);
+                return;
+            }
+            // Fallback when participant mapping is unavailable: let the hardware ADM handle it.
+            remoteTrack.setEnabled(!speakerMuted);
+            newSlot = new AudioSlot(remoteTrack, null, AudioSlotKind.ADM, null);
+            log.warn("[Subscriber] Audio m-line {} has no participant mapping, using ADM: sid={}", mid, trackSid);
+        }
+
+        AudioSlot prev = audioSlotsByMid.put(mid, newSlot);
+        if (prev != null && prev.sink() != null && prev.sink() != newSlot.sink()) {
+            // The m-line's previous receiver (from before the reconnect) must be
+            // detached or both would play at once — the "doubled voice" bug.
+            closeSlotSink(prev);
+            if (prev.sink() instanceof UserVoiceReceiver uvr) {
+                userIdToMicReceiver.values().remove(uvr);
+                userIdToScreenAudioReceiver.values().remove(uvr);
+            }
+        }
+    }
+
+    /** Detaches and closes the sink of an audio slot. Safe on any thread; idempotent. */
+    private void closeSlotSink(AudioSlot slot) {
+        if (slot == null || slot.sink() == null) return;
+        try { slot.track().removeSink(slot.sink()); } catch (Throwable ignored) {}
+        if (slot.sink() instanceof AutoCloseable c) {
+            try { c.close(); } catch (Exception ignored) {}
+        }
+    }
+
+    /**
+     * Closes the receiver a user's previous connection left behind on another m-line
+     * (its track is dead after a reconnect) and drops that slot, so setUserVolume &co.
+     * never target a stale sink and the dead line is freed.
+     */
+    private void closeReplacedUserReceiver(UserVoiceReceiver old, UserVoiceReceiver current) {
+        if (old == null || old == current) return;
+        audioSlotsByMid.entrySet().removeIf(e -> {
+            if (e.getValue().sink() != old) return false;
+            closeSlotSink(e.getValue());
+            return true;
+        });
+        old.close(); // in case it was not registered in any slot
+    }
+
+    /** Tears down all subscriber audio playback state (receivers, slots, userId maps). */
+    private void clearRemoteAudio() {
+        audioSlotsByMid.values().forEach(this::closeSlotSink);
+        audioSlotsByMid.clear();
+        pendingAudioTracksByMid.clear();
+        userIdToScreenAudioReceiver.clear();
+        userIdToMicReceiver.clear();
+        mutedStreamAudioUsers.clear();
+        synchronized (subscriberOfferQueue) {
+            subscriberOfferQueue.clear();
+            subscriberOfferInFlight = false;
+        }
+    }
+
     // ── Remote video helpers ──────────────────────────────────────────────────
 
     private void attachSink(String userId, String trackId, VideoTrack track, VideoTrackSink sink) {
@@ -813,15 +987,14 @@ public class WebrtcRoomClient {
 
     public void setSpeakerMuted(boolean muted) {
         this.speakerMuted = muted;
-        for (AudioTrack track : remoteAudioTracks) {
-            UserVoiceReceiver micReceiver = remoteUserMicReceivers.get(track);
-            if (micReceiver != null) {
-                micReceiver.setActive(!muted);
-            } else {
-                track.setEnabled(!muted);
+        audioSlotsByMid.values().forEach(slot -> {
+            switch (slot.kind()) {
+                case MIC          -> ((UserVoiceReceiver) slot.sink()).setActive(!muted);
+                case SOUNDBOARD   -> ((SoundboardReceiver) slot.sink()).setActive(!muted);
+                case ADM          -> slot.track().setEnabled(!muted);
+                case SCREEN_AUDIO -> {} // watch-state controlled, independent of deafen
             }
-        }
-        remoteSoundboardTracks.values().forEach(r -> r.setActive(!muted));
+        });
         if (audioPipeline != null) audioPipeline.getSoundboardMixer().setMonitorMuted(muted);
     }
 
@@ -880,7 +1053,9 @@ public class WebrtcRoomClient {
     public void setSoundboardVolume(float volume) {
         float v = Math.max(0f, Math.min(1.0f, volume));
         if (audioPipeline != null) audioPipeline.getSoundboardMixer().setVolume(v);
-        remoteSoundboardTracks.values().forEach(r -> r.setVolume(v));
+        audioSlotsByMid.values().forEach(slot -> {
+            if (slot.sink() instanceof SoundboardReceiver r) r.setVolume(v);
+        });
         UserSettings.getInstance().setSoundboardVolume(v);
     }
 
@@ -941,9 +1116,10 @@ public class WebrtcRoomClient {
         currentOutputDeviceName = deviceName;
         UserSettings.getInstance().setOutputDevice(deviceName);
         if (audioPipeline != null) audioPipeline.getSoundboardMixer().setOutputDevice(deviceName);
-        remoteSoundboardTracks.values().forEach(r -> r.setOutputDevice(deviceName));
-        remoteUserMicReceivers.values().forEach(r -> r.setOutputDevice(deviceName));
-        remoteScreenAudioReceivers.values().forEach(r -> r.setOutputDevice(deviceName));
+        audioSlotsByMid.values().forEach(slot -> {
+            if (slot.sink() instanceof SoundboardReceiver r)      r.setOutputDevice(deviceName);
+            else if (slot.sink() instanceof UserVoiceReceiver r)  r.setOutputDevice(deviceName);
+        });
         if (audioDeviceModule == null) return;
 
         AudioDevice target = resolveRender(deviceName);

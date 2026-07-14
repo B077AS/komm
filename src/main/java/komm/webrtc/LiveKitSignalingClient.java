@@ -43,6 +43,8 @@ public class LiveKitSignalingClient extends Endpoint {
     private volatile Consumer<String> onTrackPublished;
     @Setter
     private volatile Consumer<String> onError;
+    @Setter
+    private volatile Runnable onParticipantsUpdated;
 
     private volatile Session wsSession;
     private volatile RTCSessionDescription pendingPublisherOffer;
@@ -52,6 +54,8 @@ public class LiveKitSignalingClient extends Endpoint {
     private final Map<String, String> trackSidToName        = new ConcurrentHashMap<>();
     // LiveKit track SID → participant identity (userId) that published it
     private final Map<String, String> trackSidToParticipant = new ConcurrentHashMap<>();
+    // Subscriber m-line mid → the track SID currently negotiated on it (from the latest offer's msid)
+    private final Map<String, String> midToTrackSid         = new ConcurrentHashMap<>();
 
     public void liveKitConnect(String livekitUrl, String token) {
         String url = "ws://" + livekitUrl + "/rtc?access_token=" + token
@@ -79,6 +83,7 @@ public class LiveKitSignalingClient extends Endpoint {
         sidToIdentity.clear();
         trackSidToName.clear();
         trackSidToParticipant.clear();
+        midToTrackSid.clear();
     }
 
     /** Returns the track name registered in AddTrackRequest for a LiveKit track SID, or null. */
@@ -89,6 +94,45 @@ public class LiveKitSignalingClient extends Endpoint {
     /** Returns the participant identity (userId string) that published this track SID, or null. */
     public String getTrackParticipantId(String trackSid) {
         return trackSidToParticipant.get(trackSid);
+    }
+
+    /**
+     * Returns the LiveKit track SID currently negotiated on a subscriber m-line, or null.
+     *
+     * This — not MediaStreamTrack.getId() — is the reliable way to identify a remote
+     * track: libwebrtc freezes a receiver track's id at first negotiation, so when the
+     * SFU reuses an m-line for a re-published track (e.g. a user reconnecting) the track
+     * object keeps reporting the OLD sid forever. The msid in the latest offer is the
+     * only source that tracks the current SID per mid.
+     */
+    public String getTrackSidForMid(String mid) {
+        return midToTrackSid.get(mid);
+    }
+
+    /** Extracts mid → msid track id from each m-line of a subscriber offer. */
+    private void parseMidToTrackSid(String sdp) {
+        String mid = null;
+        String msidTrackId = null;
+        for (String raw : sdp.split("\r?\n")) {
+            String line = raw.trim();
+            if (line.startsWith("m=")) {
+                commitMidMapping(mid, msidTrackId);
+                mid = null;
+                msidTrackId = null;
+            } else if (line.startsWith("a=mid:")) {
+                mid = line.substring("a=mid:".length()).trim();
+            } else if (line.startsWith("a=msid:")) {
+                String[] parts = line.substring("a=msid:".length()).trim().split(" ");
+                msidTrackId = parts[parts.length - 1];
+            }
+        }
+        commitMidMapping(mid, msidTrackId);
+    }
+
+    private void commitMidMapping(String mid, String msidTrackId) {
+        if (mid == null || mid.isEmpty()) return;
+        if (msidTrackId == null || msidTrackId.isEmpty() || "-".equals(msidTrackId)) return;
+        midToTrackSid.put(mid, msidTrackId);
     }
 
     public boolean isConnected() {
@@ -261,6 +305,13 @@ public class LiveKitSignalingClient extends Endpoint {
             case OFFER -> {
                 livekit.LivekitRtc.SessionDescription sdp = msg.getOffer();
                 log.debug("[LiveKit] ← offer (subscriber)");
+                // Refresh mid → track SID before the offer is applied, so onTrack
+                // (fired from setRemoteDescription) can already resolve the mapping.
+                try {
+                    parseMidToTrackSid(sdp.getSdp());
+                } catch (Exception e) {
+                    log.warn("[LiveKit] Failed to parse offer msid mapping: {}", e.getMessage());
+                }
                 Consumer<RTCSessionDescription> cb = onOffer;
                 if (cb != null) cb.accept(new RTCSessionDescription(RTCSdpType.OFFER, sdp.getSdp()));
             }
@@ -351,6 +402,8 @@ public class LiveKitSignalingClient extends Endpoint {
                         trackSidToParticipant.put(t.getSid(), p.getIdentity());
                     });
                 });
+                Runnable cb = onParticipantsUpdated;
+                if (cb != null) cb.run();
             }
 
             //default -> log.debug("[LiveKit] ← unhandled proto message: {}", msg.getMessageCase());
