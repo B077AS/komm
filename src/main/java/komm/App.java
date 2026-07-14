@@ -68,6 +68,10 @@ public class App extends Application {
     public static ModalPane modalPane;
     @Getter
     private static MainUserSummary user;
+    // Whether the current session should have its refresh token persisted to disk on
+    // shutdown. Set explicitly at login (from the "Keep me signed in" checkbox) and on
+    // successful auto-login (a saved token only exists if a prior login opted in).
+    private static volatile boolean rememberMe = false;
     @Getter
     public static WebrtcRoomClient webrtcRoomClient;
     @Getter
@@ -143,6 +147,10 @@ public class App extends Application {
     private static final ArrayDeque<ModalPane> modalPaneStack = new ArrayDeque<>();
 
     // ── User setter ───────────────────────────────────────────────────────────
+
+    public static void setRememberMe(boolean value) {
+        rememberMe = value;
+    }
 
     public static void setUser(MainUserSummary newUser) {
         if (newUser != null && user != null) {
@@ -264,6 +272,9 @@ public class App extends Application {
             services.hub().getTokenManager().refreshAccessToken();
             setUser(services.hub().getUserService().getCurrentUser());
             log.info("Auto-login successful for user: {}", user.getUsername());
+            // A saved token only exists on disk because a prior login opted into
+            // "Keep me signed in" — carry that choice forward for this session.
+            rememberMe = true;
             startWebSocket();
             return true;
         } catch (Exception e) {
@@ -293,6 +304,7 @@ public class App extends Application {
 
     public static void logout() {
         log.info("Logging out user: {}", user != null ? user.getUsername() : "unknown");
+        rememberMe = false;
         exitStreamFullscreen();
         komm.ui.screenshare.StreamPopOutWindow.closeAll();
         user = null;
@@ -658,6 +670,7 @@ public class App extends Application {
             shutdownStep(App::stopWebSocket, "stop WebSocket");
             shutdownStep(() -> GlobalHotkeyManager.getInstance().stop(), "stop global hotkeys");
             shutdownStep(() -> {
+                if (!rememberMe) return;
                 String refreshToken = services.hub().getTokenManager().getRefreshToken();
                 if (refreshToken != null) KommUtils.saveRefreshToken(refreshToken);
             }, "save refresh token");

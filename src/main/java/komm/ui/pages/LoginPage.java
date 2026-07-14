@@ -59,6 +59,7 @@ public class LoginPage extends BorderPane {
                     long t = System.currentTimeMillis();
                     App.getServices().hub().login(loginUsername, loginPassword);
                     startWebSocket();
+                    App.setRememberMe(loginRemember);
                     if (loginRemember) {
                         KommUtils.saveRefreshToken(App.getServices().hub().getTokenManager().getRefreshToken());
                     } else {
