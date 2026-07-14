@@ -81,6 +81,14 @@ public class VideoSinkView extends StackPane implements VideoTrackSink {
     private final AtomicReference<PendingFrame> pendingFrame = new AtomicReference<>(null);
 
     /**
+     * Single-slot return channel: after the FX thread has copied a pending
+     * buffer out, it deposits it here for the worker to reuse. Without this,
+     * every consumed frame would orphan its direct ByteBuffer (freed only on
+     * GC), leaking native memory at hundreds of MB/s on a 60 fps stream.
+     */
+    private final AtomicReference<ByteBuffer> recycledBuffer = new AtomicReference<>(null);
+
+    /**
      * Guards against flooding the FX event queue.
      */
     private final AtomicBoolean renderQueued = new AtomicBoolean(false);
@@ -199,13 +207,17 @@ public class VideoSinkView extends StackPane implements VideoTrackSink {
             PendingFrame newPending = new PendingFrame(back, w, h, rotation);
             PendingFrame old = pendingFrame.getAndSet(newPending);
 
-            // Reclaim the old pending buffer (if any) as the new back-buffer
-            // so we keep exactly two direct buffers alive at all times.
+            // Reclaim a buffer as the new back-buffer: either the overwritten
+            // pending frame (FX thread was behind) or one the FX thread has
+            // already consumed and returned via recycledBuffer. Only when
+            // neither fits (first frame / resolution change) allocate fresh.
             if (old != null && old.argbBuffer.capacity() == needed) {
                 back = old.argbBuffer;
             } else {
-                // Resolution changed mid-stream or first frame: allocate fresh.
-                back = ByteBuffer.allocateDirect(needed);
+                ByteBuffer returned = recycledBuffer.getAndSet(null);
+                back = (returned != null && returned.capacity() == needed)
+                        ? returned
+                        : ByteBuffer.allocateDirect(needed);
             }
 
             if (renderQueued.compareAndSet(false, true)) {
@@ -248,6 +260,9 @@ public class VideoSinkView extends StackPane implements VideoTrackSink {
         fxArgbBuffer.put(pending.argbBuffer);
         fxArgbBuffer.rewind();
 
+        // Hand the consumed buffer back to the worker thread for reuse.
+        recycledBuffer.set(pending.argbBuffer);
+
         // Tell JavaFX the entire buffer has changed.
         pixelBuffer.updateBuffer(pb -> null);
 
@@ -266,6 +281,7 @@ public class VideoSinkView extends StackPane implements VideoTrackSink {
     public void dispose() {
         disposed = true;
         pendingFrame.set(null);
+        recycledBuffer.set(null);
         back = null;
         Platform.runLater(() -> {
             imageView.setImage(null);

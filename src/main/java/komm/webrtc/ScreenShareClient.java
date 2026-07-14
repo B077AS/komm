@@ -208,6 +208,9 @@ public class ScreenShareClient {
         };
 
         VideoTrackSink sink = frame -> {
+            // webrtc-java hands each sink its own AddRef'd native frame copy —
+            // it must be released or it leaks native memory.
+            frame.release();
             if (!published.get()) {
                 log.info("[ScreenShare] Wayland: first frame received — publishing track");
             }
