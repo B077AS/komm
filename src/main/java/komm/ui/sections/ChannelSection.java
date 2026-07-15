@@ -321,6 +321,7 @@ public class ChannelSection extends VBox {
      * after a VIEW_CHANNEL permission change.
      */
     public void addChannel(UUID channelId, ChannelCard card) {
+        if (channelBoxes.containsKey(channelId)) return; // already visible — ignore duplicate
         channelBoxes.put(channelId, card);
         orderedChannelCards.add(card);
         orderedChannelCards.sort(Comparator.comparingInt(c -> c.getChannel().getPosition()));

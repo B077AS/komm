@@ -643,8 +643,18 @@ public class EmojiMessageContent extends VBox {
         int len = Character.charCount(text.codePointAt(idx));
         while (idx + len < text.length()) {
             int cp = text.codePointAt(idx + len);
-            if (isEmojiCont(cp)) len += Character.charCount(cp);
-            else break;
+            if (isEmojiCont(cp)) {
+                len += Character.charCount(cp);
+                // ZWJ sequences: after the ZWJ, the following codepoint is the joined
+                // component (e.g. 🌫 in 😶‍🌫, ♀ in 👮‍♀) and is NOT itself in isEmojiCont,
+                // so we must consume it unconditionally or the rebuild loop re-processes
+                // it as a second standalone emoji.
+                if (cp == 0x200D && idx + len < text.length()) {
+                    len += Character.charCount(text.codePointAt(idx + len));
+                }
+            } else {
+                break;
+            }
         }
         return len;
     }
