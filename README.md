@@ -66,7 +66,7 @@ This repo is the app everyone actually looks at: a native-feeling JavaFX desktop
 
 1. You log in to the hub once — sessions are ES384-signed JWTs, and the refresh token is stored locally so the app signs you back in on startup.
 2. When you open a community, the client asks the hub for a ticket. The hub verifies your membership, checks the server is online and its certificate isn't revoked, and issues a short-lived (**60 s**) single-purpose JWT ticket.
-3. The client connects **directly** to that community's server with the ticket and receives the server's own session tokens. From that point the hub is out of the loop — every message and voice packet flows straight between you and the community's hardware.
+3. The client connects **directly** to that community's server with the ticket — over TLS: the server presents a certificate signed by the hub's CA, and the client verifies it belongs to exactly that installation (the client fetches the hub CA once per session over the hub's regular HTTPS). It then receives the server's own session tokens, and from that point the hub is out of the loop — every message and voice packet flows straight between you and the community's hardware.
 
 ### Two connections, one client
 
@@ -189,7 +189,7 @@ On first launch the client creates its app data directory — `%APPDATA%\Komm` o
 | System integration | JNA / JNA Platform (WASAPI loopback, PipeWire patch bay), JNativeHook (global hotkeys) |
 | Networking | Java `HttpClient`, Tyrus WebSocket client, Spring WebSocket/messaging (client-side) |
 | Code highlighting | ANTLR 4 lexers (Java, JavaScript, Python, Go, HTML, CSS) |
-| Serialization / crypto | Gson, BouncyCastle (CSR generation for hosting installations in-app) |
+| Serialization / crypto | Gson, BouncyCastle (CSR generation for hosting installations in-app), hub-CA TLS trust for community-server connections |
 | Build | Maven — `javafx-maven-plugin` for dev, `maven-shade-plugin` for the distributable fat JAR |
 
 ## Related repositories
