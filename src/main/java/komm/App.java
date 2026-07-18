@@ -41,6 +41,7 @@ import javafx.stage.Stage;
 import javafx.util.Duration;
 import komm.api.ServiceContainer;
 import komm.model.dto.summary.MainUserSummary;
+import komm.utils.NotificationSounds;
 import komm.model.dto.summary.ServerSummary;
 import komm.model.permissions.PermissionManager;
 import komm.ui.avatar.AvatarCache;
@@ -182,6 +183,8 @@ public class App extends Application {
                     if (!ok) log.warn("Emoji assets failed to load");
                 })
                 .join();
+
+        Thread.ofVirtual().start(NotificationSounds::extractBundledSounds);
 
         Image icon = new Image(Objects.requireNonNull(
                 getClass().getClassLoader().getResourceAsStream("icon.png")));

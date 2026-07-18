@@ -3,12 +3,11 @@ package komm.websocket.handlers;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import javafx.application.Platform;
-import javafx.scene.media.Media;
-import javafx.scene.media.MediaPlayer;
 import komm.App;
 import komm.AppState;
 import komm.api.json.GsonProvider;
 import komm.model.dto.summary.MainUserSummary.UserStatus;
+import komm.utils.NotificationSounds;
 import komm.utils.UserSettings;
 import komm.ui.avatar.AvatarCache;
 import komm.ui.customnodes.CustomNotification;
@@ -75,15 +74,7 @@ public class DmReceivedHandler implements WsInboundMessageHandler {
             App.getAvatarCache().resolve(senderId).thenAccept(cu -> {
                 String senderName = cu != null && cu.username() != null ? cu.username() : "New message";
                 Platform.runLater(() -> {
-                    try {
-                        var url = getClass().getResource("/sounds/universfield-new-notification-010-352755.mp3");
-                        if (url != null) {
-                            MediaPlayer player = new MediaPlayer(new Media(url.toExternalForm()));
-                            player.setVolume(0.5);
-                            player.setOnEndOfMedia(player::dispose);
-                            player.play();
-                        }
-                    } catch (Exception ignored) {}
+                    NotificationSounds.play(NotificationSounds.MESSAGE_RECEIVED, 0.5);
                     new CustomNotification(senderName, preview, senderId)
                         .withOnClick(() -> {
                             if (App.getCurrentPage() instanceof HomePage hp) {

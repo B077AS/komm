@@ -36,6 +36,8 @@ public class ServerSummaryDeserializer implements JsonDeserializer<ServerSummary
                 .ipAddress(KommUtils.getStringOrNull(obj, "ipAddress"))
                 .port(obj.has("port") && !obj.get("port").isJsonNull() ? obj.get("port").getAsInt() : null)
                 .signalPort(obj.has("signalPort") && !obj.get("signalPort").isJsonNull() ? obj.get("signalPort").getAsInt() : null)
+                .tlsEnabled(obj.has("tlsEnabled") && !obj.get("tlsEnabled").isJsonNull()
+                        && obj.get("tlsEnabled").getAsBoolean())
                 .avatar(avatar)
                 .avatarImageFormat(KommUtils.getStringOrNull(obj, "avatarImageFormat"))
                 .avatarBytes(avatarBytes)

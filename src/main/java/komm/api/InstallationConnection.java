@@ -29,17 +29,25 @@ public class InstallationConnection {
     private final MemberService memberService;
 
     public InstallationConnection(ServerSummary server, String ticket) throws Exception {
-        String baseUrl = "http://" + server.getIpAddress() + ":" + server.getPort();
-        log.debug("Connecting to installation at {}", baseUrl);
+        // The hub reports whether this installation serves TLS with its hub-signed
+        // certificate. If so, connect via https/wss and validate against the hub CA;
+        // legacy installations stay on plain http/ws.
+        boolean tls = server.isTlsEnabled();
+        javax.net.ssl.SSLContext sslContext =
+                tls ? komm.api.tls.HubCaTrust.contextFor(server.getInstallationId()) : null;
 
-        this.httpClient = new HttpClientWrapper(baseUrl);
+        String hostPort = server.getIpAddress() + ":" + server.getPort();
+        String baseUrl = (tls ? "https://" : "http://") + hostPort;
+        log.debug("Connecting to installation at {} (hub reports tlsEnabled={})", baseUrl, tls);
+
+        this.httpClient = new HttpClientWrapper(baseUrl, sslContext);
         this.tokenManager = new TokenManager(httpClient);
         this.auth = new InstallationAuth(httpClient, tokenManager);
 
         auth.login(ticket);
 
-        String wsBase = "ws://" + server.getIpAddress() + ":" + server.getPort();
-        this.wsClient = new InstallationWsClient(wsBase);
+        String wsBase = (tls ? "wss://" : "ws://") + hostPort;
+        this.wsClient = new InstallationWsClient(wsBase, sslContext);
         this.wsClient.connect(tokenManager.getAccessToken());
 
         this.channelService = new ChannelService(httpClient, tokenManager);

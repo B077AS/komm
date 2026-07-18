@@ -46,6 +46,11 @@ public class Launcher {
         return getDataDirectory().resolve("soundboards");
     }
 
+    /** Bundled notification sounds, extracted from the jar at startup (JavaFX Media can't read jar: URLs). */
+    public static Path getSoundsDirectory() {
+        return getDataDirectory().resolve("sounds");
+    }
+
 
     public static Path getConfigDirectory() {
         return getAppDataDirectory().resolve("config");
@@ -123,6 +128,7 @@ public class Launcher {
         createDirectory(getSoundboardDirectory());
         createDirectory(getSoundboardDirectory().resolve("server"));
         createDirectory(getSoundboardDirectory().resolve("personal"));
+        createDirectory(getSoundsDirectory());
         createDirectory(getConfigDirectory());
         createDirectory(getLogsDirectory());
     }

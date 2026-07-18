@@ -22,6 +22,7 @@ import java.util.function.Consumer;
 public class InstallationWsClient extends Endpoint {
 
     private final String baseUrl;
+    private final javax.net.ssl.SSLContext sslContext;
     private final Gson gson = GsonProvider.get();
 
     private volatile Session session;
@@ -30,7 +31,15 @@ public class InstallationWsClient extends Endpoint {
     private final Map<WsMessageType, WsInboundMessageHandler> handlers = new ConcurrentHashMap<>();
 
     public InstallationWsClient(String baseUrl) {
+        this(baseUrl, null);
+    }
+
+    /**
+     * @param sslContext custom trust for wss connections (hub-CA trust); null for plain ws.
+     */
+    public InstallationWsClient(String baseUrl, javax.net.ssl.SSLContext sslContext) {
         this.baseUrl = baseUrl;
+        this.sslContext = sslContext;
         List.of(
                 new UserJoinedChannelHandler(),
                 new UserLeftChannelHandler(),
@@ -84,7 +93,22 @@ public class InstallationWsClient extends Endpoint {
                         }
                     })
                     .build();
-            WebSocketContainer container = ContainerProvider.getWebSocketContainer();
+            WebSocketContainer container;
+            if (sslContext != null) {
+                // Tyrus needs the custom SSLContext via client properties. Host
+                // verification is off because installations sit on bare IPs — the
+                // trust manager already checks the hub-signed CN identity instead.
+                org.glassfish.tyrus.client.ClientManager client =
+                        org.glassfish.tyrus.client.ClientManager.createClient();
+                org.glassfish.tyrus.client.SslEngineConfigurator ssl =
+                        new org.glassfish.tyrus.client.SslEngineConfigurator(sslContext, true, false, false);
+                ssl.setHostVerificationEnabled(false);
+                client.getProperties().put(
+                        org.glassfish.tyrus.client.ClientProperties.SSL_ENGINE_CONFIGURATOR, ssl);
+                container = client;
+            } else {
+                container = ContainerProvider.getWebSocketContainer();
+            }
             container.connectToServer(this, config, URI.create(baseUrl + "/ws"));
         } catch (Exception e) {
             throw new RuntimeException("Failed to connect to installation WS: " + e.getMessage(), e);

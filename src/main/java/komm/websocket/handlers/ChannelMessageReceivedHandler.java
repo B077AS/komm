@@ -3,8 +3,6 @@ package komm.websocket.handlers;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import javafx.application.Platform;
-import javafx.scene.media.Media;
-import javafx.scene.media.MediaPlayer;
 import komm.App;
 import komm.AppState;
 import komm.api.json.GsonProvider;
@@ -12,6 +10,7 @@ import komm.model.dto.summary.ChannelSummary;
 import komm.model.dto.summary.MainUserSummary.UserStatus;
 import komm.ui.chat.ChatSection;
 import komm.ui.customnodes.CustomNotification;
+import komm.utils.NotificationSounds;
 import komm.websocket.interfaces.WsInboundMessageHandler;
 import komm.websocket.messages.WsMessageType;
 import komm.websocket.messages.payloads.MessageReceivedPayload;
@@ -95,15 +94,7 @@ public class ChannelMessageReceivedHandler implements WsInboundMessageHandler {
             if (!showToast && !playSound) return;
 
             if (playSound) {
-                try {
-                    var url = getClass().getResource("/sounds/universfield-new-notification-010-352755.mp3");
-                    if (url != null) {
-                        MediaPlayer player = new MediaPlayer(new Media(url.toExternalForm()));
-                        player.setVolume(0.5);
-                        player.setOnEndOfMedia(player::dispose);
-                        player.play();
-                    }
-                } catch (Exception ignored) {}
+                NotificationSounds.play(NotificationSounds.MESSAGE_RECEIVED, 0.5);
             }
 
             if (!showToast) return;

@@ -31,11 +31,22 @@ public class HttpClientWrapper {
     private final String baseUrl;
 
     public HttpClientWrapper(String baseUrl) {
+        this(baseUrl, null);
+    }
+
+    /**
+     * @param sslContext custom trust for https connections (hub-CA trust when talking
+     *                   to installations); null uses the platform default.
+     */
+    public HttpClientWrapper(String baseUrl, javax.net.ssl.SSLContext sslContext) {
         this.baseUrl = baseUrl;
-        this.httpClient = HttpClient.newBuilder()
+        HttpClient.Builder builder = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
-                .connectTimeout(Duration.ofSeconds(10))
-                .build();
+                .connectTimeout(Duration.ofSeconds(10));
+        if (sslContext != null) {
+            builder.sslContext(sslContext);
+        }
+        this.httpClient = builder.build();
     }
 
     /**
