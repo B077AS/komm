@@ -15,6 +15,7 @@ import javafx.scene.image.WritableImage;
 import javafx.scene.layout.StackPane;
 
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.IntBuffer;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -242,7 +243,12 @@ public class VideoSinkView extends StackPane implements VideoTrackSink {
 
         // Recreate PixelBuffer / WritableImage only on resolution change.
         if (w != currentWidth || h != currentHeight) {
-            fxArgbBuffer = ByteBuffer.allocateDirect(w * h * 4);
+            // Native byte order is required: convertFromI420 writes little-endian
+            // ARGB words, and the sw pipeline reads pixels through this IntBuffer
+            // view honoring its declared order (the es2 pipeline uploads raw
+            // memory and never consults it). Default big-endian swaps channels.
+            fxArgbBuffer = ByteBuffer.allocateDirect(w * h * 4)
+                    .order(ByteOrder.nativeOrder());
             fxIntView = fxArgbBuffer.asIntBuffer();
             pixelBuffer = new PixelBuffer<>(w, h, fxIntView,
                     PixelFormat.getIntArgbPreInstance());
