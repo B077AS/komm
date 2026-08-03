@@ -10,7 +10,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
+import java.util.ArrayList;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -102,6 +104,11 @@ public class LauncherUpdateService {
         }
     }
 
+    /** {@code Komm.cfg}'s classpath line for the launcher's own jar, jpackage-generated. */
+    private static final String CFG_CLASSPATH_PREFIX = "app.classpath=$APPDIR\\";
+    private static final String CFG_LAUNCHER_JAR_PREFIX = CFG_CLASSPATH_PREFIX + "komm-launcher-";
+    private static final String CFG_LAUNCHER_JAR_FIXED = CFG_CLASSPATH_PREFIX + "komm-launcher.jar";
+
     /** The client always runs from {@code <installRoot>/runtime}; the launcher's
      *  own jar lives alongside it at {@code <installRoot>/app/komm-launcher.jar}. */
     private void swapWindowsLauncherJar(byte[] bytes) throws Exception {
@@ -118,6 +125,45 @@ public class LauncherUpdateService {
         Files.write(tmp, bytes);
         Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
         log.info("Swapped launcher jar at {}", target);
+
+        repointCfgIfNeeded(appDir);
+    }
+
+    /**
+     * Installs built before the launcher jar's filename was pinned to a constant
+     * have {@code Komm.cfg} pointing at a versioned name (e.g. {@code komm-launcher-0.0.1.jar}) —
+     * the swap above always writes {@code komm-launcher.jar}, but {@code Komm.exe} would keep
+     * loading the old file unless this repoints it. One-time per install: once
+     * {@code Komm.cfg} says {@code komm-launcher.jar}, no line matches the stale prefix and
+     * this is a no-op on every future swap.
+     */
+    private void repointCfgIfNeeded(Path appDir) {
+        Path cfg = appDir.resolve("Komm.cfg");
+        if (!Files.isRegularFile(cfg)) return;
+        try {
+            List<String> lines = Files.readAllLines(cfg);
+            List<String> updated = new ArrayList<>(lines.size());
+            String staleEntry = null;
+            for (String line : lines) {
+                String trimmed = line.trim();
+                if (trimmed.startsWith(CFG_LAUNCHER_JAR_PREFIX) && trimmed.endsWith(".jar")) {
+                    staleEntry = trimmed.substring(CFG_CLASSPATH_PREFIX.length());
+                    updated.add(CFG_LAUNCHER_JAR_FIXED);
+                } else {
+                    updated.add(line);
+                }
+            }
+            if (staleEntry == null) return;
+
+            Path tmpCfg = appDir.resolve("Komm.cfg.new");
+            Files.write(tmpCfg, updated);
+            Files.move(tmpCfg, cfg, StandardCopyOption.REPLACE_EXISTING);
+            log.info("Repointed Komm.cfg from {} to komm-launcher.jar", staleEntry);
+
+            Files.deleteIfExists(appDir.resolve(staleEntry));
+        } catch (Exception e) {
+            log.warn("Could not repoint Komm.cfg (this install may need a manual reinstall): {}", e.toString());
+        }
     }
 
     private void swapLinuxAppImage(byte[] bytes) throws Exception {
