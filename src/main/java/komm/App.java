@@ -49,6 +49,7 @@ import komm.ui.pages.HomePage;
 import komm.ui.pages.LoginPage;
 import komm.ui.pages.ServerPage;
 import komm.ui.utils.WindowsThemeUtil;
+import komm.update.LauncherUpdateService;
 import komm.utils.AppConfig;
 import komm.utils.GlobalHotkeyManager;
 import komm.utils.KommUtils;
@@ -238,6 +239,7 @@ public class App extends Application {
         }
         initializeWebRTCDelayed();
         initializeGlobalHotkeys();
+        initializeLauncherUpdateCheck();
     }
 
     public static void startWebSocket() {
@@ -339,6 +341,10 @@ public class App extends Application {
         t.setName("global-hotkey-init");
         t.setDaemon(true);
         t.start();
+    }
+
+    private void initializeLauncherUpdateCheck() {
+        new LauncherUpdateService().start();
     }
 
     public static void disconnectFromVoice() {

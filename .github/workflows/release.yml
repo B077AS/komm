@@ -122,11 +122,21 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Check out komm-launcher (main)
+      - name: Resolve launcher release tag
+        id: launcher-v
+        run: |
+          TAG=$(gh release view --repo B077AS/komm-launcher --json tagName -q .tagName)
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      # Pinned to the launcher's own latest release (not a moving `main` HEAD) so
+      # every installer/AppImage build is reproducible and bundles a launcher jar
+      # that's already correctly self-versioned (see the version-set step below).
+      - name: Check out komm-launcher (latest release)
         uses: actions/checkout@v4
         with:
           repository: B077AS/komm-launcher
-          ref: main
+          ref: ${{ steps.launcher-v.outputs.tag }}
           token: ${{ secrets.LAUNCHER_REPO_TOKEN || github.token }}
 
       - uses: actions/setup-java@v4
@@ -134,6 +144,9 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
+
+      - name: Set launcher Maven version from its release tag
+        run: mvn -B versions:set -DnewVersion="${{ steps.launcher-v.outputs.version }}" -DgenerateBackupPoms=false
 
       - name: Resolve version
         id: v
@@ -186,11 +199,21 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Check out komm-launcher (main)
+      - name: Resolve launcher release tag
+        id: launcher-v
+        run: |
+          TAG=$(gh release view --repo B077AS/komm-launcher --json tagName -q .tagName)
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      # Pinned to the launcher's own latest release (not a moving `main` HEAD) so
+      # every installer/AppImage build is reproducible and bundles a launcher jar
+      # that's already correctly self-versioned (see the version-set step below).
+      - name: Check out komm-launcher (latest release)
         uses: actions/checkout@v4
         with:
           repository: B077AS/komm-launcher
-          ref: main
+          ref: ${{ steps.launcher-v.outputs.tag }}
           token: ${{ secrets.LAUNCHER_REPO_TOKEN || github.token }}
 
       - uses: actions/setup-java@v4
@@ -198,6 +221,9 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
+
+      - name: Set launcher Maven version from its release tag
+        run: mvn -B versions:set -DnewVersion="${{ steps.launcher-v.outputs.version }}" -DgenerateBackupPoms=false
 
       - name: Resolve version
         id: v
