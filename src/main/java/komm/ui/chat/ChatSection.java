@@ -842,6 +842,14 @@ public class ChatSection extends VBox {
     }
 
     private void installScrollListeners() {
+        // setActiveChannel() removes listeners synchronously but installs them inside a
+        // deferred Platform.runLater; if two calls land close enough together the second
+        // call's removal can run before the first call's install, leaving no listener to
+        // remove and letting both installs attach — guard here so that can never leak a
+        // duplicate onto vvalueProperty regardless of call ordering.
+        if (scrollListener != null) {
+            chatScrollPane.vvalueProperty().removeListener(scrollListener);
+        }
         scrollListener = (obs, oldVal, newVal) -> {
             /*log.debug("[DBG] LISTENER vvalue {}->{} pending={} loadHiding={} isAtBottom={} frozen={} contentH={} viewportH={}",
                     oldVal, newVal, scrollToBottomPending, loadHiding, isAtBottom, scrollFrozen,

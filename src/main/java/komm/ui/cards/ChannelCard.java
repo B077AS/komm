@@ -727,6 +727,10 @@ public class ChannelCard extends VBox {
         return currentlyConnected != null ? currentlyConnected.channel.getChannelId() : null;
     }
 
+    public boolean isUserConnected(UUID userId) {
+        return userCards.containsKey(userId);
+    }
+
     /** Disconnects from voice if currently connected to the given channel (e.g. on deletion). */
     public static void disconnectIfConnectedTo(UUID channelId) {
         if (currentlyConnected != null

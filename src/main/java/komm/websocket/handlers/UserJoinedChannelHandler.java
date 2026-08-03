@@ -6,6 +6,7 @@ import javafx.application.Platform;
 import komm.App;
 import komm.api.json.GsonProvider;
 import komm.model.dto.summary.ChannelUserSummary;
+import komm.utils.NotificationSounds;
 import komm.websocket.interfaces.WsInboundMessageHandler;
 import komm.websocket.messages.WsMessageType;
 import komm.websocket.messages.payloads.UserJoinedChannelPayload;
@@ -59,7 +60,13 @@ public class UserJoinedChannelHandler implements WsInboundMessageHandler {
                             .get(channelId);
                     if (card == null) return;
                     card.addConnectedUser(user);
-                    if (isSelf) card.onJoinConfirmed();
+                    if (isSelf) {
+                        card.onJoinConfirmed();
+                        NotificationSounds.play(NotificationSounds.CHANNEL_JOIN, 0.5);
+                    } else if (channelId.equals(App.getWebrtcRoomClient() != null
+                            ? App.getWebrtcRoomClient().getCurrentChannelId() : null)) {
+                        NotificationSounds.play(NotificationSounds.CHANNEL_JOIN, 0.5);
+                    }
                 });
 
             } catch (Exception e) {
