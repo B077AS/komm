@@ -271,21 +271,36 @@ class PipeWirePatchBay {
     private static boolean commandExists(String name) {
         try {
             Process p = new ProcessBuilder("sh", "-c", "command -v " + name).start();
-            return p.waitFor(3, TimeUnit.SECONDS) && p.exitValue() == 0;
+            try (var stdin = p.getOutputStream(); var stdout = p.getInputStream(); var stderr = p.getErrorStream()) {
+                return p.waitFor(3, TimeUnit.SECONDS) && p.exitValue() == 0;
+            } finally {
+                if (p.isAlive()) p.destroyForcibly();
+            }
         } catch (Exception e) {
             return false;
         }
     }
 
-    /** Runs {@code cmd}, returns stdout. Throws on timeout; a non-zero exit is left to the caller. */
+    /**
+     * Runs {@code cmd}, returns stdout. Throws on timeout; a non-zero exit is left to the caller.
+     *
+     * <p>Called every {@link #RESCAN_INTERVAL_MS} for the whole lifetime of a share with system
+     * audio on — stdin/stdout/stderr must all be closed and the process reaped every time, or each
+     * invocation leaks a pipe fd (and its kernel buffer) that only gets reclaimed when the JVM
+     * happens to GC the {@code Process} object.</p>
+     */
     private static String exec(int timeoutSec, String... cmd) throws Exception {
         Process p = new ProcessBuilder(cmd).redirectErrorStream(false).start();
-        byte[] out = p.getInputStream().readAllBytes();   // drains stdout (process closes it on exit)
-        if (!p.waitFor(timeoutSec, TimeUnit.SECONDS)) {
-            p.destroyForcibly();
-            throw new IllegalStateException("timed out: " + String.join(" ", cmd));
+        try (var stdin = p.getOutputStream(); var stdout = p.getInputStream(); var stderr = p.getErrorStream()) {
+            byte[] out = stdout.readAllBytes();   // drains stdout (process closes it on exit)
+            if (!p.waitFor(timeoutSec, TimeUnit.SECONDS)) {
+                p.destroyForcibly();
+                throw new IllegalStateException("timed out: " + String.join(" ", cmd));
+            }
+            return new String(out, StandardCharsets.UTF_8);
+        } finally {
+            if (p.isAlive()) p.destroyForcibly();
         }
-        return new String(out, StandardCharsets.UTF_8);
     }
 
     private static JsonObject nestedProps(JsonObject o) {
