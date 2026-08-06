@@ -1,35 +1,29 @@
 package komm.ui.cards;
 
-import atlantafx.base.controls.RingProgressIndicator;
 import atlantafx.base.theme.Styles;
 import javafx.animation.ScaleTransition;
-import javafx.application.Platform;
 import javafx.concurrent.Service;
 import javafx.concurrent.Task;
 import javafx.geometry.Insets;
 import javafx.geometry.Orientation;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
-import javafx.stage.FileChooser;
 import javafx.util.Duration;
-import javafx.util.StringConverter;
 import javafx.scene.layout.*;
 import javafx.scene.shape.Circle;
 import komm.App;
 import komm.api.HttpStatusException;
+import komm.model.dto.summary.InstallationDetailSummary;
 import komm.model.dto.summary.InstallationSummary;
 import komm.ui.customnodes.CustomNotification;
 import komm.ui.modals.ConfirmationModal;
 import komm.ui.modals.InstallationSettingsModal;
+import komm.ui.modals.VerificationCodeModal;
 import komm.ui.pages.HomePage;
-import komm.ui.utils.FileChooserUtil;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign2.*;
-
-import java.io.File;
-import java.nio.file.Files;
 
 @Slf4j
 public class InstallationCard extends HBox {
@@ -41,7 +35,6 @@ public class InstallationCard extends HBox {
 
     private MenuButton optionsBtn;
     private HBox statsArea;
-    private RingProgressIndicator downloadSpinner;
 
     public InstallationCard(InstallationSummary installation) {
         this.installation = installation;
@@ -212,10 +205,6 @@ public class InstallationCard extends HBox {
         if (installation.isOwner()) {
             settingsItem.setText("Settings");
 
-            MenuItem downloadJarItem = new MenuItem("Download JAR");
-            downloadJarItem.setGraphic(new FontIcon(MaterialDesignD.DOWNLOAD));
-            downloadJarItem.setOnAction(e -> handleDownloadJar());
-
             MenuItem deleteItem = new MenuItem("Delete Installation");
             deleteItem.setGraphic(new FontIcon(MaterialDesignD.DELETE_OUTLINE));
             deleteItem.setOnAction(e -> {
@@ -229,7 +218,17 @@ public class InstallationCard extends HBox {
                 ));
             });
 
-            btn.getItems().addAll(settingsItem, downloadJarItem, new SeparatorMenuItem(), deleteItem);
+            // Only meaningful while the installation hasn't activated yet — the hub
+            // clears the code from its own DB the moment the server does, so there's
+            // nothing left to show once it's ONLINE/OFFLINE.
+            if (installation.getStatus() == InstallationSummary.InstallationStatus.NOT_VERIFIED) {
+                MenuItem verificationCodeItem = new MenuItem("Get Verification Code");
+                verificationCodeItem.setGraphic(new FontIcon(MaterialDesignK.KEY_OUTLINE));
+                verificationCodeItem.setOnAction(e -> handleShowVerificationCode());
+                btn.getItems().addAll(settingsItem, verificationCodeItem, new SeparatorMenuItem(), deleteItem);
+            } else {
+                btn.getItems().addAll(settingsItem, new SeparatorMenuItem(), deleteItem);
+            }
         } else {
             btn.getItems().add(settingsItem);
         }
@@ -237,69 +236,40 @@ public class InstallationCard extends HBox {
         return btn;
     }
 
-    // ── JAR download ──────────────────────────────────────────────────────────
+    // ── Verification code ────────────────────────────────────────────────────
 
-    private void handleDownloadJar() {
-        if (downloadSpinner != null) return;
-
-        downloadSpinner = new RingProgressIndicator(0, false);
-        downloadSpinner.setMinSize(22, 22);
-        downloadSpinner.setMaxSize(22, 22);
-        downloadSpinner.setStringConverter(new StringConverter<>() {
-            @Override public String toString(Double d) { return ""; }
-            @Override public Double fromString(String s) { return 0d; }
-        });
-        HBox.setMargin(downloadSpinner, new Insets(0, 12, 0, 12));
-        int idx = getChildren().indexOf(statsArea);
-        if (idx >= 0) getChildren().add(idx, downloadSpinner);
-
-        Service<byte[]> svc = new Service<>() {
+    private void handleShowVerificationCode() {
+        Service<InstallationDetailSummary> svc = new Service<>() {
             @Override
-            protected Task<byte[]> createTask() {
+            protected Task<InstallationDetailSummary> createTask() {
                 return new Task<>() {
                     @Override
-                    protected byte[] call() throws Exception {
+                    protected InstallationDetailSummary call() throws Exception {
                         return App.getServices().hub().getInstallationService()
-                                .downloadInstallationJar(installation.getInstallationId(),
-                                        progress -> Platform.runLater(() -> downloadSpinner.setProgress(progress)));
+                                .getInstallationDetails(installation.getInstallationId());
                     }
                 };
             }
         };
 
         svc.setOnSucceeded(e -> {
-            byte[] bytes = svc.getValue();
-            clearDownloadSpinner();
-            FileChooser chooser = new FileChooser();
-            chooser.setInitialFileName("komm-installation.jar");
-            chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("JAR Files", "*.jar"));
-            File dest = FileChooserUtil.showSaveDialog(chooser, getScene().getWindow());
-            if (dest != null) {
-                Thread.ofVirtual().start(() -> {
-                    try {
-                        Files.write(dest.toPath(), bytes);
-                    } catch (Exception ex) {
-                        log.error("Failed to save installation JAR", ex);
-                    }
-                });
+            String code = svc.getValue().getVerificationCode();
+            if (code == null || code.isBlank()) {
+                new CustomNotification("Verification Code", "This installation has already been activated.",
+                        new FontIcon(MaterialDesignK.KEY_OUTLINE)).showNotification();
+                return;
             }
+            App.showModal(new VerificationCodeModal(installation, code));
         });
 
         svc.setOnFailed(e -> {
             Throwable ex = svc.getException();
-            log.error("Failed to download installation JAR", ex);
-            clearDownloadSpinner();
+            log.error("Failed to load verification code for installation {}", installation.getInstallationId(), ex);
             String msg = HttpStatusException.extractMessage(ex);
-            new CustomNotification("Download JAR", msg, new FontIcon(MaterialDesignA.ALERT_CIRCLE_OUTLINE))
+            new CustomNotification("Verification Code", msg, new FontIcon(MaterialDesignA.ALERT_CIRCLE_OUTLINE))
                     .showNotification();
         });
         svc.start();
-    }
-
-    private void clearDownloadSpinner() {
-        if (downloadSpinner == null) return;
-        getChildren().remove(downloadSpinner);
-        downloadSpinner = null;
     }
 
     // ── Interactions ──────────────────────────────────────────────────────────

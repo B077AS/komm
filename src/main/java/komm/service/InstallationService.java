@@ -79,13 +79,6 @@ public class InstallationService {
         });
     }
 
-    public byte[] downloadInstallationJar(UUID installationId, Consumer<Double> progressCallback) throws Exception {
-        return tokenManager.executeWithRetry(() -> {
-            String endpoint = "/api/installations/jar?installationId=" + installationId;
-            return httpClient.downloadBinary(endpoint, tokenManager.getAccessToken(), progressCallback);
-        });
-    }
-
     public void deleteInstallation(UUID installationId) throws Exception {
         tokenManager.executeWithRetry(() -> {
             httpClient.delete("/api/installations/" + installationId, tokenManager.getAccessToken());
