@@ -145,6 +145,7 @@ public class App extends Application {
 
     private static AppWebSocketClient webSocketClient;
     private static Thread webRtcThread;
+    @Getter
     private static StackPane mainStackPane;
     private static final ArrayDeque<ModalPane> modalPaneStack = new ArrayDeque<>();
 
