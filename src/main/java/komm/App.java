@@ -70,9 +70,7 @@ public class App extends Application {
     public static ModalPane modalPane;
     @Getter
     private static MainUserSummary user;
-    // Whether the current session should have its refresh token persisted to disk on
-    // shutdown. Set explicitly at login (from the "Keep me signed in" checkbox) and on
-    // successful auto-login (a saved token only exists if a prior login opted in).
+    @Setter
     private static volatile boolean rememberMe = false;
     @Getter
     public static WebrtcRoomClient webrtcRoomClient;
@@ -145,14 +143,11 @@ public class App extends Application {
 
     private static AppWebSocketClient webSocketClient;
     private static Thread webRtcThread;
+    @Getter
     private static StackPane mainStackPane;
     private static final ArrayDeque<ModalPane> modalPaneStack = new ArrayDeque<>();
 
     // ── User setter ───────────────────────────────────────────────────────────
-
-    public static void setRememberMe(boolean value) {
-        rememberMe = value;
-    }
 
     public static void setUser(MainUserSummary newUser) {
         if (newUser != null && user != null) {

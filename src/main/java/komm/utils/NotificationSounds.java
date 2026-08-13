@@ -11,6 +11,7 @@ import javax.sound.sampled.SourceDataLine;
 import komm.Launcher;
 import lombok.extern.slf4j.Slf4j;
 
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.net.URI;
 import java.nio.file.FileSystem;
@@ -41,6 +42,9 @@ import java.util.stream.Stream;
 public final class NotificationSounds {
 
     public static final String MESSAGE_RECEIVED = "universfield-new-notification-010-352755.mp3";
+    public static final String CHANNEL_JOIN = "universfield-new-notification-019-363747.mp3";
+    public static final String STREAM_WATCH_STARTED = "universfield-new-notification-014-363678.mp3";
+    public static final String STREAM_STARTED = "universfield-new-notification-08-352461.mp3";
 
     private static final String CLASSPATH_DIR = "/sounds";
 
@@ -108,6 +112,70 @@ public final class NotificationSounds {
             }
         } catch (Exception e) {
             log.warn("Failed to play notification sound {}: {}", fileName, e.getMessage());
+        }
+    }
+
+    /**
+     * Plays a bundled sound backwards. Always goes through Java Sound (never JavaFX
+     * Media, which has no time-reversal option) on a background thread, since
+     * generating the reversed clip means decoding the whole file up front anyway.
+     */
+    public static void playReversed(String fileName, double volume) {
+        Thread.ofVirtual().start(() -> {
+            try {
+                Path reversed = ensureReversedWav(fileName);
+                if (reversed != null) playWav(reversed, volume);
+            } catch (Exception e) {
+                log.warn("Failed to play reversed notification sound {}: {}", fileName, e.getMessage());
+            }
+        });
+    }
+
+    /** Returns the reversed-WAV sibling of the given bundled mp3, generating it once if missing. */
+    private static Path ensureReversedWav(String fileName) {
+        Path mp3 = Launcher.getSoundsDirectory().resolve(fileName);
+        if (!Files.exists(mp3)) {
+            extractOne(fileName, mp3);
+            if (!Files.exists(mp3)) return null;
+        }
+
+        Path reversed = mp3.resolveSibling(fileName.replaceFirst("\\.mp3$", "-reversed.wav"));
+        if (Files.exists(reversed)) return reversed;
+
+        try (AudioInputStream mp3In = AudioSystem.getAudioInputStream(mp3.toFile())) {
+            AudioFormat src = mp3In.getFormat();
+            AudioFormat pcm = new AudioFormat(AudioFormat.Encoding.PCM_SIGNED,
+                    src.getSampleRate(), 16, src.getChannels(),
+                    src.getChannels() * 2, src.getSampleRate(), false);
+
+            byte[] pcmBytes;
+            try (AudioInputStream pcmIn = AudioSystem.getAudioInputStream(pcm, mp3In)) {
+                pcmBytes = pcmIn.readAllBytes();
+            }
+
+            // Reverse whole sample frames (all channels together), not raw bytes —
+            // reversing individual bytes would scramble each 16-bit sample and
+            // interleave channels backwards.
+            int frameSize = pcm.getFrameSize();
+            int frameCount = pcmBytes.length / frameSize;
+            byte[] reversedBytes = new byte[frameCount * frameSize];
+            for (int i = 0; i < frameCount; i++) {
+                System.arraycopy(pcmBytes, i * frameSize, reversedBytes, (frameCount - 1 - i) * frameSize, frameSize);
+            }
+
+            Path tmp = Files.createTempFile(reversed.getParent(), reversed.getFileName().toString(), ".tmp");
+            try (AudioInputStream reversedIn = new AudioInputStream(
+                    new ByteArrayInputStream(reversedBytes), pcm, frameCount)) {
+                AudioSystem.write(reversedIn, AudioFileFormat.Type.WAVE, tmp.toFile());
+                Files.move(tmp, reversed, StandardCopyOption.REPLACE_EXISTING);
+                log.info("Generated reversed notification sound {}", reversed.getFileName());
+            } finally {
+                Files.deleteIfExists(tmp);
+            }
+            return reversed;
+        } catch (Exception e) {
+            log.warn("Failed to generate reversed notification sound {}: {}", fileName, e.getMessage());
+            return null;
         }
     }
 

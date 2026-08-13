@@ -1,4 +1,7 @@
-# komm
+<h1 align="center">
+  <img src="src/main/resources/icon.png" alt="Komm icon" width="80"><br>
+  komm
+</h1>
 
 <p align="center">
   <b>The desktop client for <a href="https://kommvoice.com">Komm</a> — a free, self-hosted voice, video &amp; text chat platform.</b><br>
@@ -111,12 +114,23 @@ mic ─► capture ─► AEC3 ─► RNNoise / WebRTC-NS ─► AGC2 ─► Sil
 | `ui/modals/` | Everything modal: user/server/channel/installation settings, invites, screen share picker, profiles |
 | `ui/code/`, `ui/emojis/`, `ui/gifs/` | Code blocks (ANTLR lexers + RichTextFX), emoji rendering & pickers, GIF search |
 | `utils/` | App config, global hotkeys, audio device discovery, ping/packet-loss history, user settings |
+| `update/` | `LauncherUpdateService` — checks and self-updates the launcher that started this client (see below) |
 
 A few rules keep the client sane (see `CLAUDE.md` for the full contributor guide):
 
 - **`AppState` is the single source of truth** for mic/speaker/user status — UI components bind to its JavaFX properties and never touch WebRTC or the WebSocket directly.
 - UI mutations happen on the FX thread (`Platform.runLater`); HTTP calls happen off it (virtual threads).
 - `PermissionManager` mirrors the server's role/channel permission model with bitmask checks, updated in real time over WebSocket.
+
+### Keeping the launcher up to date
+
+The client's `update/LauncherUpdateService` does something a little unusual: once per start, it checks whether the **[komm-launcher](https://github.com/B077AS/komm-launcher)** that started it is out of date, and if so, downloads and swaps the launcher's files in the background — not just its own jar. It has to be the client that does this, not the launcher: by the time the client is running, the launcher process has already exited, so there's nothing left to check on its own behalf.
+
+- It reads `System.getProperty("launcher.version")` — a value the launcher forwards when it spawns the client — and compares it against `GET {hub}/api/launcher/latest?os=windows|linux`. A missing value (an old launcher, from before this existed) is always treated as outdated.
+- On Windows it overwrites `app/komm-launcher.jar` next to the running install; on Linux it overwrites the `.AppImage` at `$APPIMAGE` (an AppImage is one opaque unit — there's no "just the launcher part" to update). Both are safe to replace while in use — the launcher process is already gone, and POSIX file semantics mean the currently-running AppImage keeps working until it next exits.
+- It's entirely best-effort and silent: any failure is logged and swallowed, since a failed launcher self-update must never interfere with the client actually running. No UI, no restart prompt — the new launcher is just what's there the next time the user opens the app.
+
+See [komm-launcher's README](https://github.com/B077AS/komm-launcher#how-the-launcher-updates-itself) for the full mechanics, including why Windows and Linux need genuinely different update artifacts.
 
 ## Getting the app (users)
 
@@ -211,7 +225,7 @@ On first launch the client creates its app data directory — `%APPDATA%\Komm` o
 
 **Can the hub read my community's messages?** No. After a one-time 60-second ticket exchange, the client talks directly to the community's server — messages, voice and files never pass through the hub.
 
-**How do updates work?** The launcher checks the hub for a new client version on every start and swaps in the new JAR automatically. Install once, forget about it.
+**How do updates work?** The launcher checks the hub for a new client version on every start and swaps in the new JAR automatically. The client returns the favor: it checks whether the *launcher* itself is out of date and self-updates it in the background too (see [Keeping the launcher up to date](#keeping-the-launcher-up-to-date)). Install once, forget about it — in both directions.
 
 ## License
 

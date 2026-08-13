@@ -13,7 +13,6 @@ import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
 import komm.ui.avatar.AvatarCache;
 import komm.ui.avatar.AvatarColor;
-import komm.ui.pages.HomePage;
 import org.kordamp.ikonli.javafx.FontIcon;
 import atlantafx.base.controls.Notification;
 import atlantafx.base.theme.Styles;
@@ -31,6 +30,8 @@ import komm.App;
 import java.util.UUID;
 
 public class CustomNotification {
+
+    private static final double NOTIFICATION_VIEW_ORDER = -1000;
 
     private final Notification notification;
     private final Timeline slideInAnimation;
@@ -51,7 +52,7 @@ public class CustomNotification {
     }
 
     public CustomNotification(String title, String content, UUID senderId) {
-        this(new KommNotification(buildForMessage(title, content, senderId), buildSenderAvatar(senderId)));
+        this(new KommNotification(buildForMessage(title, content), buildSenderAvatar(senderId)));
     }
 
     public CustomNotification(String title, Node content, FontIcon icon) {
@@ -133,7 +134,7 @@ public class CustomNotification {
         return new VBox(2, titleLabel, contentLabel);
     }
 
-    private static Node buildForMessage(String title, String content, UUID senderId) {
+    private static Node buildForMessage(String title, String content) {
         Label titleLabel = new Label(title);
         titleLabel.getStyleClass().add(Styles.TEXT_BOLD);
 
@@ -212,22 +213,7 @@ public class CustomNotification {
     }
 
     private void showNotificationAuto() {
-        StackPane target;
-
-        if (App.getModalPane().isDisplay()) {
-            var content = App.getModalPane().getContent();
-            if (content != null && content.getParent() instanceof StackPane contentParent) {
-                target = contentParent;
-            } else {
-                target = App.getStackPane();
-            }
-        } else {
-            target = App.getStackPane();
-        }
-
-        double topMargin = App.getCurrentPage() instanceof HomePage ? 110 : 70;
-        StackPane.setMargin(notification, new Insets(topMargin, 10, 0, 0));
-
+        StackPane target = App.getMainStackPane();
         showNotificationOnCustomPane(target);
     }
 
@@ -236,6 +222,7 @@ public class CustomNotification {
 
         StackPane.setMargin(notification, new Insets(70, 10, 0, 0));
 
+        notification.setViewOrder(NOTIFICATION_VIEW_ORDER);
         notification.setTranslateX(300);
 
         if (pane.getChildren().contains(notification)) {

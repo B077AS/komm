@@ -5,6 +5,8 @@ import com.google.gson.JsonObject;
 import javafx.application.Platform;
 import komm.App;
 import komm.api.json.GsonProvider;
+import komm.ui.cards.ChannelCard;
+import komm.utils.NotificationSounds;
 import komm.websocket.interfaces.WsInboundMessageHandler;
 import komm.websocket.messages.WsMessageType;
 import komm.websocket.messages.payloads.UserScreenSharePayload;
@@ -33,6 +35,20 @@ public class UserScreenShareHandler implements WsInboundMessageHandler {
                     .getChannelBoxes()
                     .values()
                     .forEach(box -> box.setUserScreenSharing(userId, p.isSharing()));
+
+            // Heard by everyone currently in the same voice channel as the streamer
+            // (including the streamer themselves, since they're a connected member
+            // of their own channel too) — not the whole server.
+            if (p.isSharing()) {
+                UUID myChannelId = App.getWebrtcRoomClient() != null
+                        ? App.getWebrtcRoomClient().getCurrentChannelId() : null;
+                if (myChannelId == null) return;
+                ChannelCard myChannelCard = App.getCachedServerPage()
+                        .getChannelSection().getChannelBoxes().get(myChannelId);
+                if (myChannelCard != null && myChannelCard.isUserConnected(userId)) {
+                    NotificationSounds.play(NotificationSounds.STREAM_STARTED, 0.2);
+                }
+            }
         });
     }
 }
