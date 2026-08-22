@@ -4,25 +4,23 @@
 #   1. jar        — sets the Maven version from the release tag (the tag is the
 #                   single source of truth; app.properties' client.version is
 #                   filtered from it; a leading "v" is tolerated and stripped),
-#                   builds the fat jar, attaches it to the release, and deploys
-#                   it to the hub over SSH (atomic: upload to a temp name, then
-#                   rename).
+#                   builds the fat jar and attaches it to the release. Nothing
+#                   further to deploy — the launcher fetches this jar straight
+#                   from the release (releases/latest via GitHub's API), verified
+#                   against the SHA-256 digest GitHub reports for the asset.
 #   2. installer / appimage — check out komm-launcher@main, bundle the exact
 #                   jar built in step 1 as the seed, and attach the resulting
 #                   Komm-Setup-<v>.exe / Komm-<v>-x86_64.AppImage to the SAME
 #                   release. Stable-named aliases (Komm-Setup.exe, Komm.AppImage)
-#                   are uploaded too so `releases/latest/download/...` links on
-#                   the hub site never change.
+#                   are uploaded too so `releases/latest/download/...` links stay
+#                   stable across versions.
 #
 # Manual flow (Actions tab -> Run workflow, tag = existing release e.g. 0.0.3):
-#   Skips the jar build and hub deploy; rebuilds only the installers from the
-#   CURRENT komm-launcher main against that release's already-published jar and
+#   Skips the jar build; rebuilds only the installers from the CURRENT
+#   komm-launcher main against that release's already-published jar and
 #   replaces the installer assets on it. Use this after launcher-only changes.
 #
 # Secrets:
-#   HUB_SSH_HOST / HUB_SSH_USER / HUB_SSH_KEY / HUB_CLIENT_JAR_PATH (+ optional
-#   HUB_SSH_PORT, default 22) — hub deploy; the step is skipped when HUB_SSH_HOST
-#   is unset. HUB_CLIENT_JAR_PATH is the absolute path of kommhub.client.jar.path.
 #   LAUNCHER_REPO_TOKEN (optional) — only needed if komm-launcher is private.
 
 name: Release
@@ -46,10 +44,6 @@ jobs:
   jar:
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
-    env:
-      # Mirrored from secrets so the deploy step's `if` can test it — the
-      # secrets context is not allowed in step-level if expressions.
-      HUB_SSH_HOST: ${{ secrets.HUB_SSH_HOST }}
     steps:
       - uses: actions/checkout@v4
 
@@ -86,28 +80,6 @@ jobs:
           gh release upload "${{ steps.v.outputs.tag }}" \
             "target/komm-${{ steps.v.outputs.version }}.jar" \
             --clobber -R "$GITHUB_REPOSITORY"
-
-      - name: Deploy jar to hub (atomic swap)
-        if: ${{ env.HUB_SSH_HOST != '' }}
-        env:
-          HUB_SSH_PORT: ${{ secrets.HUB_SSH_PORT }}
-          HUB_SSH_USER: ${{ secrets.HUB_SSH_USER }}
-          HUB_SSH_KEY: ${{ secrets.HUB_SSH_KEY }}
-          HUB_CLIENT_JAR_PATH: ${{ secrets.HUB_CLIENT_JAR_PATH }}
-          VERSION: ${{ steps.v.outputs.version }}
-        run: |
-          PORT="${HUB_SSH_PORT:-22}"
-          mkdir -p ~/.ssh
-          printf '%s\n' "$HUB_SSH_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -p "$PORT" "$HUB_SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
-          # Upload beside the live jar, then rename over it: clients polling
-          # /api/client/download can never see a half-written file.
-          scp -i ~/.ssh/deploy_key -P "$PORT" \
-            "target/komm-$VERSION.jar" \
-            "$HUB_SSH_USER@$HUB_SSH_HOST:$HUB_CLIENT_JAR_PATH.tmp"
-          ssh -i ~/.ssh/deploy_key -p "$PORT" "$HUB_SSH_USER@$HUB_SSH_HOST" \
-            "mv -f '$HUB_CLIENT_JAR_PATH.tmp' '$HUB_CLIENT_JAR_PATH'"
 
   installer:
     name: Windows installer
@@ -176,7 +148,7 @@ jobs:
       - name: Build installer
         run: |
           echo "Building installers from komm-launcher@$(git rev-parse HEAD)"
-          mvn -B clean package -Pinstaller,prod \
+          mvn -B clean package -Pinstaller \
             "-Dclient.version=${{ steps.v.outputs.version }}" \
             "-Dclient.jar=${{ github.workspace }}\client-jar\komm-${{ steps.v.outputs.version }}.jar" \
             "-Discc.path=C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
@@ -260,7 +232,7 @@ jobs:
       - name: Build AppImage
         run: |
           echo "Building installers from komm-launcher@$(git rev-parse HEAD)"
-          mvn -B clean package -Pappimage,prod \
+          mvn -B clean package -Pappimage \
             "-Dclient.version=${{ steps.v.outputs.version }}" \
             "-Dclient.jar=$GITHUB_WORKSPACE/client-jar/komm-${{ steps.v.outputs.version }}.jar"
 

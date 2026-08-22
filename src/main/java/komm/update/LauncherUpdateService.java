@@ -1,15 +1,20 @@
 package komm.update;
 
+import com.google.gson.Gson;
 import com.sun.jna.Platform;
-import komm.api.HttpClientWrapper;
-import komm.utils.AppConfig;
 import lombok.extern.slf4j.Slf4j;
 
+import java.io.InputStream;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
@@ -18,7 +23,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Checks the hub, once per run, for a newer launcher than the one that started
+ * Checks GitHub, once per run, for a newer launcher than the one that started
  * this client, and swaps it in place in the background if so.
  *
  * <p>The launcher forwards its own version as {@code -Dlauncher.version=...}
@@ -40,6 +45,25 @@ import java.util.concurrent.TimeUnit;
 public class LauncherUpdateService {
 
     private static final int INITIAL_DELAY_SECONDS = 5;
+
+    /** Public GitHub repo the launcher is released from — overridable for testing against a fork. */
+    private static final String GITHUB_LAUNCHER_OWNER = systemPropertyOr("github.launcher.owner", "B077AS");
+    private static final String GITHUB_LAUNCHER_REPO = systemPropertyOr("github.launcher.repo", "komm-launcher");
+
+    private static final String WINDOWS_ASSET_NAME = "komm-launcher-windows.jar";
+    private static final String LINUX_ASSET_NAME = "komm-launcher-linux.AppImage";
+
+    private final Gson gson = new Gson();
+    private final HttpClient http = HttpClient.newBuilder()
+            .version(HttpClient.Version.HTTP_1_1)
+            .connectTimeout(Duration.ofSeconds(10))
+            .followRedirects(HttpClient.Redirect.NORMAL)
+            .build();
+
+    private static String systemPropertyOr(String key, String fallback) {
+        String value = System.getProperty(key);
+        return value == null || value.isBlank() ? fallback : value.trim();
+    }
 
     private ScheduledExecutorService scheduler;
 
@@ -63,37 +87,51 @@ public class LauncherUpdateService {
     private void checkAndSwap() {
         try {
             String currentVersion = System.getProperty("launcher.version");
-            String os = Platform.isWindows() ? "windows" : "linux";
+            boolean windows = Platform.isWindows();
+            String assetName = windows ? WINDOWS_ASSET_NAME : LINUX_ASSET_NAME;
 
-            HttpClientWrapper http = new HttpClientWrapper(AppConfig.getInstance().getApiUrl());
-            LauncherVersionResponse latest = http.get("/api/launcher/latest?os=" + os, null, LauncherVersionResponse.class);
-            if (latest == null || latest.getVersion() == null || latest.getDownloadUrl() == null) {
-                log.debug("No launcher version info from hub; skipping update check");
+            GithubRelease release = fetchLatestRelease();
+            if (release == null || release.getTagName() == null) {
+                log.debug("No launcher release info from GitHub; skipping update check");
                 return;
             }
+            String tagName = release.getTagName();
+            String latestVersion = tagName.startsWith("v") ? tagName.substring(1) : tagName;
 
-            if (latest.getVersion().equals(currentVersion)) {
+            if (latestVersion.equals(currentVersion)) {
                 log.debug("Launcher is up to date (version {})", currentVersion);
                 return;
             }
 
-            log.info("Launcher update available: {} -> {}", currentVersion, latest.getVersion());
-            byte[] bytes = http.downloadBinary("/api/launcher/download?os=" + os, null, null);
+            GithubRelease.GithubAsset asset = release.findAsset(assetName);
+            if (asset == null || asset.getBrowserDownloadUrl() == null) {
+                log.warn("Launcher release {} has no asset named {} yet; skipping swap", latestVersion, assetName);
+                return;
+            }
+
+            log.info("Launcher update available: {} -> {}", currentVersion, latestVersion);
+            byte[] bytes = downloadBinary(asset.getBrowserDownloadUrl());
             if (bytes == null || bytes.length == 0) {
                 log.warn("Launcher update download was empty; skipping swap");
                 return;
             }
 
-            if (latest.getSha256() != null && !latest.getSha256().isBlank()) {
+            // GitHub computes and returns this itself for every uploaded asset — no
+            // separate checksum file or hub involved.
+            String expectedSha256 = asset.getDigest();
+            if (expectedSha256 != null && expectedSha256.startsWith("sha256:")) {
+                expectedSha256 = expectedSha256.substring("sha256:".length());
+            }
+            if (expectedSha256 != null && !expectedSha256.isBlank()) {
                 MessageDigest digest = MessageDigest.getInstance("SHA-256");
                 String actual = HexFormat.of().formatHex(digest.digest(bytes));
-                if (!latest.getSha256().trim().equalsIgnoreCase(actual)) {
+                if (!expectedSha256.trim().equalsIgnoreCase(actual)) {
                     log.warn("Downloaded launcher update failed integrity check; skipping swap");
                     return;
                 }
             }
 
-            if (Platform.isWindows()) {
+            if (windows) {
                 swapWindowsLauncherJar(bytes);
             } else {
                 swapLinuxAppImage(bytes);
@@ -101,6 +139,31 @@ public class LauncherUpdateService {
         } catch (Exception e) {
             // Best-effort: a failed launcher self-update must never disrupt the running client.
             log.debug("Launcher update check failed (non-fatal): {}", e.toString());
+        }
+    }
+
+    /** {@code GET /repos/{owner}/{repo}/releases/latest}. */
+    private GithubRelease fetchLatestRelease() throws Exception {
+        String url = "https://api.github.com/repos/" + GITHUB_LAUNCHER_OWNER + "/" + GITHUB_LAUNCHER_REPO + "/releases/latest";
+        HttpRequest req = HttpRequest.newBuilder(URI.create(url))
+                .header("Accept", "application/vnd.github+json")
+                .header("X-GitHub-Api-Version", "2022-11-28")
+                .GET().build();
+        HttpResponse<String> res = http.send(req, HttpResponse.BodyHandlers.ofString());
+        if (res.statusCode() != 200) {
+            throw new IllegalStateException("GitHub returned HTTP " + res.statusCode());
+        }
+        return gson.fromJson(res.body(), GithubRelease.class);
+    }
+
+    private byte[] downloadBinary(String url) throws Exception {
+        HttpRequest req = HttpRequest.newBuilder(URI.create(url)).GET().build();
+        HttpResponse<InputStream> res = http.send(req, HttpResponse.BodyHandlers.ofInputStream());
+        if (res.statusCode() != 200) {
+            throw new IllegalStateException("Download failed: HTTP " + res.statusCode());
+        }
+        try (InputStream in = res.body()) {
+            return in.readAllBytes();
         }
     }
 
