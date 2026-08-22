@@ -126,7 +126,7 @@ A few rules keep the client sane (see `CLAUDE.md` for the full contributor guide
 
 The client's `update/LauncherUpdateService` does something a little unusual: once per start, it checks whether the **[komm-launcher](https://github.com/B077AS/komm-launcher)** that started it is out of date, and if so, downloads and swaps the launcher's files in the background — not just its own jar. It has to be the client that does this, not the launcher: by the time the client is running, the launcher process has already exited, so there's nothing left to check on its own behalf.
 
-- It reads `System.getProperty("launcher.version")` — a value the launcher forwards when it spawns the client — and compares it against `GET {hub}/api/launcher/latest?os=windows|linux`. A missing value (an old launcher, from before this existed) is always treated as outdated.
+- It reads `System.getProperty("launcher.version")` — a value the launcher forwards when it spawns the client — and compares it against the latest release tag from `GET api.github.com/repos/B077AS/komm-launcher/releases/latest`, verifying the per-OS asset it downloads against the SHA-256 digest GitHub reports for it. A missing value (an old launcher, from before this existed) is always treated as outdated.
 - On Windows it overwrites `app/komm-launcher.jar` next to the running install; on Linux it overwrites the `.AppImage` at `$APPIMAGE` (an AppImage is one opaque unit — there's no "just the launcher part" to update). Both are safe to replace while in use — the launcher process is already gone, and POSIX file semantics mean the currently-running AppImage keeps working until it next exits.
 - It's entirely best-effort and silent: any failure is logged and swallowed, since a failed launcher self-update must never interfere with the client actually running. No UI, no restart prompt — the new launcher is just what's there the next time the user opens the app.
 
@@ -225,7 +225,7 @@ On first launch the client creates its app data directory — `%APPDATA%\Komm` o
 
 **Can the hub read my community's messages?** No. After a one-time 60-second ticket exchange, the client talks directly to the community's server — messages, voice and files never pass through the hub.
 
-**How do updates work?** The launcher checks the hub for a new client version on every start and swaps in the new JAR automatically. The client returns the favor: it checks whether the *launcher* itself is out of date and self-updates it in the background too (see [Keeping the launcher up to date](#keeping-the-launcher-up-to-date)). Install once, forget about it — in both directions.
+**How do updates work?** The launcher checks GitHub directly for a new client release on every start and swaps in the new JAR automatically. The client returns the favor: it checks whether the *launcher* itself is out of date (also straight from GitHub) and self-updates it in the background too (see [Keeping the launcher up to date](#keeping-the-launcher-up-to-date)). No hub involved in either direction — install once, forget about it.
 
 ## License
 
