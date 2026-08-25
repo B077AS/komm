@@ -42,9 +42,10 @@ import java.util.stream.Stream;
 public final class NotificationSounds {
 
     public static final String MESSAGE_RECEIVED = "universfield-new-notification-010-352755.mp3";
-    public static final String CHANNEL_JOIN = "universfield-new-notification-019-363747.mp3";
-    public static final String STREAM_WATCH_STARTED = "universfield-new-notification-014-363678.mp3";
-    public static final String STREAM_STARTED = "universfield-new-notification-08-352461.mp3";
+    public static final String CHANNEL_JOIN = "universfield-new-notification-07-210334.mp3";
+    public static final String STREAM_WATCH_STARTED = "universfield-new-notification-08-352461.mp3";
+    public static final String STREAM_WATCH_ENDED = "universfield-new-notification-014-363678.mp3";
+    public static final String STREAM_STARTED = "universfield-new-notification-019-363747.mp3";
 
     private static final String CLASSPATH_DIR = "/sounds";
 
