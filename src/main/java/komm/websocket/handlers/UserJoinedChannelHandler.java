@@ -62,10 +62,10 @@ public class UserJoinedChannelHandler implements WsInboundMessageHandler {
                     card.addConnectedUser(user);
                     if (isSelf) {
                         card.onJoinConfirmed();
-                        NotificationSounds.play(NotificationSounds.CHANNEL_JOIN, 0.5);
+                        NotificationSounds.play(NotificationSounds.CHANNEL_JOIN, 0.8);
                     } else if (channelId.equals(App.getWebrtcRoomClient() != null
                             ? App.getWebrtcRoomClient().getCurrentChannelId() : null)) {
-                        NotificationSounds.play(NotificationSounds.CHANNEL_JOIN, 0.5);
+                        NotificationSounds.play(NotificationSounds.CHANNEL_JOIN, 0.8);
                     }
                 });
 

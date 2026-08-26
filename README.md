@@ -116,7 +116,7 @@ mic ─► capture ─► AEC3 ─► RNNoise / WebRTC-NS ─► AGC2 ─► Sil
 | `utils/` | App config, global hotkeys, audio device discovery, ping/packet-loss history, user settings |
 | `update/` | `LauncherUpdateService` — checks and self-updates the launcher that started this client (see below) |
 
-A few rules keep the client sane (see `CLAUDE.md` for the full contributor guide):
+A few rules keep the client sane:
 
 - **`AppState` is the single source of truth** for mic/speaker/user status — UI components bind to its JavaFX properties and never touch WebRTC or the WebSocket directly.
 - UI mutations happen on the FX thread (`Platform.runLater`); HTTP calls happen off it (virtual threads).

@@ -219,11 +219,11 @@
             <artifactId>jnativehook</artifactId>
             <version>2.2.2</version>
         </dependency>
-        <!-- https://mvnrepository.com/artifact/org.antlr/antlr4-runtime -->
+        <!-- https://mvnrepository.com/artifact/com.fifesoft/rsyntaxtextarea -->
         <dependency>
-            <groupId>org.antlr</groupId>
-            <artifactId>antlr4-runtime</artifactId>
-            <version>4.13.2</version>
+            <groupId>com.fifesoft</groupId>
+            <artifactId>rsyntaxtextarea</artifactId>
+            <version>4.0.1</version>
         </dependency>
     </dependencies>
 
@@ -353,22 +353,6 @@
                 </configuration>
             </plugin>
             <plugin>
-                <groupId>org.antlr</groupId>
-                <artifactId>antlr4-maven-plugin</artifactId>
-                <version>4.13.2</version>
-                <executions>
-                    <execution>
-                        <goals>
-                            <goal>antlr4</goal>
-                        </goals>
-                    </execution>
-                </executions>
-                <configuration>
-                    <listener>false</listener>
-                    <visitor>false</visitor>
-                </configuration>
-            </plugin>
-            <plugin>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.15.0</version>
                 <configuration>
@@ -420,6 +404,5 @@
     </build>
 </project>
 
-<!-- mvn generate-sources -->
 <!-- mvn clean package -Ppackage -->
 <!-- mvn clean package -Ppackage,prod -->

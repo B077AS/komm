@@ -46,7 +46,7 @@ public class UserScreenShareHandler implements WsInboundMessageHandler {
                 ChannelCard myChannelCard = App.getCachedServerPage()
                         .getChannelSection().getChannelBoxes().get(myChannelId);
                 if (myChannelCard != null && myChannelCard.isUserConnected(userId)) {
-                    NotificationSounds.play(NotificationSounds.STREAM_STARTED, 0.2);
+                    NotificationSounds.play(NotificationSounds.STREAM_STARTED, 0.5);
                 }
             }
         });

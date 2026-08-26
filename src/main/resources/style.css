@@ -5443,14 +5443,23 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 
 /* syntax token colours — applied to the span Text nodes (must out-specify the
    base .code-area .text rule above, hence the extra .text.cm-* qualifier) */
-.code-area .text.cm-keyword    { -fx-fill: #a97ec8; }
-.code-area .text.cm-string     { -fx-fill: #88a86c; }
-.code-area .text.cm-comment    { -fx-fill: #6c7484; -fx-font-style: italic; }
-.code-area .text.cm-number     { -fx-fill: #c0915a; }
-.code-area .text.cm-annotation { -fx-fill: #a97ec8; }
-.code-area .text.cm-type       { -fx-fill: #c4a85c; }
-.code-area .text.cm-method     { -fx-fill: #6699cc; }
-.code-area .text.cm-variable   { -fx-fill: #4aabab; }
+/* One Dark — colors pulled directly from the real IntelliJ "One Dark Theme"
+   plugin's editor scheme (one-dark/jetbrains-one-dark-theme, one_dark.xml):
+   DEFAULT_KEYWORD, DEFAULT_STRING, DEFAULT_LINE_COMMENT, DEFAULT_NUMBER,
+   DEFAULT_METADATA, DEFAULT_CLASS_NAME, DEFAULT_FUNCTION_CALL, DEFAULT_IDENTIFIER.
+   Note DEFAULT_IDENTIFIER (plain vars/params) is a dim gray, not red — IntelliJ
+   only reds instance/static FIELDS and globals, a distinction our tokenizer
+   (no semantic analysis) can't make, so plain identifiers stay dim like IntelliJ's
+   own default rather than being colored as if they were all fields. */
+.code-area .text.cm-keyword    { -fx-fill: #c678dd; }
+.code-area .text.cm-string     { -fx-fill: #98c379; }
+.code-area .text.cm-comment    { -fx-fill: #5c6370; -fx-font-style: italic; }
+.code-area .text.cm-number     { -fx-fill: #d19a66; }
+.code-area .text.cm-annotation { -fx-fill: #e5c07b; }
+.code-area .text.cm-type       { -fx-fill: #e5c07b; }
+.code-area .text.cm-method     { -fx-fill: #61afef; }
+.code-area .text.cm-variable   { -fx-fill: #abb2bf; }
+.code-area .text.cm-final      { -fx-fill: #e06c75; }
 
 .ring-progress-indicator:indeterminate>.container>.ring {
 	-fx-stroke: linear-gradient(-color-bg-default, -color-progress-indicator-fill);

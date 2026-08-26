@@ -15,8 +15,8 @@ public class StreamViewerCountHandler implements WsInboundMessageHandler {
 
     private final Gson gson = GsonProvider.get();
 
-    /** Last known viewer count for MY OWN stream; used to detect a new watcher joining
-     *  (count going up) — a watcher leaving plays no sound, only updates the count. */
+    /** Last known viewer count for MY OWN stream; used to detect a watcher joining
+     *  (count going up) vs. leaving (count going down). */
     private int lastOwnViewerCount = 0;
 
     @Override
@@ -34,10 +34,12 @@ public class StreamViewerCountHandler implements WsInboundMessageHandler {
         boolean isOwnStream = App.getUser() != null
                 && App.getUser().getUserId().toString().equals(streamerUserId);
         boolean newWatcher = isOwnStream && count > lastOwnViewerCount;
+        boolean watcherLeft = isOwnStream && count < lastOwnViewerCount;
         if (isOwnStream) lastOwnViewerCount = count;
 
         Platform.runLater(() -> {
             if (newWatcher) NotificationSounds.play(NotificationSounds.STREAM_WATCH_STARTED, 0.5);
+            else if (watcherLeft) NotificationSounds.play(NotificationSounds.STREAM_WATCH_ENDED, 0.5);
 
             ServerPage page = App.getCachedServerPage();
             if (page != null) {

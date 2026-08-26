@@ -1,221 +1,241 @@
 package komm.ui.code;
 
-import org.antlr.v4.runtime.CharStreams;
-import org.antlr.v4.runtime.Lexer;
-import org.antlr.v4.runtime.Vocabulary;
+import org.fife.ui.rsyntaxtextarea.TokenMaker;
+import org.fife.ui.rsyntaxtextarea.TokenTypes;
+import org.fife.ui.rsyntaxtextarea.modes.CSSTokenMaker;
+import org.fife.ui.rsyntaxtextarea.modes.GoTokenMaker;
+import org.fife.ui.rsyntaxtextarea.modes.HTMLTokenMaker;
+import org.fife.ui.rsyntaxtextarea.modes.JavaScriptTokenMaker;
+import org.fife.ui.rsyntaxtextarea.modes.JavaTokenMaker;
+import org.fife.ui.rsyntaxtextarea.modes.PythonTokenMaker;
 import org.fxmisc.richtext.model.StyleSpans;
 import org.fxmisc.richtext.model.StyleSpansBuilder;
 
-import java.util.*;
+import javax.swing.text.Segment;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
 
-public final class CodeHighlighter {
-
-    private CodeHighlighter() {}
+/**
+ * Tokenizes code with RSyntaxTextArea's {@link TokenMaker} parsers, used
+ * purely headlessly here — {@code getTokenList} is a plain string scanner,
+ * no Swing UI is ever created — and maps each token to one of the fixed
+ * {@code cm-*} CSS classes that {@code style.css} colors, for RichTextFX
+ * to render in the app's own {@code CodeArea}.
+ *
+ * <p>Two things about the underlying tokenizer are not obvious from its public
+ * API and matter a lot here (confirmed against RSTA's own JFlex grammar
+ * sources, e.g. {@code JavaTokenMaker.flex}):
+ * <ul>
+ *   <li>{@code . , ;} are lexed as {@link TokenTypes#IDENTIFIER}, not a
+ *       separator type — {@link #isIdentifierShaped} filters those out before
+ *       any identifier-only heuristic runs.</li>
+ *   <li>{@link TokenTypes#FUNCTION} is <em>not</em> "this is a method call" —
+ *       for Java it is a ~100-entry hardcoded whitelist of well-known JDK
+ *       class/exception names (Timer, TreeMap, UUID, ...), i.e. types. Real
+ *       method-call detection is done ourselves via {@link #isFollowedByOpenParen}.</li>
+ * </ul>
+ */
+public class CodeHighlighter {
 
     /** A contiguous slice of the source. {@code styleClass} is {@code null} for unstyled text. */
     public record Token(int start, int end, String styleClass) {}
 
-    // Keyword token-type sets auto-derived from each grammar's vocabulary (no hardcoded lists).
-    // CSS/HTML entries are empty — their keywords are handled by name-based classification below.
-    private static final Map<CodeLanguage, Set<Integer>> KEYWORD_TYPES;
-
-    static {
-        Map<CodeLanguage, Set<Integer>> map = new EnumMap<>(CodeLanguage.class);
-        map.put(CodeLanguage.JAVA,       kwTypes(new JavaLexer(cs("")),        Set.of("BOOL_LITERAL", "NULL_LITERAL")));
-        map.put(CodeLanguage.PYTHON,     kwTypes(new Python3Lexer(cs("")),      Set.of()));
-        map.put(CodeLanguage.JAVASCRIPT, kwTypes(new JavaScriptLexer(cs("")),   Set.of("BooleanLiteral")));
-        map.put(CodeLanguage.GO,         kwTypes(new GoLexer(cs("")),           Set.of()));
-        KEYWORD_TYPES = Collections.unmodifiableMap(map);
-    }
-
-    private static org.antlr.v4.runtime.CharStream cs(String s) {
-        return CharStreams.fromString(s);
-    }
-
-    private static Set<Integer> kwTypes(Lexer lexer, Set<String> extra) {
-        Vocabulary vocab = lexer.getVocabulary();
-        Set<Integer> types = new HashSet<>();
-        for (int t = 1; t <= vocab.getMaxTokenType(); t++) {
-            String literal = vocab.getLiteralName(t);
-            if (literal != null) {
-                String word = literal.substring(1, literal.length() - 1);
-                if (word.matches("[a-zA-Z][a-zA-Z0-9_-]*")) types.add(t);
-            }
-            if (extra.contains(vocab.getSymbolicName(t))) types.add(t);
-        }
-        return Collections.unmodifiableSet(types);
-    }
-
-    // Per-language: identifier/paren token names and whether uppercase → cm-type.
-    // CSS and HTML fall to default (null) because they use dedicated classifiers instead.
-    private record Profile(String identSym, String parenSym, boolean typeHeuristic) {}
-
-    private static Profile profileOf(CodeLanguage lang) {
-        return switch (lang) {
-            case JAVA       -> new Profile("IDENTIFIER", "LPAREN",     true);
-            case PYTHON     -> new Profile("NAME",       "OPEN_PAREN", false);
-            case JAVASCRIPT -> new Profile("Identifier", "OpenParen",  true);
-            case GO         -> new Profile("IDENTIFIER", "L_PAREN",    true);
-            default         -> new Profile(null,          null,         false);
+    private static TokenMaker tokenMakerFor(CodeLanguage language) {
+        return switch (language) {
+            case JAVA       -> new JavaTokenMaker();
+            case PYTHON     -> new PythonTokenMaker();
+            case JAVASCRIPT -> new JavaScriptTokenMaker();
+            case GO         -> new GoTokenMaker();
+            case CSS        -> new CSSTokenMaker();
+            case HTML       -> new HTMLTokenMaker();
+            default         -> null;
         };
     }
 
     public static List<Token> tokens(String text, CodeLanguage language) {
         if (text == null || text.isEmpty()) return List.of();
-        if (language == CodeLanguage.PLAIN_TEXT)
-            return List.of(new Token(0, text.length(), null));
+        TokenMaker tokenMaker = tokenMakerFor(language);
+        if (tokenMaker == null) return List.of(new Token(0, text.length(), null));
 
-        Lexer lexer = createLexer(text, language);
-        if (lexer == null) return List.of(new Token(0, text.length(), null));
-        lexer.removeErrorListeners();
-
-        Vocabulary vocab = lexer.getVocabulary();
-        List<? extends org.antlr.v4.runtime.Token> raw = lexer.getAllTokens();
-
-        Set<Integer> kwTypes = KEYWORD_TYPES.getOrDefault(language, Set.of());
-        Profile prof = profileOf(language);
-        String identSym = prof.identSym();
-        String parenSym = prof.parenSym();
-
-        String[] styles = new String[raw.size()];
-
-        // Pass 1 — classify each token; identifiers left null for later passes
-        for (int i = 0; i < raw.size(); i++) {
-            org.antlr.v4.runtime.Token t = raw.get(i);
-            String sym   = symName(t, vocab);
-            String ttext = t.getText();
-            styles[i] = switch (language) {
-                case CSS  -> cssTokStyle(sym);
-                case HTML -> htmlTokStyle(sym);
-                default   -> genericTokStyle(sym, ttext, kwTypes, t, prof, identSym);
-            };
-        }
-
-        if (identSym == null) {
-            // CSS: Ident immediately after '.' → class selector → cm-type
-            if (language == CodeLanguage.CSS) {
-                for (int i = 0; i + 1 < raw.size(); i++) {
-                    if ("Dot".equals(symName(raw.get(i), vocab))
-                            && "Ident".equals(symName(raw.get(i + 1), vocab))) {
-                        styles[i + 1] = "cm-type";
-                    }
-                }
-            }
-            return buildTokenList(text, raw, styles);
-        }
-
-        // Pass 2 — extend cm-annotation from @ to the identifier that follows it
-        for (int i = 0; i < raw.size(); i++) {
-            if (!"cm-annotation".equals(styles[i])) continue;
-            for (int j = i + 1; j < raw.size(); j++) {
-                String n = symName(raw.get(j), vocab);
-                if (isWs(n)) continue;
-                if (identSym.equals(n)) styles[j] = "cm-annotation";
-                break;
-            }
-        }
-
-        // Pass 3 — identifier immediately before '(' → cm-method
-        for (int i = 0; i < raw.size(); i++) {
-            if (styles[i] != null) continue;
-            if (!identSym.equals(symName(raw.get(i), vocab))) continue;
-            for (int j = i + 1; j < raw.size(); j++) {
-                String n = symName(raw.get(j), vocab);
-                if (isWs(n)) continue;
-                if (parenSym != null && parenSym.equals(n)) styles[i] = "cm-method";
-                break;
-            }
-        }
-
-        // Pass 4 — remaining null-styled identifiers → cm-variable
-        for (int i = 0; i < raw.size(); i++) {
-            if (styles[i] != null) continue;
-            if (identSym.equals(symName(raw.get(i), vocab))) styles[i] = "cm-variable";
-        }
-
-        return buildTokenList(text, raw, styles);
-    }
-
-    // ── Language-specific classifiers ────────────────────────────────────────
-
-    private static String genericTokStyle(String sym, String ttext,
-            Set<Integer> kwTypes, org.antlr.v4.runtime.Token t,
-            Profile prof, String identSym) {
-        if (kwTypes.contains(t.getType()))   return "cm-keyword";
-        if (isComment(sym))                  return "cm-comment";
-        if (isString(sym))                   return "cm-string";
-        if (isNumber(sym))                   return "cm-number";
-        if ("AT".equals(sym))                return "cm-annotation";
-        if (identSym != null && identSym.equals(sym)
-                && ttext != null && !ttext.isEmpty()
-                && prof.typeHeuristic() && Character.isUpperCase(ttext.charAt(0)))
-            return "cm-type";
-        return null;
-    }
-
-    // CSS grammar: keywords are case-insensitive char-by-char patterns, not single literals,
-    // so vocabulary scanning finds nothing. We match by symbolic token name instead.
-    private static String cssTokStyle(String sym) {
-        return switch (sym) {
-            case "Comment"                                   -> "cm-comment";
-            case "String_"                                   -> "cm-string";
-            case "Number", "Dimension", "UnknownDimension",
-                 "Percentage", "UnicodeRange"               -> "cm-number";
-            case "Hash"                                      -> "cm-number";   // hex color or #id
-            // CSS functions — grammar defines these as Ident+'(' combined into one token
-            case "Function_", "Calc", "Var", "Url",
-                 "Url_", "PseudoNot", "DxImageTransform"   -> "cm-method";
-            case "Variable"                                  -> "cm-variable"; // --custom-prop
-            case "Important"                                 -> "cm-keyword";
-            // At-rules
-            case "Import", "Page", "Media", "Namespace",
-                 "Charset", "FontFace", "Supports",
-                 "Keyframes", "Viewport", "CounterStyle",
-                 "FontFeatureValues", "AtKeyword"           -> "cm-keyword";
-            // Case-insensitive keywords (and, or, not, only, from, to)
-            case "And", "Or", "Not", "MediaOnly",
-                 "From", "To"                               -> "cm-keyword";
-            default                                          -> null;
-        };
-    }
-
-    // HTML grammar uses lexer modes. Token names are explicit and don't follow
-    // the UPPER_CASE or MixedCase conventions of programming language grammars.
-    private static String htmlTokStyle(String sym) {
-        return switch (sym) {
-            case "HTML_COMMENT",
-                 "HTML_CONDITIONAL_COMMENT"                 -> "cm-comment";
-            case "TAG_NAME"                                  -> "cm-type";
-            case "ATTVALUE_VALUE"                            -> "cm-string";
-            case "TAG_OPEN", "TAG_CLOSE",
-                 "TAG_SLASH_CLOSE", "TAG_SLASH"             -> "cm-keyword";
-            case "SCRIPT_OPEN", "STYLE_OPEN"                -> "cm-keyword";
-            case "DTD"                                       -> "cm-type";
-            default                                          -> null;
-        };
-    }
-
-    // ── Shared helpers ────────────────────────────────────────────────────────
-
-    private static List<Token> buildTokenList(String text,
-            List<? extends org.antlr.v4.runtime.Token> raw, String[] styles) {
-        List<Token> result = new ArrayList<>(raw.size() + 4);
+        List<Token> result = new ArrayList<>();
+        String[] lines = text.split("\n", -1);
         int cursor = 0;
-        for (int i = 0; i < raw.size(); i++) {
-            org.antlr.v4.runtime.Token t = raw.get(i);
-            if (t.getType() == org.antlr.v4.runtime.Token.EOF) break;
-            int start = t.getStartIndex();
-            int stop  = t.getStopIndex() + 1;
-            if (start < 0 || start >= text.length()) continue;
-            stop = Math.min(stop, text.length());
-            if (stop <= start) continue;
-            if (start < cursor) { cursor = Math.max(cursor, stop); continue; }
-            if (start > cursor) result.add(new Token(cursor, start, null));
-            result.add(new Token(start, stop, styles[i]));
-            cursor = stop;
+        int offset = 0;
+        int lineStartTokenType = TokenTypes.NULL;
+
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i];
+            Segment segment = new Segment(line.toCharArray(), 0, line.length());
+            int lineCharEnd = offset + line.length();
+
+            org.fife.ui.rsyntaxtextarea.Token first = tokenMaker.getTokenList(segment, lineStartTokenType, offset);
+            boolean importLine = isImportOrPackageLine(first, language);
+            boolean prevWasNew = false;
+
+            for (org.fife.ui.rsyntaxtextarea.Token t = first; t != null; t = t.getNextToken()) {
+                if (t.getType() == TokenTypes.NULL || t.length() <= 0) continue;
+                int rawStart = t.getOffset();
+                // A token still "open" at end-of-line (an unterminated block comment or
+                // template literal continuing onto the next line) can report a length that
+                // runs past what this line's own char array actually holds — a real quirk
+                // in RSTA's generated tokenizers, not just a theoretical edge case (verified
+                // against JavaScriptTokenMaker). Any content-inspecting helper below (charAt,
+                // is(), isSingleChar()) would throw ArrayIndexOutOfBoundsException on it, so
+                // such tokens are only ever classified by type, never by content.
+                boolean fitsInLine = rawStart + t.length() <= lineCharEnd;
+                int end = Math.min(rawStart + t.length(), lineCharEnd);
+                if (end <= cursor) continue;
+                int start = Math.max(rawStart, cursor);
+                if (start >= end) continue;
+                if (start > cursor) result.add(new Token(cursor, start, null));
+
+                boolean identifierShaped = fitsInLine && isIdentifierShaped(t);
+                String styleClass;
+                if (importLine && identifierShaped && t.getType() != TokenTypes.RESERVED_WORD) {
+                    // Whole dotted path of an import/package statement, not just the class name.
+                    styleClass = "cm-type";
+                } else if (identifierShaped && isCallable(t.getType()) && isFollowedByOpenParen(t)) {
+                    // `new Foo(...)` is a type/constructor reference; anything else immediately
+                    // followed by `(` is an actual call — RSTA has no such lookahead itself.
+                    styleClass = prevWasNew ? "cm-type" : "cm-method";
+                } else if (fitsInLine) {
+                    styleClass = styleFor(t, language);
+                } else {
+                    styleClass = safeStyleFor(t.getType());
+                }
+                result.add(new Token(start, end, styleClass));
+                cursor = end;
+
+                if (!t.isWhitespace()) prevWasNew = fitsInLine && t.is(TokenTypes.RESERVED_WORD, "new");
+            }
+
+            int lineEnd = offset + line.length();
+            if (lineEnd > cursor) {
+                result.add(new Token(cursor, lineEnd, null));
+                cursor = lineEnd;
+            }
+
+            lineStartTokenType = tokenMaker.getLastTokenTypeOnLine(segment, lineStartTokenType);
+            offset = lineEnd + 1; // '\n' consumed between this line and the next
+
+            if (i < lines.length - 1 && offset <= text.length()) {
+                result.add(new Token(cursor, offset, null)); // the '\n' itself
+                cursor = offset;
+            }
         }
+
         if (cursor < text.length()) result.add(new Token(cursor, text.length(), null));
         return result;
+    }
+
+    // `. , ;` come back as IDENTIFIER from RSTA's own grammar (see class javadoc) —
+    // this is what actually distinguishes a real name from stray punctuation.
+    private static boolean isIdentifierShaped(org.fife.ui.rsyntaxtextarea.Token t) {
+        return t.length() > 0 && Character.isJavaIdentifierStart(t.charAt(0));
+    }
+
+    // Token types that represent some kind of name — the only ones worth checking
+    // for a following '(' to decide "this is being called".
+    private static boolean isCallable(int type) {
+        return type == TokenTypes.IDENTIFIER || type == TokenTypes.VARIABLE || type == TokenTypes.FUNCTION;
+    }
+
+    private static boolean isFollowedByOpenParen(org.fife.ui.rsyntaxtextarea.Token t) {
+        for (org.fife.ui.rsyntaxtextarea.Token n = t.getNextToken(); n != null; n = n.getNextToken()) {
+            if (n.getType() == TokenTypes.NULL || n.isWhitespace()) continue;
+            // Type check first: '(' is always SEPARATOR, so this never reaches isSingleChar
+            // (which touches the token's characters) on some other, possibly malformed token.
+            return n.getType() == TokenTypes.SEPARATOR && n.isSingleChar('(');
+        }
+        return false;
+    }
+
+    // Languages where an identifier starting with an uppercase letter is treated
+    // as a type reference (class/interface usage) rather than a plain variable —
+    // RSTA's DATA_TYPE token only fires for built-in primitive keywords, so
+    // without this every class name (extremely common) would fall through to
+    // the plain-identifier color and the whole snippet would read flat. Also
+    // gates the ALL_CAPS-means-constant convention these languages share.
+    private static boolean usesCapitalizedTypeHeuristic(CodeLanguage language) {
+        return language == CodeLanguage.JAVA || language == CodeLanguage.JAVASCRIPT || language == CodeLanguage.GO;
+    }
+
+    // True if `first` (the first token of a line) opens a Java import/package
+    // statement — the whole dotted path gets colored as a type reference, since
+    // that is how the real IntelliJ Java editor renders it, not just the leaf
+    // class name at the end.
+    private static boolean isImportOrPackageLine(org.fife.ui.rsyntaxtextarea.Token first, CodeLanguage language) {
+        if (language != CodeLanguage.JAVA) return false;
+        for (org.fife.ui.rsyntaxtextarea.Token t = first; t != null; t = t.getNextToken()) {
+            if (t.getType() == TokenTypes.NULL || t.isWhitespace()) continue;
+            return t.is(TokenTypes.RESERVED_WORD, "import") || t.is(TokenTypes.RESERVED_WORD, "package");
+        }
+        return false;
+    }
+
+    // ALL_CAPS identifiers (MAX_RETRIES, FOO_BAR) read as constants/`final` fields
+    // by convention in these languages — our tokenizer has no semantic analysis to
+    // confirm `final`/`static final`, so this textual convention is the best proxy.
+    private static boolean looksLikeConstant(org.fife.ui.rsyntaxtextarea.Token t) {
+        // Single uppercase letters are overwhelmingly generic type parameters
+        // (T, E, K, V...), not constants — require at least two characters.
+        if (t.length() < 2) return false;
+        boolean hasLetter = false;
+        for (int i = 0, len = t.length(); i < len; i++) {
+            char c = t.charAt(i);
+            if (Character.isUpperCase(c)) hasLetter = true;
+            else if (c != '_' && !Character.isDigit(c)) return false;
+        }
+        return hasLetter;
+    }
+
+    // Maps RSTA's token-type constants onto the app's fixed style-class palette.
+    // Only reached for tokens the call-site didn't already resolve via the
+    // import-path or method-call checks above.
+    private static String styleFor(org.fife.ui.rsyntaxtextarea.Token t, CodeLanguage language) {
+        int type = t.getType();
+        if (type == TokenTypes.IDENTIFIER) {
+            // Stray '.', ',', ';' come back as IDENTIFIER too (see class javadoc) — leave unstyled.
+            if (!isIdentifierShaped(t)) return null;
+            if (usesCapitalizedTypeHeuristic(language)) {
+                if (looksLikeConstant(t)) return "cm-final";
+                if (Character.isUpperCase(t.charAt(0))) return "cm-type";
+            }
+            return "cm-variable";
+        }
+        return styleForType(type);
+    }
+
+    // Classifies by RSTA type alone — never touches the token's characters, so it
+    // is the only classifier safe to call on a token whose reported length runs
+    // past this line's actual bounds (see the fitsInLine check in tokens()).
+    private static String safeStyleFor(int type) {
+        return type == TokenTypes.IDENTIFIER ? null : styleForType(type);
+    }
+
+    private static String styleForType(int type) {
+        return switch (type) {
+            case TokenTypes.RESERVED_WORD, TokenTypes.RESERVED_WORD_2,
+                 TokenTypes.LITERAL_BOOLEAN, TokenTypes.MARKUP_TAG_DELIMITER,
+                 TokenTypes.PREPROCESSOR                                       -> "cm-keyword";
+            case TokenTypes.LITERAL_STRING_DOUBLE_QUOTE, TokenTypes.LITERAL_CHAR,
+                 TokenTypes.LITERAL_BACKQUOTE, TokenTypes.MARKUP_TAG_ATTRIBUTE_VALUE,
+                 TokenTypes.MARKUP_CDATA                                       -> "cm-string";
+            case TokenTypes.COMMENT_EOL, TokenTypes.COMMENT_MULTILINE,
+                 TokenTypes.COMMENT_DOCUMENTATION, TokenTypes.COMMENT_KEYWORD,
+                 TokenTypes.COMMENT_MARKUP, TokenTypes.MARKUP_COMMENT          -> "cm-comment";
+            case TokenTypes.LITERAL_NUMBER_DECIMAL_INT, TokenTypes.LITERAL_NUMBER_FLOAT,
+                 TokenTypes.LITERAL_NUMBER_HEXADECIMAL                         -> "cm-number";
+            case TokenTypes.ANNOTATION                                        -> "cm-annotation";
+            // FUNCTION is RSTA's hardcoded well-known-JDK-type whitelist (Timer, UUID, ...) —
+            // these are class names, not calls, so they belong with DATA_TYPE, not cm-method.
+            case TokenTypes.DATA_TYPE, TokenTypes.FUNCTION,
+                 TokenTypes.MARKUP_TAG_NAME, TokenTypes.MARKUP_DTD             -> "cm-type";
+            case TokenTypes.VARIABLE, TokenTypes.MARKUP_TAG_ATTRIBUTE          -> "cm-variable";
+            default                                                           -> null;
+        };
     }
 
     public static StyleSpans<Collection<String>> computeHighlighting(String text, CodeLanguage language) {
@@ -231,52 +251,5 @@ public final class CodeHighlighter {
             spansBuilder.add(style, t.end() - t.start());
         }
         return spansBuilder.create();
-    }
-
-    private static Lexer createLexer(String text, CodeLanguage language) {
-        var c = CharStreams.fromString(text);
-        return switch (language) {
-            case JAVA       -> new JavaLexer(c);
-            case PYTHON     -> new Python3Lexer(c);
-            case JAVASCRIPT -> new JavaScriptLexer(c);
-            case GO         -> new GoLexer(c);
-            case CSS        -> new css3Lexer(c);
-            case HTML       -> new HTMLLexer(c);
-            default         -> null;
-        };
-    }
-
-    private static boolean isWs(String sym) {
-        String u = sym.toUpperCase();
-        return u.equals("WS") || u.equals("WHITESPACE") || u.contains("LINE_TERMINATOR");
-    }
-
-    private static boolean isComment(String sym) {
-        return sym.toUpperCase().contains("COMMENT");
-    }
-
-    private static boolean isString(String sym) {
-        String u = sym.toUpperCase();
-        return u.contains("STRING") || u.equals("CHAR_LITERAL") || u.equals("TEXT_BLOCK")
-                || u.equals("BYTES_LITERAL") || u.contains("REGULAREXPRESSION")
-                || u.equals("BACKTICK") || u.contains("TEMPLATESTRING");
-    }
-
-    private static boolean isNumber(String sym) {
-        String u = sym.toUpperCase();
-        if (u.equals("NUMBER") || u.contains("IMAG")) return true;
-        if (u.contains("INTEGER") || u.contains("FLOAT") || u.contains("DECIMAL")) return true;
-        if (u.equals("DIMENSION") || u.equals("PERCENTAGE")) return true;
-        // *_LIT / *LITERAL not involving strings/booleans/null → numeric (covers Go, Java)
-        boolean endsLit = u.endsWith("_LIT") || u.endsWith("LITERAL");
-        return endsLit
-                && !u.contains("STRING") && !u.contains("CHAR")  && !u.contains("TEXT")
-                && !u.contains("BOOL")   && !u.contains("NULL")  && !u.contains("NIL")
-                && !u.contains("REGULAR") && !u.contains("TEMPLATE");
-    }
-
-    private static String symName(org.antlr.v4.runtime.Token t, Vocabulary vocab) {
-        String n = vocab.getSymbolicName(t.getType());
-        return n != null ? n : "";
     }
 }
