@@ -40,7 +40,7 @@ This repo is the app everyone actually looks at: a native-feeling JavaFX desktop
 - **HD screen sharing with system audio** — multiple people can stream at once; viewers can pop streams out into separate windows, with live viewer counts. System audio is captured natively — WASAPI loopback on Windows, PipeWire on Linux
 - **Video** — camera support in voice channels
 - **Rich text chat** — channels and DMs with editing, deletion, emoji reactions, typing indicators, GIF search, file attachments and unread/read state
-- **Code snippets** — dedicated code blocks with automatic language detection and ANTLR-based syntax highlighting (Java, JavaScript, Python, Go, HTML, CSS)
+- **Code snippets** — dedicated code blocks with automatic language detection and syntax highlighting (Java, JavaScript, Python, Go, HTML, CSS)
 - **Soundboards** — server-wide soundboards plus your own personal one, triggered by click or global hotkey
 - **Friends & DMs** — friend requests, direct messages and pokes, delivered over the hub WebSocket wherever you are
 - **Roles & permissions** — the client renders custom roles and enforces fine-grained per-channel permissions with bitmask speed
@@ -112,7 +112,7 @@ mic ─► capture ─► AEC3 ─► RNNoise / WebRTC-NS ─► AGC2 ─► Sil
 | `ui/pages/` | Top-level pages: login, register, email verification, home (friends & DMs), server |
 | `ui/sections/`, `ui/chat/` | The server layout: channel list · chat · member list, plus the DM experience |
 | `ui/modals/` | Everything modal: user/server/channel/installation settings, invites, screen share picker, profiles |
-| `ui/code/`, `ui/emojis/`, `ui/gifs/` | Code blocks (ANTLR lexers + RichTextFX), emoji rendering & pickers, GIF search |
+| `ui/code/`, `ui/emojis/`, `ui/gifs/` | Code blocks (RSyntaxTextArea tokenizers + RichTextFX), emoji rendering & pickers, GIF search |
 | `utils/` | App config, global hotkeys, audio device discovery, ping/packet-loss history, user settings |
 | `update/` | `LauncherUpdateService` — checks and self-updates the launcher that started this client (see below) |
 
@@ -202,7 +202,7 @@ On first launch the client creates its app data directory — `%APPDATA%\Komm` o
 | Audio DSP | RNNoise (rnnoise4j), Silero VAD via ONNX Runtime, WebRTC AEC3/AGC2, mp3spi |
 | System integration | JNA / JNA Platform (WASAPI loopback, PipeWire patch bay), JNativeHook (global hotkeys) |
 | Networking | Java `HttpClient`, Tyrus WebSocket client, Spring WebSocket/messaging (client-side) |
-| Code highlighting | ANTLR 4 lexers (Java, JavaScript, Python, Go, HTML, CSS) |
+| Code highlighting | RSyntaxTextArea's `TokenMaker` parsers, used headlessly (Java, JavaScript, Python, Go, HTML, CSS) |
 | Serialization / crypto | Gson, BouncyCastle (CSR generation for hosting installations in-app), hub-CA TLS trust for community-server connections |
 | Build | Maven — `javafx-maven-plugin` for dev, `maven-shade-plugin` for the distributable fat JAR |
 
