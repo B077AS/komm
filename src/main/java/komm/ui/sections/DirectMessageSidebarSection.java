@@ -155,13 +155,21 @@ public class DirectMessageSidebarSection extends VBox {
                 if (bt == null) return -1;
                 return bt.compareTo(at);
             });
-            // Seed unread from server-side flag, then layer on any in-session arrivals
+            // Reseed unread state from the server's authoritative flags on every load —
+            // never trust stale local state left over from a previous load, since that
+            // lets a cleared dot get stuck forever if the server's flag ever lagged.
+            // Exclude the currently selected conversation: reload() races the mark-read
+            // call fired when opening it, so a stale "still unread" snapshot must not
+            // resurrect the dot for the conversation the user just opened.
+            unreadPartners.clear();
             conversations.stream()
                     .filter(ConversationSummary::isHasUnread)
                     .map(ConversationSummary::getPartnerId)
+                    .filter(id -> !id.equals(selectedPartnerId))
                     .forEach(unreadPartners::add);
             unreadPartners.addAll(App.getAndClearPendingDmUnreadPartners());
-            if (!unreadPartners.isEmpty()) App.setDmUnread(true);
+            unreadPartners.remove(selectedPartnerId);
+            App.setDmUnread(!unreadPartners.isEmpty());
             renderConversations();
         });
         loadService.setOnFailed(e ->
