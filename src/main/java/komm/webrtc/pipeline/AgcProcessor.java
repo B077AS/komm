@@ -38,8 +38,14 @@ public class AgcProcessor implements AutoCloseable {
     private void initialize() {
         try {
             AudioProcessingConfig cfg = new AudioProcessingConfig();
-            cfg.gainControl.enabled = true;
-            cfg.gainControl.adaptiveDigital.enabled = true;
+            cfg.gainControllerDigital.enabled = true;
+            cfg.gainControllerDigital.adaptiveDigital.enabled = true;
+            // webrtc-java 0.15+ added this legacy AGC1 struct alongside AGC2; explicitly
+            // disable it — AdaptiveAnalog mode needs OS-mixer coupling via
+            // stream_analog_level() that this app never wires up, so leaving it at just
+            // its Java-side default risks the native APM running an unwired analog gain
+            // stage on top of AGC2, which is audible as static/pumping.
+            cfg.gainController.enabled = false;
             apm = new AudioProcessing();
             apm.applyConfig(cfg);
             log.info("[AGC] WebRTC AGC initialized (adaptiveDigital enabled)");
@@ -86,8 +92,9 @@ public class AgcProcessor implements AutoCloseable {
         if (apm == null) return;
         try {
             AudioProcessingConfig cfg = new AudioProcessingConfig();
-            cfg.gainControl.enabled = enabled;
-            cfg.gainControl.adaptiveDigital.enabled = enabled;
+            cfg.gainControllerDigital.enabled = enabled;
+            cfg.gainControllerDigital.adaptiveDigital.enabled = enabled;
+            cfg.gainController.enabled = false;
             apm.applyConfig(cfg);
         } catch (Exception e) {
             log.warn("[AGC] Failed to apply config: {}", e.getMessage());

@@ -41,6 +41,10 @@ public class AecProcessor implements AutoCloseable {
         try {
             AudioProcessingConfig cfg = new AudioProcessingConfig();
             cfg.echoCanceller.enabled = true;
+            // webrtc-java 0.15+ added this legacy AGC1 struct alongside AGC2; explicitly
+            // disable it — AdaptiveAnalog mode needs OS-mixer coupling via
+            // stream_analog_level() that this app never wires up.
+            cfg.gainController.enabled = false;
             apm = new AudioProcessing();
             apm.applyConfig(cfg);
             log.info("[AEC] WebRTC AEC3 initialized");
@@ -107,6 +111,7 @@ public class AecProcessor implements AutoCloseable {
         try {
             AudioProcessingConfig cfg = new AudioProcessingConfig();
             cfg.echoCanceller.enabled = enabled;
+            cfg.gainController.enabled = false;
             apm.applyConfig(cfg);
         } catch (Exception e) {
             log.warn("[AEC] Failed to apply config: {}", e.getMessage());

@@ -143,22 +143,8 @@
         <dependency>
             <groupId>dev.onvoid.webrtc</groupId>
             <artifactId>webrtc-java</artifactId>
-            <version>0.14.0</version>
+            <version>0.16.0</version>
         </dependency>
-        <dependency>
-            <groupId>dev.onvoid.webrtc</groupId>
-            <artifactId>webrtc-java</artifactId>
-            <version>0.14.0</version>
-            <classifier>windows-x86_64</classifier>
-        </dependency>
-        <!-- Linux native lib: custom build of webrtc-java 0.14.0 (fork branch
-             x11-pipewire-0.14.0) patched with WEBRTC_USE_X11 (fixes the screen-share SIGSEGV
-             in DesktopCapturer::GetSourceList) and WEBRTC_USE_PIPEWIRE (Wayland capture via
-             xdg-desktop-portal; auto-selected at runtime on Wayland sessions). Shipped as a raw
-             .so in src/main/resources/ so it lands at the classpath root, where NativeLoader
-             looks for it. Do NOT add the official linux-x86_64 classifier dependency here — its
-             unpatched .so would shadow this one. -->
-
         <!-- https://mvnrepository.com/artifact/org.bouncycastle/bcpkix-jdk18on -->
         <dependency>
             <groupId>org.bouncycastle</groupId>
@@ -310,6 +296,18 @@
                     <artifactId>javafx-media</artifactId>
                     <version>${javafx.version}</version>
                     <classifier>linux</classifier>
+                </dependency>
+                <dependency>
+                    <groupId>dev.onvoid.webrtc</groupId>
+                    <artifactId>webrtc-java</artifactId>
+                    <version>0.16.0</version>
+                    <classifier>windows-x86_64</classifier>
+                </dependency>
+                <dependency>
+                    <groupId>dev.onvoid.webrtc</groupId>
+                    <artifactId>webrtc-java</artifactId>
+                    <version>0.16.0</version>
+                    <classifier>linux-x86_64</classifier>
                 </dependency>
             </dependencies>
         </profile>
