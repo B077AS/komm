@@ -71,6 +71,8 @@ public class NoiseSuppressor implements AutoCloseable {
             AudioProcessingConfig cfg = new AudioProcessingConfig();
             cfg.noiseSuppression.enabled = true;
             cfg.noiseSuppression.level   = AudioProcessingConfig.NoiseSuppression.Level.HIGH;
+            // See AgcProcessor for why this legacy AGC1 struct is explicitly disabled.
+            cfg.gainController.enabled = false;
             fallbackApm = new AudioProcessing();
             fallbackApm.applyConfig(cfg);
             log.info("[NS] WebRTC NS fallback initialized");
@@ -140,6 +142,7 @@ public class NoiseSuppressor implements AutoCloseable {
                 AudioProcessingConfig cfg = new AudioProcessingConfig();
                 cfg.noiseSuppression.enabled = enabled;
                 cfg.noiseSuppression.level   = AudioProcessingConfig.NoiseSuppression.Level.HIGH;
+                cfg.gainController.enabled = false;
                 fallbackApm.applyConfig(cfg);
             } catch (Exception e) {
                 log.warn("[NS] Failed to apply fallback config: {}", e.getMessage());

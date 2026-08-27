@@ -100,6 +100,16 @@ public class WebrtcRoomClient {
     /** True while system audio is actually being captured/sent for the current share. */
     private volatile boolean screenAudioActive = false;
     private DeviceChangeListener deviceChangeListener;
+    /**
+     * True once audioDeviceModule.startPlayout() has actually been called for the current
+     * channel session. Real audio (mic/soundboard/screen-audio) is always routed through
+     * UserVoiceReceiver sinks with the track disabled — see handleRemoteAudioTrack — so the
+     * hardware ADM is only ever needed for the rare unmapped-track fallback. Starting it
+     * eagerly on every join left its render thread running with nothing to play essentially
+     * always; on webrtc-java 0.16.0 that produced audible static instead of silence, so it's
+     * now started lazily, only when that fallback path actually fires.
+     */
+    private volatile boolean admPlayoutActive = false;
 
     // ── Custom DSP pipeline ───────────────────────────────────────────────────
     private UserAudioPipeline audioPipeline;
@@ -282,6 +292,7 @@ public class WebrtcRoomClient {
             factory = null;
         }
 
+        admPlayoutActive = false;
         if (audioDeviceModule != null) {
             try { audioDeviceModule.stopPlayout(); } catch (Throwable ignored) {}
             audioDeviceModule.dispose();
@@ -332,14 +343,18 @@ public class WebrtcRoomClient {
             audioPipeline.getSoundboardMixer().setPublishCallback(null);
         }
         try { audioDeviceModule.stopPlayout(); } catch (Throwable ignored) {}
+        admPlayoutActive = false;
         try { audioDeviceModule.initPlayout(); } catch (Throwable ignored) {}
 
         this.currentToken      = token;
         this.currentLivekitUrl = livekitUrl;
         STUN_URLS = List.of("stun:" + livekitUrl);
 
-        // Start hardware playout (speaker receives incoming audio via ADM)
-        audioDeviceModule.startPlayout();
+        // Hardware ADM playout is NOT started here — real audio (mic/soundboard/screen-audio)
+        // is always routed through UserVoiceReceiver sinks with the track disabled, so the ADM
+        // has nothing to play in the normal case. It's started lazily by ensureAdmPlayoutStarted()
+        // only if the rare unmapped-track fallback in handleRemoteAudioTrack actually fires.
+        // See admPlayoutActive field doc for why.
 
         publisherPc  = factory.createPeerConnection(buildRTCConfiguration(), new PublisherObserver());
         subscriberPc = factory.createPeerConnection(buildRTCConfiguration(), new SubscriberObserver());
@@ -525,6 +540,7 @@ public class WebrtcRoomClient {
         // join without requiring a full start() cycle.  Mirrors the stop→init→start
         // pattern already used in changeOutputDevice().
         try { audioDeviceModule.stopPlayout(); } catch (Throwable ignored) {}
+        admPlayoutActive = false;
         try { audioDeviceModule.initPlayout(); } catch (Throwable ignored) {}
 
         Runnable cb = onConnectionStateChanged;
@@ -909,6 +925,7 @@ public class WebrtcRoomClient {
                 return;
             }
             // Fallback when participant mapping is unavailable: let the hardware ADM handle it.
+            ensureAdmPlayoutStarted();
             remoteTrack.setEnabled(!speakerMuted);
             newSlot = new AudioSlot(remoteTrack, null, AudioSlotKind.ADM, null);
             log.warn("[Subscriber] Audio m-line {} has no participant mapping, using ADM: sid={}", mid, trackSid);
@@ -1125,11 +1142,14 @@ public class WebrtcRoomClient {
         AudioDevice target = resolveRender(deviceName);
         if (target == null) target = MediaDevices.getDefaultAudioRenderDevice();
 
-        boolean wasInChannel = isInChannel();
+        // Only restart the render thread if it was actually running (see admPlayoutActive
+        // field doc — most channel sessions never start it at all).
+        boolean wasPlayoutActive = admPlayoutActive;
         try { audioDeviceModule.stopPlayout(); } catch (Throwable ignored) {}
+        admPlayoutActive = false;
         audioDeviceModule.setPlayoutDevice(target);
         audioDeviceModule.initPlayout();
-        if (wasInChannel) audioDeviceModule.startPlayout();
+        if (wasPlayoutActive) ensureAdmPlayoutStarted();
     }
 
     public String getCurrentInputDevice()  { return currentInputDeviceName; }
@@ -1355,6 +1375,18 @@ public class WebrtcRoomClient {
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
+
+    /** Lazily starts hardware ADM playout — see admPlayoutActive field doc. Idempotent. */
+    private void ensureAdmPlayoutStarted() {
+        if (admPlayoutActive || audioDeviceModule == null) return;
+        try {
+            audioDeviceModule.startPlayout();
+            admPlayoutActive = true;
+            log.info("[Voice] ADM playout started on demand (unmapped-track fallback)");
+        } catch (Throwable t) {
+            log.warn("[Voice] Failed to start ADM playout: {}", t.getMessage());
+        }
+    }
 
     private AudioDeviceModule buildAudioDeviceModule() {
         AudioDeviceModule adm = new AudioDeviceModule();
