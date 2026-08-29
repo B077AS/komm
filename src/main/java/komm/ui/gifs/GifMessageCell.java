@@ -45,6 +45,7 @@ public class GifMessageCell extends StackPane {
             });
 
     private final String gifUrl;
+    private final String kindLabel;
 
     private double cellW = MAX_GIF_WIDTH;
     private double cellH = PLACEHOLDER_H;
@@ -77,7 +78,17 @@ public class GifMessageCell extends StackPane {
     // ── Constructor ───────────────────────────────────────────────────────────
 
     public GifMessageCell(String gifUrl, int gifWidth, int gifHeight) {
+        this(gifUrl, gifWidth, gifHeight, "GIF");
+    }
+
+    /**
+     * @param kindLabel what to call this in user-facing text ("GIF", "Image", ...) — this cell is
+     *                  really just "render whatever's at this URL", reused for anything that's
+     *                  displayed as an image bubble without being an uploaded attachment.
+     */
+    public GifMessageCell(String gifUrl, int gifWidth, int gifHeight, String kindLabel) {
         this.gifUrl = gifUrl;
+        this.kindLabel = kindLabel;
 
         if (gifWidth > 0 && gifHeight > 0) {
             double[] wh = computeSize(gifWidth, gifHeight);
@@ -103,7 +114,7 @@ public class GifMessageCell extends StackPane {
         spinner.setMaxSize(32, 32);
         spinner.setMouseTransparent(true);
 
-        Label errLabel = new Label("GIF unavailable");
+        Label errLabel = new Label(kindLabel + " unavailable");
         errLabel.setStyle("-fx-text-fill: -color-fg-muted; -fx-font-size: 11px;");
         Button retryBtn = new Button("↺  Retry");
         retryBtn.setStyle("-fx-background-color: transparent; -fx-border-color: -color-fg-muted;" +
@@ -132,8 +143,8 @@ public class GifMessageCell extends StackPane {
                 modalIv.setFitHeight(600);
 
                 // ── Context menu on the modal image ──────────────────────────
-                MenuItem miCopyUrl = new MenuItem("Copy GIF URL");
-                MenuItem miDownload = new MenuItem("Download GIF…");
+                MenuItem miCopyUrl = new MenuItem("Copy " + kindLabel + " URL");
+                MenuItem miDownload = new MenuItem("Download " + kindLabel + "…");
                 ContextMenu modalMenu = new ContextMenu(miCopyUrl, miDownload);
 
                 miCopyUrl.setOnAction(ev -> {
@@ -243,7 +254,7 @@ public class GifMessageCell extends StackPane {
 
                 if (image.isError()) {
                     Throwable ex = image.getException();
-                    log.warn("GIF failed to load [url={}]: {}", gifUrl, ex != null ? ex.getMessage() : "unknown error", ex.getMessage());
+                    log.warn("{} failed to load [url={}]: {}", kindLabel, gifUrl, ex != null ? ex.getMessage() : "unknown error", ex.getMessage());
                     Platform.runLater(() -> {
                         if (!disposed) showError();
                     });
@@ -265,7 +276,7 @@ public class GifMessageCell extends StackPane {
                             imageView.setFitWidth(cellW);
                             imageView.setFitHeight(cellH);
                         } else {
-                            log.warn("GIF reported 0×0 dimensions [url={}], skipping size commit", gifUrl);
+                            log.warn("{} reported 0×0 dimensions [url={}], skipping size commit", kindLabel, gifUrl);
                             sizeCommitted = true;
                         }
                     }
@@ -275,7 +286,7 @@ public class GifMessageCell extends StackPane {
                 });
 
             } catch (Exception e) {
-                log.error("Unexpected error loading GIF [url={}]", gifUrl, e);
+                log.error("Unexpected error loading {} [url={}]", kindLabel, gifUrl, e);
                 Platform.runLater(() -> {
                     if (!disposed) showError();
                 });
@@ -365,16 +376,20 @@ public class GifMessageCell extends StackPane {
     }
 
     private void downloadGif(String url, javafx.scene.Node ownerNode) {
+        boolean isGif = "GIF".equals(kindLabel);
+        String fallbackName = isGif ? "animation.gif" : "image.jpg";
+
         FileChooser chooser = new FileChooser();
-        chooser.setTitle("Save GIF");
-        chooser.getExtensionFilters().add(
-                new FileChooser.ExtensionFilter("GIF / MP4 files", "*.gif", "*.mp4"));
+        chooser.setTitle("Save " + kindLabel);
+        chooser.getExtensionFilters().add(isGif
+                ? new FileChooser.ExtensionFilter("GIF / MP4 files", "*.gif", "*.mp4")
+                : new FileChooser.ExtensionFilter("Image files", "*.jpg", "*.jpeg", "*.png", "*.webp", "*.gif"));
 
         String suggested = url.contains("/")
                 ? url.substring(url.lastIndexOf('/') + 1)
-                : "animation.gif";
+                : fallbackName;
         if (suggested.contains("?")) suggested = suggested.substring(0, suggested.indexOf('?'));
-        if (suggested.isBlank()) suggested = "animation.gif";
+        if (suggested.isBlank()) suggested = fallbackName;
         chooser.setInitialFileName(suggested);
 
         File file = FileChooserUtil.showSaveDialog(chooser, ownerNode.getScene().getWindow());
@@ -392,8 +407,8 @@ public class GifMessageCell extends StackPane {
             }
         };
 
-        task.setOnSucceeded(e -> log.info("GIF saved to {}", file.getAbsolutePath()));
-        task.setOnFailed(e -> log.warn("GIF download failed", task.getException()));
+        task.setOnSucceeded(e -> log.info("{} saved to {}", kindLabel, file.getAbsolutePath()));
+        task.setOnFailed(e -> log.warn("{} download failed", kindLabel, task.getException()));
 
         Thread dl = new Thread(task, "gif-download");
         dl.setDaemon(true);

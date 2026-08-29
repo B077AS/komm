@@ -25,6 +25,7 @@ import komm.model.dto.summary.ServerSummary;
 import komm.ui.avatar.AvatarCache;
 import komm.ui.cards.ChannelCard;
 import komm.model.dto.summary.InstallationSummary;
+import komm.ui.modals.BotsModal;
 import komm.ui.modals.CreateChannelModal;
 import komm.ui.modals.CreateDecorationChannelModal;
 import komm.ui.modals.CreateInviteModal;
@@ -148,6 +149,12 @@ public class ChannelSection extends VBox {
                     Map<UUID, ChannelSummary> channelsMap = App.getServices().installation()
                             .getChannelService().getChannels();
                     if (channelsMap == null) return new HashMap<>();
+
+                    try {
+                        App.getBotRoster().reset(App.getServices().installation().getBotService().getBots());
+                    } catch (Exception e) {
+                        App.getBotRoster().reset(java.util.List.of());
+                    }
 
                     var permSvc = App.getServices().installation().getChannelPermissionService();
                     Map<UUID, ChannelCard> result = new HashMap<>();
@@ -537,6 +544,15 @@ public class ChannelSection extends VBox {
             MenuItem editServerItem = new MenuItem("Server Settings", new FontIcon(MaterialDesignC.COG));
             editServerItem.setOnAction(e -> App.showModal(new EditServerModal(server, true)));
             menu.getItems().addAll(new SeparatorMenuItem(), editServerItem);
+        }
+
+        if (App.getPermissionManager().has(Permission.MANAGE_BOTS)) {
+            MenuItem manageBotsItem = new MenuItem("Manage Bots", new FontIcon(MaterialDesignR.ROBOT_OUTLINE));
+            manageBotsItem.setOnAction(e -> App.showModal(new BotsModal(server)));
+            if (!canEditServer) {
+                menu.getItems().add(new SeparatorMenuItem());
+            }
+            menu.getItems().add(manageBotsItem);
         }
 
         MenuItem disconnectItem = new MenuItem("Disconnect", IconColorUtil.colored(MaterialDesignP.PHONE_OFF, "-color-danger-fg", 18));

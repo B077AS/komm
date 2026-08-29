@@ -86,5 +86,6 @@ public enum WsMessageType {
     SERVER_DELETED,
     INSTALLATION_DELETED,
     POKE_USER,
-    USER_POKED
+    USER_POKED,
+    BOTS_UPDATED
 }

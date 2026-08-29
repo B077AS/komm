@@ -81,13 +81,14 @@ public class EmojiMessageItem extends HBox {
         this.payload = payload;
 
         UUID senderId = payload.getSenderId();
+        boolean isBotSender = senderId != null && App.getBotRoster().isBot(senderId);
 
         // ── Avatar ────────────────────────────────────────────────────────────
         avatarContainer = buildAvatarPlaceholder();
         HBox.setMargin(avatarContainer, new Insets(2, AVATAR_RIGHT_GAP, 0, 0));
 
-        // Left-click on avatar opens profile popup
-        if (senderId != null) {
+        // Left-click on avatar opens profile popup — bots have no Hub profile to show.
+        if (senderId != null && !isBotSender) {
             avatarContainer.setStyle("-fx-cursor: hand;");
             avatarContainer.setOnMouseClicked(e -> {
                 if (e.getButton() == javafx.scene.input.MouseButton.PRIMARY) {
@@ -169,7 +170,7 @@ public class EmojiMessageItem extends HBox {
                                 ? "-fx-text-fill: -color-accent-emphasis;"
                                 : "-fx-text-fill: -color-fg-default;")
         );
-        if (senderId != null) {
+        if (senderId != null && !isBotSender) {
             nameLabel.setOnMouseClicked(e -> {
                 if (e.getButton() == javafx.scene.input.MouseButton.PRIMARY) {
                     UUID serverId = dmContext ? null
@@ -191,7 +192,21 @@ public class EmojiMessageItem extends HBox {
         editedLabel.setVisible(payload.isEdited());
         editedLabel.setManaged(payload.isEdited());
 
-        HBox header = new HBox(8, nameLabel, timeLabel, editedLabel);
+        HBox header;
+        if (isBotSender) {
+            Label botTag = new Label("BOT");
+            botTag.setStyle(
+                    "-fx-font-size: 9px;" +
+                            "-fx-font-weight: bold;" +
+                            "-fx-text-fill: white;" +
+                            "-fx-background-color: -color-accent-emphasis;" +
+                            "-fx-background-radius: 3px;" +
+                            "-fx-padding: 1 4 1 4;"
+            );
+            header = new HBox(8, nameLabel, botTag, timeLabel, editedLabel);
+        } else {
+            header = new HBox(8, nameLabel, timeLabel, editedLabel);
+        }
         header.setAlignment(Pos.BASELINE_LEFT);
 
         // ── Message bubble ────────────────────────────────────────────────────
@@ -200,6 +215,10 @@ public class EmojiMessageItem extends HBox {
             // Width/height are 0 for now (not stored); GifMessageCell uses fallback ratio.
             String gifUrl = payload.getContent();
             bubble = EmojiMessageContent.ofGif(gifUrl, 0, 0);
+        } else if (payload.getMessageType() == MessageReceivedPayload.MessageType.URL_IMAGE) {
+            // content holds the image URL directly — today only ever from a bot (e.g. the anime
+            // waifu spawner), which posts a URL rather than uploading a real attachment.
+            bubble = EmojiMessageContent.ofUrlImage(payload.getContent(), 0, 0);
         } else if (payload.getMessageType() == MessageReceivedPayload.MessageType.CODE) {
             bubble = EmojiMessageContent.ofCode(
                     payload.getContent() == null ? "" : payload.getContent(),
@@ -275,7 +294,9 @@ public class EmojiMessageItem extends HBox {
         });
 
         // ── Resolve username + avatar ─────────────────────────────────────────
-        if (senderId != null) {
+        if (isBotSender) {
+            applyUser(botCachedUser(App.getBotRoster().get(senderId)));
+        } else if (senderId != null) {
             AvatarCache.CachedUser cached = App.getAvatarCache().getIfPresent(senderId);
             if (cached != null && cached.getChatImage() != null) {
                 applyUser(cached);
@@ -290,6 +311,26 @@ public class EmojiMessageItem extends HBox {
                         });
             }
         }
+    }
+
+    /**
+     * Bots are installation-local, never Hub users — never go through {@link AvatarCache}. This
+     * builds an equivalent {@link AvatarCache.CachedUser} on the fly from the bot roster
+     * (populated from {@code BOTS_UPDATED} / the join-time fetch) so the existing avatar/name
+     * rendering code can stay untouched.
+     */
+    private static AvatarCache.CachedUser botCachedUser(komm.model.dto.summary.BotSummary bot) {
+        if (bot == null) {
+            return AvatarCache.CachedUser.builder().username("Bot").build();
+        }
+        AvatarCache.CachedUser user = AvatarCache.CachedUser.builder().username(bot.getName()).build();
+        if (bot.getAvatarUrl() != null && !bot.getAvatarUrl().isBlank()) {
+            // Background-loaded straight from the URL; falls back to the initial-letter
+            // circle in applyUser/applyMiniAvatar until (if ever) it finishes loading.
+            user.setChatImage(new Image(bot.getAvatarUrl(), AVATAR_SIZE, AVATAR_SIZE, true, true, true));
+            user.setMiniImage(new Image(bot.getAvatarUrl(), MINI_SIZE, MINI_SIZE, true, true, true));
+        }
+        return user;
     }
 
     public static EmojiMessageItem of(MessageReceivedPayload payload, boolean isOwnMessage) {
@@ -368,7 +409,11 @@ public class EmojiMessageItem extends HBox {
         strip.getChildren().addAll(accentBar, miniAvatar, replyName, textBox);
 
         UUID replyToSenderId = payload.getReplyToSenderId();
-        if (replyToSenderId != null) {
+        if (replyToSenderId != null && App.getBotRoster().isBot(replyToSenderId)) {
+            AvatarCache.CachedUser botUser = botCachedUser(App.getBotRoster().get(replyToSenderId));
+            if (botUser.username() != null) replyName.setText(botUser.username());
+            applyMiniAvatar(miniAvatar, botUser);
+        } else if (replyToSenderId != null) {
             AvatarCache.CachedUser cached = App.getAvatarCache().getIfPresent(replyToSenderId);
             if (cached != null && cached.getMiniImage() != null) {
                 if (cached.username() != null) replyName.setText(cached.username());
@@ -449,7 +494,8 @@ public class EmojiMessageItem extends HBox {
 
         bar.getChildren().addAll(heartBtn, reactBtn);
 
-        if (isOwnMessage && payload.getMessageType() != MessageReceivedPayload.MessageType.GIF) {
+        if (isOwnMessage && payload.getMessageType() != MessageReceivedPayload.MessageType.GIF
+                && payload.getMessageType() != MessageReceivedPayload.MessageType.URL_IMAGE) {
             FontIcon editIcon = new FontIcon(MaterialDesignP.PENCIL_OUTLINE);
             editIcon.getStyleClass().add("custom-icon-15");
             Button editBtn = buildActionButton(editIcon);
@@ -582,6 +628,7 @@ public class EmojiMessageItem extends HBox {
     private static String replyPreviewPlaceholder(MessageReceivedPayload payload) {
         MessageReceivedPayload.MessageType type = payload.getReplyToMessageType();
         if (type == MessageReceivedPayload.MessageType.GIF) return "GIF";
+        if (type == MessageReceivedPayload.MessageType.URL_IMAGE) return "Image";
         if (type == MessageReceivedPayload.MessageType.CODE) return "Code snippet";
         if (payload.isReplyToHasAttachments()) {
             String name = payload.getReplyToFileName();

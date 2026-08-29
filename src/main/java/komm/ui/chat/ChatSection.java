@@ -1206,7 +1206,8 @@ public class ChatSection extends VBox {
         item.getBubble().setOnDelete(() -> sendDeleteMessage(msg.getMessageId()));
         item.getBubble().setOnReply(bubble -> openReplyBar(msg));
         item.getBubble().setOnAllPopupsClosed(item::onAllPopupsClosed);
-        boolean canEdit = isOwn && msg.getMessageType() != MessageReceivedPayload.MessageType.GIF;
+        boolean canEdit = isOwn && msg.getMessageType() != MessageReceivedPayload.MessageType.GIF
+                && msg.getMessageType() != MessageReceivedPayload.MessageType.URL_IMAGE;
         if (canEdit) {
             item.getBubble().setEditVisible(true);
             item.getBubble().setOnEdit(() -> startEditMode(msg, item));
@@ -1387,9 +1388,14 @@ public class ChatSection extends VBox {
                 -fx-text-fill: -color-accent-emphasis;
                 """);
 
+        boolean isUrlMedia = target.getMessageType() == MessageReceivedPayload.MessageType.GIF
+                || target.getMessageType() == MessageReceivedPayload.MessageType.URL_IMAGE;
+
         String preview;
         if (target.getMessageType() == MessageReceivedPayload.MessageType.GIF) {
             preview = "GIF";
+        } else if (target.getMessageType() == MessageReceivedPayload.MessageType.URL_IMAGE) {
+            preview = "Image";
         } else if (target.getMessageType() == MessageReceivedPayload.MessageType.CODE) {
             preview = "Code snippet";
         } else {
@@ -1402,7 +1408,7 @@ public class ChatSection extends VBox {
 
         HBox textBox = new HBox();
         textBox.setAlignment(Pos.CENTER_LEFT);
-        if (target.getMessageType() == MessageReceivedPayload.MessageType.GIF) {
+        if (isUrlMedia) {
             Label gifLabel = new Label(preview);
             gifLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: -color-fg-muted;");
             textBox.getChildren().add(gifLabel);
@@ -1581,6 +1587,7 @@ public class ChatSection extends VBox {
 
     private void startEditMode(MessageReceivedPayload msg, EmojiMessageItem item) {
         if (msg.getMessageType() == MessageReceivedPayload.MessageType.GIF) return;
+        if (msg.getMessageType() == MessageReceivedPayload.MessageType.URL_IMAGE) return;
         if (msg.getMessageType() == MessageReceivedPayload.MessageType.CODE) {
             openCodeEditor(msg);
             return;
@@ -1664,8 +1671,9 @@ public class ChatSection extends VBox {
             VBox contentCol = item.getContentCol();
             EmojiMessageContent oldBubble = item.getBubble();
 
-            // Only update text-type messages (not GIFs)
+            // Only update text-type messages (not GIFs or URL images)
             if (originalPayload.getMessageType() == MessageReceivedPayload.MessageType.GIF) return;
+            if (originalPayload.getMessageType() == MessageReceivedPayload.MessageType.URL_IMAGE) return;
 
             int bubbleIdx = contentCol.getChildren().indexOf(oldBubble);
             if (bubbleIdx < 0) return;
