@@ -37,6 +37,11 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -125,6 +130,18 @@ public class WebrtcRoomClient {
 
     // ── State ─────────────────────────────────────────────────────────────────
     private final AtomicBoolean running = new AtomicBoolean(false);
+
+    /**
+     * Every channel lifecycle operation — join (token → connect), leave, and
+     * server-forced move — runs on this single thread. The native peer connections
+     * and the hardware ADM are NOT safe to tear down / rebuild from two threads at
+     * once, which is exactly what happened on a fast channel switch: the FX thread
+     * ran {@link #disconnectFromChannel()} while a LiveKit signalling thread ran
+     * {@link #onVoiceTokenReceived} for the previous join — closing the same
+     * RTCPeerConnection twice and calling initPlayout()/stopPlayout() concurrently,
+     * which froze the app and then crashed the JVM in native code.
+     */
+    private volatile ExecutorService channelExecutor;
     private volatile boolean micMuted    = false;
     @Getter private volatile boolean speakerMuted = false;
     private volatile String currentToken = null;
@@ -139,7 +156,8 @@ public class WebrtcRoomClient {
     private List<String> STUN_URLS;
 
     @Setter private volatile Runnable onConnectionStateChanged;
-    private volatile Runnable onScreenShareStateChanged;
+    /** Fired whenever the real screen-share state changes (Wayland: after the first frame). */
+    @Setter private volatile Runnable onScreenShareStateChanged;
 
     private final CopyOnWriteArrayList<Runnable>     deviceListListeners    = new CopyOnWriteArrayList<>();
 
@@ -182,6 +200,12 @@ public class WebrtcRoomClient {
 
     public void start() {
         if (running.getAndSet(true)) return;
+
+        channelExecutor = Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r, "webrtc-channel-ops");
+            t.setDaemon(true);
+            return t;
+        });
 
         // Opt-in native WebRTC logging (set KOMM_WEBRTC_DEBUG=1). Forwards libwebrtc's
         // own RTC_LOG output — including the PipeWire/xdg-desktop-portal capturer — into
@@ -250,6 +274,19 @@ public class WebrtcRoomClient {
     public void stop() {
         if (!running.getAndSet(false)) return;
 
+        // Let any queued join/leave finish before we dispose the native objects it touches.
+        ExecutorService exec = channelExecutor;
+        channelExecutor = null;
+        if (exec != null) {
+            exec.shutdown();
+            try {
+                if (!exec.awaitTermination(5, TimeUnit.SECONDS)) exec.shutdownNow();
+            } catch (InterruptedException e) {
+                exec.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+        }
+
         stopMicTestLoopback();
         stopSystemAudioCapture();
 
@@ -306,6 +343,23 @@ public class WebrtcRoomClient {
 
     // ── Channel connect / disconnect ──────────────────────────────────────────
 
+    /** Queues a channel lifecycle op on the single-threaded channel executor. */
+    private void submitChannelOp(Runnable op) {
+        ExecutorService exec = channelExecutor;
+        if (exec == null) return;
+        try {
+            exec.submit(() -> {
+                try {
+                    op.run();
+                } catch (Throwable t) {
+                    log.error("[Voice] Channel op failed", t);
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            log.debug("[Voice] Channel op rejected — client stopping");
+        }
+    }
+
     public void connectToChannel(String ip, UUID serverId, UUID channelId) {
         if (!running.get()) throw new IllegalStateException("Call start() before connectToChannel()");
 
@@ -313,10 +367,22 @@ public class WebrtcRoomClient {
         this.currentServerId  = serverId;
         this.currentChannelId = channelId;
 
+        // Rapidly clicking between voice channels fires several CHANNEL_JOINs before any
+        // is confirmed. The server answers each with a CHANNEL_TOKEN, in order. Only the
+        // token for the channel we actually still want (the last one clicked) must drive
+        // the WebRTC (re)connect — consuming an earlier token would connect us to a room
+        // the server has already moved us out of. Tokens for superseded joins are dropped.
         wsClient.register(WsMessageType.CHANNEL_TOKEN, payload -> {
             VoiceTokenPayload voiceTokenPayload = gson.fromJson(payload, VoiceTokenPayload.class);
+            UUID tokenChannelId = voiceTokenPayload.getChannelId();
+            if (tokenChannelId != null && !tokenChannelId.equals(this.currentChannelId)) {
+                log.info("[Voice] Ignoring CHANNEL_TOKEN for superseded join channelId={} (want {})",
+                        tokenChannelId, this.currentChannelId);
+                return;
+            }
             wsClient.unregister(WsMessageType.CHANNEL_TOKEN);
-            onVoiceTokenReceived(ip, voiceTokenPayload.getToken());
+            String token = voiceTokenPayload.getToken();
+            submitChannelOp(() -> onVoiceTokenReceived(ip, token, channelId));
         });
 
         wsClient.send(WsMessageType.CHANNEL_JOIN, ChannelJoinPayload.builder()
@@ -326,7 +392,14 @@ public class WebrtcRoomClient {
                 .build());
     }
 
-    public void onVoiceTokenReceived(String livekitUrl, String token) {
+    public void onVoiceTokenReceived(String livekitUrl, String token, UUID channelId) {
+        // A still-newer join was requested while this token sat in the executor queue —
+        // its own token is coming, so don't waste a full connect on a channel we've left.
+        if (channelId != null && !channelId.equals(this.currentChannelId)) {
+            log.info("[Voice] Skipping stale voice-token connect for channelId={} (want {})",
+                    channelId, this.currentChannelId);
+            return;
+        }
         // Tear down any existing session before setting up the new one.
         // This handles channel switches where disconnectFromChannel() was not
         // called explicitly (e.g. server-forced move to another channel).
@@ -469,6 +542,12 @@ public class WebrtcRoomClient {
             App.getServices().installation().getWsClient()
                     .send(WsMessageType.USER_SCREEN_SHARE, new UserScreenSharePayload(
                             App.getUser().getUserId(), sharing, sharing && screenAudioActive));
+
+            // Let the UI (toolbar button) follow the *real* sharing state. On Wayland
+            // this fires only once the portal produced the first frame, so the button
+            // no longer lights up the instant "Start Sharing" is clicked.
+            Runnable uiCb = onScreenShareStateChanged;
+            if (uiCb != null) uiCb.run();
         });
 
         // Start custom mic capture → DSP pipeline → CustomAudioSource
@@ -499,6 +578,26 @@ public class WebrtcRoomClient {
     }
 
     public void disconnectFromChannel() {
+        // Clear the desired-channel markers immediately (UI guards read these on the FX
+        // thread), then do the native teardown on the channel executor so it can never
+        // overlap an in-flight onVoiceTokenReceived / server-forced move.
+        UUID leaving = this.currentChannelId;
+        this.currentChannelId = null;
+        this.currentServerId  = null;
+
+        // Tell the server we're leaving now, on the caller's thread, so this ordinarily
+        // precedes any CHANNEL_JOIN a channel switch is about to send (preserves the
+        // server's VIEW_CHANNEL re-hide semantics for moved-into channels).
+        if (wsClient != null && leaving != null) {
+            wsClient.send(WsMessageType.CHANNEL_LEAVE, ChannelLeavePayload.builder()
+                    .channelId(leaving)
+                    .build());
+        }
+
+        submitChannelOp(this::doDisconnectFromChannel);
+    }
+
+    private void doDisconnectFromChannel() {
         stopSystemAudioCapture();
 
         // Stop custom capture pipeline first
@@ -527,21 +626,13 @@ public class WebrtcRoomClient {
             screenShareClient = null;
         }
 
-        if (wsClient != null) {
-            wsClient.send(WsMessageType.CHANNEL_LEAVE, ChannelLeavePayload.builder()
-                    .channelId(currentChannelId)
-                    .build());
-        }
-
         if (livekitSignaling != null) {
             livekitSignaling.disconnect();
             livekitSignaling = null;
         }
 
         closePeerConnections();
-        currentToken      = null;
-        currentChannelId  = null;
-        currentServerId   = null;
+        currentToken = null;
 
         // Stop playout then immediately re-initialize so the ADM is ready for the next
         // join without requiring a full start() cycle.  Mirrors the stop→init→start

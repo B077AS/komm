@@ -578,6 +578,11 @@ public class ChannelCard extends VBox {
     }
 
     public void onJoinPending() {
+        // Rapid channel-hopping: the previous target is now superseded — drop its spinner
+        // so only the channel we're actually heading for shows the pending state.
+        if (currentlyPending != null && currentlyPending != this) {
+            currentlyPending.clearPendingSpinner();
+        }
         currentlyPending = this;
         pendingSpinner = new ProgressIndicator();
         pendingSpinner.setPrefSize(16, 16);
@@ -595,15 +600,36 @@ public class ChannelCard extends VBox {
     }
 
     public void onJoinConfirmed() {
-        currentlyPending = null;
+        // A superseded join may have briefly left another card looking connected
+        // (its self USER_JOINED_CHANNEL raced ahead of its USER_LEFT_CHANNEL). Demote it.
+        if (currentlyConnected != null && currentlyConnected != this) {
+            ChannelCard stale = currentlyConnected;
+            stale.updateConnectedState(false);
+            if (App.getUser() != null) stale.removeConnectedUser(App.getUser().getUserId());
+        }
+        if (currentlyPending == this) currentlyPending = null;
         clearPendingSpinner();
         updateConnectedState(true);
         App.getCachedServerPage().getChatSection().setActiveChannel(channel);
         markSelected(true);
     }
 
+    /**
+     * A self {@code USER_JOINED_CHANNEL} arrived for a channel we've already moved on
+     * from (rapid channel-hop). The server has force-left us from it, so just clear its
+     * pending spinner without ever marking it connected.
+     */
+    public void onJoinSuperseded() {
+        if (currentlyPending == this) currentlyPending = null;
+        clearPendingSpinner();
+        if (currentlyConnected != this) {
+            isConnected = false;
+            refreshNameStyle();
+        }
+    }
+
     public void onJoinDenied(String reason) {
-        currentlyPending = null;
+        if (currentlyPending == this) currentlyPending = null;
         clearPendingSpinner();
         connectButton.setOpacity(0.0);
         new CustomNotification(
@@ -613,10 +639,17 @@ public class ChannelCard extends VBox {
                 .showNotification();
     }
 
-    public static void notifyJoinDenied(String reason) {
-        if (currentlyPending != null) {
-            ChannelCard card = currentlyPending;
-            Platform.runLater(() -> card.onJoinDenied(reason));
+    /** Called on the FX thread from {@link komm.websocket.handlers.ChannelJoinDeniedHandler}. */
+    public static void notifyJoinDenied(UUID channelId, String reason) {
+        ChannelCard card = App.getCachedServerPage().getChannelSection()
+                .getChannelBoxes().get(channelId);
+        if (card == null) return;
+        // Only surface the failure if this is still the join we're waiting on; a denial
+        // for a superseded join (rapid channel-hop) just needs its spinner cleared.
+        if (currentlyPending == card) {
+            card.onJoinDenied(reason);
+        } else {
+            card.clearPendingSpinner();
         }
     }
 
