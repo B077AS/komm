@@ -3,6 +3,7 @@ package komm.api;
 import komm.api.auth.InstallationAuth;
 import komm.api.auth.TokenManager;
 import komm.model.dto.summary.ServerSummary;
+import komm.service.BotService;
 import komm.service.ChannelPermissionService;
 import komm.service.ChannelService;
 import komm.service.InstallationPermissionService;
@@ -27,6 +28,7 @@ public class InstallationConnection {
     private final InstallationPermissionService installationPermissionService;
     private final SoundboardService soundboardService;
     private final MemberService memberService;
+    private final BotService botService;
 
     public InstallationConnection(ServerSummary server, String ticket) throws Exception {
         // The hub reports whether this installation serves TLS with its hub-signed
@@ -56,6 +58,7 @@ public class InstallationConnection {
         this.installationPermissionService = new InstallationPermissionService(httpClient, tokenManager);
         this.soundboardService = new SoundboardService(httpClient, tokenManager);
         this.memberService = new MemberService(httpClient, tokenManager);
+        this.botService = new BotService(httpClient, tokenManager);
     }
 
     public void close() {

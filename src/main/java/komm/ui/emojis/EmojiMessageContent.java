@@ -761,6 +761,23 @@ public class EmojiMessageContent extends VBox {
         return content;
     }
 
+    /**
+     * A URL-image message: an image the server didn't upload as an attachment, just posted a
+     * direct URL for — today only the anime waifu bot ({@code MessageType.URL_IMAGE}). Renders the
+     * same way as {@link #ofGif} (both are just "an image at a URL"), but with an image-labeled
+     * context menu instead of the GIF one.
+     */
+    public static EmojiMessageContent ofUrlImage(String imageUrl, int width, int height) {
+        EmojiMessageContent content = new EmojiMessageContent("");
+
+        GifMessageCell cell = new GifMessageCell(imageUrl, width, height, "Image");
+        VBox.setMargin(cell, new Insets(4, 0, 4, H_PAD));
+        content.getChildren().add(0, cell);
+
+        content.markAsUrlImage(imageUrl);
+        return content;
+    }
+
     public EmojiReactionBar detachReactionBar() {
         getChildren().remove(reactionBar);
         return reactionBar;
@@ -836,5 +853,27 @@ public class EmojiMessageContent extends VBox {
         miCopyGifUrl.setOnAction(e -> toClipboard(gifUrl));  // use the passed-in URL
 
         items.add(2, miCopyGifUrl);
+    }
+
+    /**
+     * Called once when this content wraps a URL-image message. Mirrors {@link #markAsGif} but
+     * with an "Image" label instead of "GIF" — same mechanics, different, more accurate wording.
+     */
+    public void markAsUrlImage(String imageUrl) {
+        contextMenu.getItems().removeIf(mi ->
+                "Copy".equals(mi.getText()) || "Copy All".equals(mi.getText()));
+
+        var items = contextMenu.getItems();
+        for (int i = items.size() - 1; i > 0; i--) {
+            if (items.get(i) instanceof SeparatorMenuItem && items.get(i - 1) instanceof SeparatorMenuItem) {
+                items.remove(i);
+                break;
+            }
+        }
+
+        MenuItem miCopyImageUrl = new MenuItem("Copy Image URL", new FontIcon(MaterialDesignC.CONTENT_COPY));
+        miCopyImageUrl.setOnAction(e -> toClipboard(imageUrl));
+
+        items.add(2, miCopyImageUrl);
     }
 }

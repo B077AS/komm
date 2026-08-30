@@ -179,7 +179,7 @@
         <dependency>
             <groupId>io.livekit</groupId>
             <artifactId>livekit-server</artifactId>
-            <version>0.13.0</version>
+            <version>0.15.1</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/com.microsoft.onnxruntime/onnxruntime -->
         <dependency>
@@ -296,12 +296,6 @@
                     <artifactId>javafx-media</artifactId>
                     <version>${javafx.version}</version>
                     <classifier>linux</classifier>
-                </dependency>
-                <dependency>
-                    <groupId>dev.onvoid.webrtc</groupId>
-                    <artifactId>webrtc-java</artifactId>
-                    <version>0.16.0</version>
-                    <classifier>windows-x86_64</classifier>
                 </dependency>
                 <dependency>
                     <groupId>dev.onvoid.webrtc</groupId>

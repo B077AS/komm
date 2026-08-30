@@ -79,7 +79,8 @@ public class InstallationWsClient extends Endpoint {
                 new MemberLeftHandler(),
                 new PokeReceivedHandler(),
                 new StreamViewerCountHandler(),
-                new StreamEndedHandler()
+                new StreamEndedHandler(),
+                new BotsUpdatedHandler()
         ).forEach(h -> handlers.put(h.getType(), h));
     }
 

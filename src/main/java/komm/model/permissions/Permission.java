@@ -31,7 +31,8 @@ public enum Permission {
     USE_SOUNDBOARD          ("Use Soundboard",            "Play soundboard sounds in voice channels"),
     MANAGE_SERVER_SOUNDBOARD("Manage Server Soundboards", "Add, edit and remove server-wide soundboard sounds"),
     MOVE_MEMBERS            ("Move Members",              "Move members between voice channels"),
-    VIEW_CHANNEL            ("View Channel",              "See this channel in the channel list and access its content");
+    VIEW_CHANNEL            ("View Channel",              "See this channel in the channel list and access its content"),
+    MANAGE_BOTS             ("Manage Bots",               "Add, configure and remove server bots");
 
     private final String displayName;
     private final String description;

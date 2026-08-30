@@ -38,6 +38,6 @@ public class MessageReceivedPayload {
     private String replyToFileType;
 
     public enum MessageType {
-        TEXT, GIF, CODE
+        TEXT, GIF, CODE, URL_IMAGE
     }
 }

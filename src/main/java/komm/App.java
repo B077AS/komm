@@ -85,6 +85,8 @@ public class App extends Application {
     @Getter
     private static AvatarCache avatarCache;
     @Getter
+    private static final komm.ui.bots.BotRoster botRoster = new komm.ui.bots.BotRoster();
+    @Getter
     private static final ServiceContainer services = ServiceContainer.getInstance();
 
     @Getter
