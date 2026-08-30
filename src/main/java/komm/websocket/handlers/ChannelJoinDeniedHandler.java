@@ -21,6 +21,6 @@ public class ChannelJoinDeniedHandler implements WsInboundMessageHandler {
     @Override
     public void handle(JsonObject payload) {
         ChannelJoinDeniedPayload denied = gson.fromJson(payload, ChannelJoinDeniedPayload.class);
-        Platform.runLater(() -> ChannelCard.notifyJoinDenied(denied.getReason()));
+        Platform.runLater(() -> ChannelCard.notifyJoinDenied(denied.getChannelId(), denied.getReason()));
     }
 }

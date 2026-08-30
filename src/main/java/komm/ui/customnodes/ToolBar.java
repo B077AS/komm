@@ -77,6 +77,15 @@ public class ToolBar extends HBox {
                     syncChannelFeatures();
                 })
         );
+
+        // Drive the screen-share button from the *real* sharing state rather than
+        // flipping it the instant "Start Sharing" is clicked. This callback fires
+        // once the share is actually live and announced — on Wayland that's after
+        // the xdg-desktop-portal picker delivers the first frame; on X11/Windows
+        // it's effectively immediate. Same timing as the "user is sharing" icon.
+        App.getWebrtcRoomClient().setOnScreenShareStateChanged(() ->
+                Platform.runLater(this::syncScreenShareActiveState)
+        );
         this.setMinHeight(60);
         this.setMaxHeight(60);
         this.setPadding(new Insets(5, 12, 5, 12));
@@ -466,20 +475,28 @@ public class ToolBar extends HBox {
     }
 
     private void onScreenShareToggle() {
-        if (App.getWebrtcRoomClient().isScreenSharing()) {
-            if (App.getWebrtcRoomClient() != null) {
-                App.getWebrtcRoomClient().stopScreenShare();
-            }
-            setScreenShareActive(false);
+        WebrtcRoomClient client = App.getWebrtcRoomClient();
+        if (client == null) return;
+
+        if (client.isScreenSharing()) {
+            client.stopScreenShare();
+            // Button state follows via onScreenShareStateChanged.
         } else {
             ScreenShareModal modal = new ScreenShareModal(selection -> {
-                if (App.getWebrtcRoomClient() != null) {
-                    App.getWebrtcRoomClient().startScreenShare(selection);
-                    setScreenShareActive(true);
-                }
+                WebrtcRoomClient c = App.getWebrtcRoomClient();
+                if (c != null) c.startScreenShare(selection);
+                // Do NOT light the button here — it flips once the share is really
+                // live (onScreenShareStateChanged). On Wayland that waits for the
+                // portal picker + first frame; cancelling the picker leaves it off.
             });
             App.showModal(modal);
         }
+    }
+
+    /** Syncs the toolbar screen-share button to the webrtc client's real sharing state. */
+    private void syncScreenShareActiveState() {
+        WebrtcRoomClient client = App.getWebrtcRoomClient();
+        setScreenShareActive(client != null && client.isScreenSharing());
     }
 
     private void setScreenShareActive(boolean active) {

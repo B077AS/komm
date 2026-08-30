@@ -49,22 +49,33 @@ public class UserJoinedChannelHandler implements WsInboundMessageHandler {
                 user.setScreenSharingEnabled(false);
 
                 Platform.runLater(() -> {
-                    if (isSelf) {
-                        komm.AppState.applyServerMicEnabled(joinPayload.isServerMicEnabled());
-                        komm.AppState.applyServerSpeakerEnabled(joinPayload.isServerSpeakerEnabled());
-                    }
+                    UUID desiredChannelId = App.getWebrtcRoomClient() != null
+                            ? App.getWebrtcRoomClient().getCurrentChannelId() : null;
 
                     var card = App.getCachedServerPage()
                             .getChannelSection()
                             .getChannelBoxes()
                             .get(channelId);
                     if (card == null) return;
+
+                    if (isSelf && !channelId.equals(desiredChannelId)) {
+                        // We rapidly hopped channels; the server already force-left us from
+                        // this one. Don't add our own card or mark it connected — just tidy
+                        // the pending spinner. The matching USER_LEFT_CHANNEL follows.
+                        card.onJoinSuperseded();
+                        return;
+                    }
+
+                    if (isSelf) {
+                        komm.AppState.applyServerMicEnabled(joinPayload.isServerMicEnabled());
+                        komm.AppState.applyServerSpeakerEnabled(joinPayload.isServerSpeakerEnabled());
+                    }
+
                     card.addConnectedUser(user);
                     if (isSelf) {
                         card.onJoinConfirmed();
                         NotificationSounds.play(NotificationSounds.CHANNEL_JOIN, 0.8);
-                    } else if (channelId.equals(App.getWebrtcRoomClient() != null
-                            ? App.getWebrtcRoomClient().getCurrentChannelId() : null)) {
+                    } else if (channelId.equals(desiredChannelId)) {
                         NotificationSounds.play(NotificationSounds.CHANNEL_JOIN, 0.8);
                     }
                 });
