@@ -297,12 +297,15 @@
                     <version>${javafx.version}</version>
                     <classifier>linux</classifier>
                 </dependency>
-                <dependency>
-                    <groupId>dev.onvoid.webrtc</groupId>
-                    <artifactId>webrtc-java</artifactId>
-                    <version>0.16.0</version>
-                    <classifier>linux-x86_64</classifier>
-                </dependency>
+                <!-- NO webrtc-java native classifier deps here (linux-x86_64 removed,
+                     windows-x86_64 was removed earlier for the same reason): the fixed
+                     native libraries from the B077AS/webrtc-java fork branch
+                     fix/windows-desktop-capture ship in src/main/resources/
+                     (webrtc-java-windows-x86_64.dll, libwebrtc-java-linux-x86_64.so —
+                     the linux one adds the any-screen-content Wayland portal picker).
+                     Including a classifier dep would shade the official native lib
+                     into the fat jar alongside ours and make NativeLoader's pick
+                     dependent on shade ordering. -->
             </dependencies>
         </profile>
     </profiles>
