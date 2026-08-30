@@ -459,6 +459,13 @@ public class WebrtcRoomClient {
         screenShareClient = new ScreenShareClient(factory, publisherPc, livekitSignaling);
         screenShareClient.setOnSharingStateChanged(() -> {
             boolean sharing = screenShareClient.isSharing();
+            if (!sharing && systemAudioCapture != null) {
+                // A Wayland share can be aborted from inside ScreenShareClient (portal
+                // picker cancelled/denied) — the system audio loopback started ahead of
+                // the portal in startScreenShare() must not keep running in that case.
+                stopSystemAudioCapture();
+                screenAudioActive = false;
+            }
             App.getServices().installation().getWsClient()
                     .send(WsMessageType.USER_SCREEN_SHARE, new UserScreenSharePayload(
                             App.getUser().getUserId(), sharing, sharing && screenAudioActive));

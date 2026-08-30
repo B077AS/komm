@@ -1,6 +1,7 @@
 package komm.webrtc;
 
 import dev.onvoid.webrtc.*;
+import dev.onvoid.webrtc.media.MediaSource;
 import dev.onvoid.webrtc.media.video.VideoDesktopSource;
 import dev.onvoid.webrtc.media.video.VideoTrack;
 import dev.onvoid.webrtc.media.video.VideoTrackSink;
@@ -70,8 +71,12 @@ public class ScreenShareClient {
             && (System.getenv("WAYLAND_DISPLAY") != null
                 || "wayland".equalsIgnoreCase(System.getenv("XDG_SESSION_TYPE")));
 
-    /** Fallback: publish anyway if no frame arrives within this window (portal denied/slow). */
-    private static final long WAYLAND_FIRST_FRAME_TIMEOUT_MS = 10_000;
+    /**
+     * Safety net: abort the pending share if no frame ever arrives. The portal picker
+     * itself has no deadline — cancel/deny is detected early via the source state —
+     * so this only catches a portal that hangs without ever ending the source.
+     */
+    private static final long WAYLAND_PORTAL_TIMEOUT_MS = 120_000;
 
     private final PeerConnectionFactory factory;
     private final RTCPeerConnection publisherPc;
@@ -125,17 +130,36 @@ public class ScreenShareClient {
         final boolean firstShare = (sender == null);
 
         if (WAYLAND) {
+            // libwebrtc's DesktopCapturer::IsRunningUnderWayland() requires BOTH
+            // XDG_SESSION_TYPE to start with "wayland" AND WAYLAND_DISPLAY to be set
+            // before it routes capture through the PipeWire/xdg-desktop-portal backend.
+            // Our own WAYLAND flag is an OR of the two, so in a half-set environment
+            // (IDE, launcher, systemd, .desktop file) komm shows the portal flow while
+            // the native layer silently creates the X11 capturer — and the portal
+            // picker dialog never opens.
+            String sessionType = System.getenv("XDG_SESSION_TYPE");
+            String waylandDisplay = System.getenv("WAYLAND_DISPLAY");
+            log.info("[ScreenShare] Wayland env: XDG_SESSION_TYPE={} WAYLAND_DISPLAY={}",
+                    sessionType, waylandDisplay);
+            if (sessionType == null || !sessionType.startsWith("wayland") || waylandDisplay == null) {
+                log.warn("[ScreenShare] Wayland env incomplete — libwebrtc will fall back to "
+                        + "X11 capture and the xdg-desktop-portal picker will NOT open");
+            }
             // Wait for the portal to deliver the first frame before publishing, so
-            // LiveKit never negotiates an empty video track. A one-shot sink fires
-            // publish() on the first frame; a timer publishes anyway if the user is
-            // slow or denies the dialog (behaviour then no worse than immediate publish).
-            log.info("[ScreenShare] Wayland: deferring publish until first captured frame");
+            // LiveKit never negotiates an empty video track. The share announcement
+            // (USER_SCREEN_SHARE broadcast via notifySharingStateChanged) is deferred
+            // with it: clicking "Start Sharing" only opens the portal picker — nobody
+            // should see "user is sharing" until a source was actually picked and the
+            // first frame exists. Cancelling the picker aborts the attempt silently.
+            log.info("[ScreenShare] Wayland: deferring publish and announcement until first captured frame");
             deferPublishUntilFirstFrame(trackToPublish, firstShare, trackToRetire);
+            // On reuse the share is already announced — refresh the state right away
+            // so a changed audio flag still propagates while the picker is open.
+            if (isReuse) notifySharingStateChanged();
         } else {
             publishTrack(trackToPublish, firstShare, trackToRetire);
+            notifySharingStateChanged();
         }
-
-        notifySharingStateChanged();
         log.info("[ScreenShare] Desktop source started");
     }
 
@@ -184,12 +208,15 @@ public class ScreenShareClient {
     }
 
     /**
-     * Attaches a one-shot {@link VideoTrackSink} that publishes on the first frame,
-     * with a timeout that publishes anyway if none arrives. Both paths are guarded
-     * so the track is published exactly once and the sink is always detached.
+     * Attaches a one-shot {@link VideoTrackSink} that publishes (and announces) on
+     * the first frame. A watchdog polls the desktop source state: when the user
+     * cancels or denies the portal picker, the native capturer ends the source and
+     * the pending share is aborted — it was never announced, so to everyone else
+     * nothing happened. The picker itself has no deadline; a generous hard timeout
+     * only catches a portal that hangs without ending the source.
      */
     private void deferPublishUntilFirstFrame(VideoTrack track, boolean firstShare, VideoTrack trackToRetire) {
-        AtomicBoolean published = new AtomicBoolean(false);
+        AtomicBoolean done = new AtomicBoolean(false);
         // Holder so the sink can remove itself from inside its own callback.
         VideoTrackSink[] sinkRef = new VideoTrackSink[1];
 
@@ -197,13 +224,16 @@ public class ScreenShareClient {
         // native layer from inside onVideoFrame could deadlock, and addTrack/offer
         // shouldn't block frame delivery.
         Runnable publishOnce = () -> {
-            if (published.getAndSet(true)) return;
+            if (done.getAndSet(true)) return;
             Thread.ofVirtual().name("screenshare-publish").start(() -> {
                 try {
                     if (sinkRef[0] != null) track.removeSink(sinkRef[0]);
                 } catch (Throwable ignored) {
                 }
                 publishTrack(track, firstShare, trackToRetire);
+                // Only now is the user really sharing — announce it. (On reuse this
+                // merely refreshes an already-announced state.)
+                notifySharingStateChanged();
             });
         };
 
@@ -211,7 +241,7 @@ public class ScreenShareClient {
             // webrtc-java hands each sink its own AddRef'd native frame copy —
             // it must be released or it leaks native memory.
             frame.release();
-            if (!published.get()) {
+            if (!done.get()) {
                 log.info("[ScreenShare] Wayland: first frame received — publishing track");
             }
             publishOnce.run();
@@ -219,19 +249,82 @@ public class ScreenShareClient {
         sinkRef[0] = sink;
         track.addSink(sink);
 
-        Thread.ofVirtual().name("screenshare-portal-timeout").start(() -> {
-            try {
-                Thread.sleep(WAYLAND_FIRST_FRAME_TIMEOUT_MS);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return;
+        Thread.ofVirtual().name("screenshare-portal-watchdog").start(() -> {
+            long deadline = System.currentTimeMillis() + WAYLAND_PORTAL_TIMEOUT_MS;
+            while (!done.get() && System.currentTimeMillis() < deadline) {
+                try {
+                    Thread.sleep(250);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+                if (track != videoTrack) return; // superseded by a newer share attempt
+                if (desktopSourceEnded()) {
+                    if (done.getAndSet(true)) return;
+                    log.info("[ScreenShare] Wayland: portal cancelled or denied — aborting share");
+                    abortPendingShare(track, sinkRef[0], firstShare);
+                    return;
+                }
             }
-            if (!published.get()) {
-                log.warn("[ScreenShare] Wayland: no frame within {} ms — publishing anyway",
-                        WAYLAND_FIRST_FRAME_TIMEOUT_MS);
-                publishOnce.run();
+            if (!done.getAndSet(true)) {
+                log.warn("[ScreenShare] Wayland: no frame within {} ms — aborting share",
+                        WAYLAND_PORTAL_TIMEOUT_MS);
+                abortPendingShare(track, sinkRef[0], firstShare);
             }
         });
+    }
+
+    /** True when the desktop source ended natively (portal picker cancelled/denied). */
+    private boolean desktopSourceEnded() {
+        VideoDesktopSource src = desktopSource;
+        if (src == null) return false;
+        try {
+            return src.getState() == MediaSource.State.ENDED;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /**
+     * Tears down a Wayland share attempt whose portal dialog was cancelled, denied,
+     * or never produced a frame. On a first share nothing was published or announced,
+     * so this is invisible to everyone else. On reuse the previous share was already
+     * announced and its source torn down, so the sender is deactivated like a normal
+     * stop and the state change is broadcast.
+     */
+    private void abortPendingShare(VideoTrack track, VideoTrackSink sink, boolean firstShare) {
+        if (track != this.videoTrack) return; // superseded by a newer share attempt
+        sharing.set(false);
+
+        try {
+            if (sink != null) track.removeSink(sink);
+        } catch (Throwable ignored) {
+        }
+
+        this.videoTrack = null;
+        releaseDesktopResources();
+        try {
+            // Never handed to the sender for this attempt — safe to dispose here.
+            track.dispose();
+        } catch (Throwable ignored) {
+        }
+
+        if (!firstShare && sender != null) {
+            // A previous share was live on this sender; wind it down like stopSharing().
+            // (The retired track itself is disposed in dispose(), same as a normal stop.)
+            for (RTCRtpTransceiver t : publisherPc.getTransceivers()) {
+                if (t.getSender() == sender) {
+                    t.setDirection(RTCRtpTransceiverDirection.INACTIVE);
+                    break;
+                }
+            }
+            triggerRenegotiation();
+        }
+
+        // For a first share this broadcasts sharing=false that nobody ever saw as
+        // true — harmless, and it resets any local UI. For a reuse it takes the
+        // stale share down for everyone.
+        notifySharingStateChanged();
     }
 
     public void stopSharing() {
