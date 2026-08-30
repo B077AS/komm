@@ -32,12 +32,12 @@ import komm.model.dto.summary.ServerSummary;
 import komm.ui.avatar.AvatarColor;
 import komm.ui.cards.ChannelCard;
 import komm.ui.customnodes.CustomNotification;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import org.kordamp.ikonli.javafx.FontIcon;
-import org.kordamp.ikonli.materialdesign2.MaterialDesignA;
-import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
-import org.kordamp.ikonli.materialdesign2.MaterialDesignD;
-import org.kordamp.ikonli.materialdesign2.MaterialDesignP;
-import org.kordamp.ikonli.materialdesign2.MaterialDesignR;
+import org.kordamp.ikonli.materialdesign2.*;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -54,14 +54,25 @@ import java.util.UUID;
 public class BotsModal extends VBox {
 
     /** One entry per addable bot type — the picker view just iterates this. */
-    private record BotTypeOption(BotSummary.BotType type, String label, String description,
-                                  org.kordamp.ikonli.Ikon icon) {}
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    private static class BotTypeOption {
+        private BotSummary.BotType type;
+        private String label;
+        private String description;
+        private org.kordamp.ikonli.Ikon icon;
+    }
 
     private static final List<BotTypeOption> AVAILABLE_TYPES = List.of(
-            new BotTypeOption(BotSummary.BotType.ANIME_WAIFU, "Anime Waifu Spawner",
-                    "Posts a random anime image every so often as people chat. "
-                            + "Capped to at most one image every 20 seconds per channel, no matter the chance.",
-                    MaterialDesignR.ROBOT_HAPPY_OUTLINE)
+            BotTypeOption.builder()
+                    .type(BotSummary.BotType.ANIME_WAIFU)
+                    .label("Anime Waifu Spawner")
+                    .description("Posts a random anime image every so often as people chat. "
+                            + "Capped to at most one image every 20 seconds per channel, no matter the chance.")
+                    .icon(MaterialDesignF.FACE_WOMAN_SHIMMER_OUTLINE)
+                    .build()
     );
 
     private final ServerSummary server;
@@ -177,6 +188,7 @@ public class BotsModal extends VBox {
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
         Button closeBtn = new Button(null, new FontIcon(MaterialDesignC.CLOSE));
+        closeBtn.setFocusTraversable(false);
         closeBtn.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE);
         closeBtn.setOnAction(e -> App.closeModal());
 
@@ -211,15 +223,17 @@ public class BotsModal extends VBox {
         footer.setAlignment(Pos.CENTER_RIGHT);
         footer.setPadding(new Insets(12, 16, 12, 16));
 
-        Button addBotBtn = new Button("Add Bot", new FontIcon(MaterialDesignP.PLUS));
+        Button addBotBtn = new Button("Add Bot");
+        addBotBtn.setFocusTraversable(false);
         addBotBtn.getStyleClass().addAll(Styles.ACCENT, Styles.SMALL);
         addBotBtn.setOnAction(e -> showTypePickerView());
 
         Button closeBtn = new Button("Close");
+        closeBtn.setFocusTraversable(false);
         closeBtn.getStyleClass().add(Styles.SMALL);
         closeBtn.setOnAction(e -> App.closeModal());
 
-        footer.getChildren().addAll(addBotBtn, closeBtn);
+        footer.getChildren().addAll(closeBtn, addBotBtn);
 
         root.getChildren().addAll(content, footer);
         return root;
@@ -244,8 +258,8 @@ public class BotsModal extends VBox {
         VBox.setVgrow(empty, Priority.ALWAYS);
 
         FontIcon icon = new FontIcon(MaterialDesignR.ROBOT_OUTLINE);
-        icon.setIconSize(40);
-        icon.setStyle("-fx-icon-color: -color-fg-subtle;");
+        icon.getStyleClass().add("custom-icon-72");
+        icon.setOpacity(0.12);
 
         Label text = new Label("No bots yet");
         text.setStyle("-fx-font-size: 13px; -fx-text-fill: -color-fg-subtle;");
@@ -294,9 +308,11 @@ public class BotsModal extends VBox {
         Button editBtn = new Button(null, new FontIcon(MaterialDesignP.PENCIL_OUTLINE));
         editBtn.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE);
         editBtn.setOnAction(e -> showEditConfigView(bot));
+        editBtn.setFocusTraversable(false);
 
         Button deleteBtn = new Button(null, new FontIcon(MaterialDesignD.DELETE_OUTLINE));
         deleteBtn.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE);
+        deleteBtn.setFocusTraversable(false);
         deleteBtn.setOnAction(e -> App.showModal(new ConfirmationModal(
                 "Remove Bot",
                 "Remove \"" + bot.getName() + "\" from this server? This cannot be undone.",
@@ -324,7 +340,7 @@ public class BotsModal extends VBox {
 
     private static BotTypeOption typeOptionFor(BotSummary.BotType type) {
         return AVAILABLE_TYPES.stream()
-                .filter(o -> o.type() == type)
+                .filter(o -> o.getType() == type)
                 .findFirst()
                 .orElse(AVAILABLE_TYPES.get(0));
     }
@@ -353,6 +369,7 @@ public class BotsModal extends VBox {
         footer.setPadding(new Insets(12, 16, 12, 16));
 
         Button cancelBtn = new Button("Cancel");
+        cancelBtn.setFocusTraversable(false);
         cancelBtn.getStyleClass().add(Styles.SMALL);
         cancelBtn.setOnAction(e -> showListView());
 
@@ -376,12 +393,12 @@ public class BotsModal extends VBox {
 
         HBox titleRow = new HBox(8);
         titleRow.setAlignment(Pos.CENTER_LEFT);
-        FontIcon icon = new FontIcon(option.icon());
-        Label nameLbl = new Label(option.label());
+        FontIcon icon = new FontIcon(option.getIcon());
+        Label nameLbl = new Label(option.getLabel());
         nameLbl.setStyle("-fx-font-size: 13px; -fx-font-weight: bold;");
         titleRow.getChildren().addAll(icon, nameLbl);
 
-        Label descLbl = new Label(option.description());
+        Label descLbl = new Label(option.getDescription());
         descLbl.setStyle("-fx-font-size: 11px; -fx-text-fill: -color-fg-subtle;");
         descLbl.setWrapText(true);
 
@@ -455,13 +472,14 @@ public class BotsModal extends VBox {
         submitBtn.setOnAction(e -> onSubmit());
 
         configCancelBtn = new Button("Cancel");
+        configCancelBtn.setFocusTraversable(false);
         configCancelBtn.getStyleClass().add(Styles.SMALL);
         configCancelBtn.setOnAction(e -> {
             if (editingBot != null) showListView();
             else showTypePickerView();
         });
 
-        footer.getChildren().addAll(submitBtn, configCancelBtn);
+        footer.getChildren().addAll(configCancelBtn, submitBtn);
 
         root.getChildren().addAll(scroll, footer);
         return root;
@@ -497,7 +515,7 @@ public class BotsModal extends VBox {
             // (enforced server-side too; this just surfaces it before the user hits Create/Save).
             BotSummary conflicting = loadedBots.stream()
                     .filter(b -> (editingBot == null || !b.getBotId().equals(editingBot.getBotId())))
-                    .filter(b -> b.getBotType() == selectedType.type())
+                    .filter(b -> b.getBotType() == selectedType.getType())
                     .filter(b -> b.getChannelIds() != null && b.getChannelIds().contains(channelId))
                     .findFirst()
                     .orElse(null);
@@ -532,7 +550,7 @@ public class BotsModal extends VBox {
         config.addProperty("sfwOnly", sfwOnlyCheck.isSelected());
 
         pendingSubmit = BotCreateRequest.builder()
-                .botType(selectedType.type())
+                .botType(selectedType.getType())
                 .name(name)
                 .config(GsonProvider.get().toJson(config))
                 .channelIds(selectedChannels)
@@ -550,9 +568,9 @@ public class BotsModal extends VBox {
     private void showAddConfigView(BotTypeOption option) {
         editingBot = null;
         selectedType = option;
-        configSubtitle.setText("Adding: " + option.label());
+        configSubtitle.setText("Adding: " + option.getLabel());
         submitBtn.setText("Create");
-        nameField.setText(option.label());
+        nameField.setText(option.getLabel());
         spawnChanceSlider.setValue(2);
         sfwOnlyCheck.setSelected(true);
         populateChannelChecklist(null);
@@ -562,7 +580,7 @@ public class BotsModal extends VBox {
     private void showEditConfigView(BotSummary bot) {
         editingBot = bot;
         selectedType = typeOptionFor(bot.getBotType());
-        configSubtitle.setText("Editing: " + selectedType.label());
+        configSubtitle.setText("Editing: " + selectedType.getLabel());
         submitBtn.setText("Save Changes");
         nameField.setText(bot.getName());
 
