@@ -297,13 +297,18 @@ public class ChatSection extends VBox {
 
         double totalH = rootStack.getHeight();
         double targetStreamH = drawerOpen ? totalH * STREAM_OPEN_RATIO : totalH;
-        double targetChatH = drawerOpen ? totalH * (1.0 - STREAM_OPEN_RATIO) : totalH;
 
         double currentStreamH = streamSection.getPrefHeight() >= 0
                 ? streamSection.getPrefHeight() : totalH;
         double currentChatH = (chatView.getMaxHeight() >= 0
                 && chatView.getMaxHeight() != Double.MAX_VALUE)
                 ? chatView.getMaxHeight() : totalH;
+
+        // On close, chatView keeps its drawer height instead of growing back to
+        // totalH behind the stream: expanding the hidden viewport can bring the
+        // list's bottom edge back into view, which re-arms follow-bottom and
+        // makes the next open snap to the bottom instead of the saved position.
+        double targetChatH = drawerOpen ? totalH * (1.0 - STREAM_OPEN_RATIO) : currentChatH;
 
         chatView.setMouseTransparent(!drawerOpen);
         streamSection.setChatOpen(drawerOpen);
