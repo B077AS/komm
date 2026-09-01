@@ -14,6 +14,8 @@ import komm.model.dto.summary.MainUserSummary.UserStatus;
 import komm.websocket.messages.WsMessageType;
 import komm.websocket.messages.payloads.UserDeafenedPayload;
 import komm.websocket.messages.payloads.UserMutedPayload;
+import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.concurrent.Executors;
@@ -52,6 +54,8 @@ public class AppState {
      */
     private static final IntegerProperty selfAvatarRevisionProp =
             new SimpleIntegerProperty(0);
+    @Setter
+    @Getter
     private static volatile boolean pokesEnabled = true;
 
     /**
@@ -104,14 +108,6 @@ public class AppState {
 
     public static IntegerProperty selfAvatarRevisionProperty() {
         return selfAvatarRevisionProp;
-    }
-
-    public static boolean isPokesEnabled() {
-        return pokesEnabled;
-    }
-
-    public static void setPokesEnabled(boolean enabled) {
-        pokesEnabled = enabled;
     }
 
     /**

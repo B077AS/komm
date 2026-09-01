@@ -2,7 +2,6 @@ package komm.ui.chat;
 
 import io.github.b077as.emojifx.EmojiData;
 import io.github.b077as.emojifx.util.TextUtils;
-import javafx.beans.value.ChangeListener;
 import javafx.concurrent.Service;
 import javafx.concurrent.Task;
 import javafx.geometry.Insets;
@@ -18,10 +17,9 @@ import javafx.animation.*;
 import komm.App;
 import komm.model.dto.summary.ChannelSummary;
 import komm.model.dto.summary.GifResult;
-import komm.model.permissions.Permission;
 import komm.ui.attachments.AttachmentDisplayBuilder;
 import komm.ui.attachments.AttachmentBarSlot;
-import komm.ui.code.CodeBlockView;
+import komm.ui.chat.virtual.VirtualMessageList;
 import komm.ui.code.CodeDetector;
 import komm.ui.code.CodeLanguage;
 import komm.ui.customnodes.CustomNotification;
@@ -32,7 +30,6 @@ import komm.ui.emojis.EmojiMessageItem;
 import komm.ui.emojis.EmojiReactionBar;
 import komm.websocket.messages.payloads.ChannelMessageEditedPayload;
 import komm.websocket.messages.payloads.MessageEditPayload;
-import komm.ui.gifs.GifMessageCell;
 import komm.ui.sections.ServerMembersSection;
 import komm.ui.screenshare.MultiStreamView;
 import komm.websocket.messages.WsMessageType;
@@ -57,7 +54,6 @@ public class ChatSection extends VBox {
     // ── Constants ─────────────────────────────────────────────────────────────
 
     private static final int PAGE_SIZE = 50;
-    private static final double PREFETCH_THRESHOLD = 0.20;
     private static final double FRIENDS_SECTION_WIDTH = 240;
     private static final double REPLY_BAR_HEIGHT = 53.0;
     private static final double REPLY_ANIM_MS = 180.0;
@@ -98,10 +94,9 @@ public class ChatSection extends VBox {
     private ChatHeader chatHeader;
 
     private VBox chatView;
-    private ScrollPane chatScrollPane;
+    private VirtualMessageList virtualList;
     private StackPane scrollPaneWrapper;
     private Button scrollToBottomBtn;
-    private VBox chatMessagesContainer;
     private MessageInputBox messageInputBox;
     private HBox typingRow;
     private VBox welcomeView;
@@ -119,6 +114,7 @@ public class ChatSection extends VBox {
      */
     private boolean drawerOpen = false;
     private Timeline drawerTimeline;
+    private javafx.beans.value.ChangeListener<Number> drawerBottomPin;
 
     // ── Members sidebar ───────────────────────────────────────────────────────
 
@@ -127,21 +123,8 @@ public class ChatSection extends VBox {
 
     // ── State ─────────────────────────────────────────────────────────────────
 
-    private double savedVvalue = -1.0;
-    private double savedContentHeight = -1.0;
-    private double savedViewportHeight = -1.0;
-    private boolean restoringScroll = false;
-    private double pendingRestoreVvalue = -1.0;
-
     @Getter
     private boolean isAtBottom = true;
-
-    // ── Scroll freeze ─────────────────────────────────────────────────────────
-
-    private boolean scrollFrozen = false;
-    private double frozenVvalue = -1.0;
-    private boolean inScrollCorrection = false;
-    private ChangeListener<Number> frozenHeightListener;
 
     @Getter
     private UUID activeTextChannelId;
@@ -149,13 +132,12 @@ public class ChatSection extends VBox {
     private volatile boolean isFetchingHistory = false;
     private boolean allHistoryLoaded = false;
 
-    private record FetchResult(UUID channelId, boolean isInitialLoad, Label chip,
+    private record FetchResult(UUID channelId, boolean isInitialLoad,
                                List<MessageReceivedPayload> messages) {}
 
     private UUID pendingFetchChannelId;
     private LocalDateTime pendingFetchBefore;
     private boolean pendingFetchIsInitialLoad;
-    private Label pendingFetchChip;
 
     private final Service<FetchResult> fetchService = new Service<>() {
         @Override
@@ -163,7 +145,6 @@ public class ChatSection extends VBox {
             final UUID cid    = pendingFetchChannelId;
             final LocalDateTime before = pendingFetchBefore;
             final boolean initial = pendingFetchIsInitialLoad;
-            final Label chip  = pendingFetchChip;
             return new Task<>() {
                 @Override
                 protected FetchResult call() throws Exception {
@@ -178,7 +159,7 @@ public class ChatSection extends VBox {
                         App.getAvatarCache().resolveAll(senderIds).join();
                         App.getAvatarCache().preloadImages(senderIds);
                     }
-                    return new FetchResult(cid, initial, chip,
+                    return new FetchResult(cid, initial,
                             page != null ? page : List.of());
                 }
             };
@@ -206,17 +187,7 @@ public class ChatSection extends VBox {
         }
     };
 
-    private ChangeListener<Number> scrollListener;
-    private boolean suppressScrollFetch = false;
-    private boolean scrollToBottomPending = false;
-    private AnimationTimer scrollBurstTimer;
-    private boolean loadHiding = false;
-
-    // ── GIF registry ──────────────────────────────────────────────────────────
-
-    private final Map<UUID, List<GifMessageCell>> gifCellsByMessage = new LinkedHashMap<>();
-
-    // ── Message item map ──────────────────────────────────────────────────────
+    // ── Message item map (currently-realized cells only) ─────────────────────
 
     private final Map<UUID, EmojiMessageItem> messageItemMap = new LinkedHashMap<>();
 
@@ -312,18 +283,32 @@ public class ChatSection extends VBox {
         if (!streamSection.isVisible()) return;
 
         drawerOpen = !drawerOpen;
+        // Captured before the resize animation starts: shrinking chatView's height
+        // mid-animation changes the virtual list's viewport, which can flip the live
+        // isAtBottom flag to false partway through even though the user was at the
+        // bottom when they opened the drawer.
+        boolean wasAtBottom = isAtBottom;
 
         if (drawerTimeline != null) drawerTimeline.stop();
+        if (drawerBottomPin != null) {
+            chatView.heightProperty().removeListener(drawerBottomPin);
+            drawerBottomPin = null;
+        }
 
         double totalH = rootStack.getHeight();
         double targetStreamH = drawerOpen ? totalH * STREAM_OPEN_RATIO : totalH;
-        double targetChatH = drawerOpen ? totalH * (1.0 - STREAM_OPEN_RATIO) : totalH;
 
         double currentStreamH = streamSection.getPrefHeight() >= 0
                 ? streamSection.getPrefHeight() : totalH;
         double currentChatH = (chatView.getMaxHeight() >= 0
                 && chatView.getMaxHeight() != Double.MAX_VALUE)
                 ? chatView.getMaxHeight() : totalH;
+
+        // On close, chatView keeps its drawer height instead of growing back to
+        // totalH behind the stream: expanding the hidden viewport can bring the
+        // list's bottom edge back into view, which re-arms follow-bottom and
+        // makes the next open snap to the bottom instead of the saved position.
+        double targetChatH = drawerOpen ? totalH * (1.0 - STREAM_OPEN_RATIO) : currentChatH;
 
         chatView.setMouseTransparent(!drawerOpen);
         streamSection.setChatOpen(drawerOpen);
@@ -350,11 +335,26 @@ public class ChatSection extends VBox {
                         new KeyValue(chatView.prefHeightProperty(), targetChatH,
                                 Interpolator.SPLINE(0.4, 0.0, 0.2, 1.0)))
         );
+        if (wasAtBottom) {
+            // Re-pin on every layout pulse of the resize instead of correcting once
+            // at the end — that made the view visibly hop back to the bottom after
+            // the drawer had already settled. Pinning continuously keeps it glued
+            // to the bottom the whole time, so there is nothing left to "snap".
+            drawerBottomPin = (obs, ov, nv) -> virtualList.pinBottomImmediate();
+            chatView.heightProperty().addListener(drawerBottomPin);
+            virtualList.pinBottomImmediate();
+        }
+
+        final javafx.beans.value.ChangeListener<Number> pinListener = drawerBottomPin;
         drawerTimeline.setOnFinished(e -> {
             drawerTimeline = null;
-            // Snap to bottom so the user sees the latest messages when opening
-            if (drawerOpen && isAtBottom)
-                chatScrollPane.setVvalue(chatScrollPane.getVmax());
+            if (pinListener != null) {
+                chatView.heightProperty().removeListener(pinListener);
+                if (drawerBottomPin == pinListener) drawerBottomPin = null;
+            }
+            // One last settle for any row whose real height only just got measured.
+            if (drawerOpen && wasAtBottom)
+                virtualList.scrollToBottom();
         });
         drawerTimeline.play();
     }
@@ -382,21 +382,15 @@ public class ChatSection extends VBox {
     // ── Public channel API ────────────────────────────────────────────────────
 
     public void setActiveChannel(ChannelSummary channel) {
-        removeScrollListeners();
-
         this.activeTextChannelId = channel.getChannelId();
         markActiveChannelReadNow(activeTextChannelId);
         this.oldestMessageTimestamp = null;
         this.allHistoryLoaded = false;
         this.isFetchingHistory = false;
         this.isAtBottom = true;
-        this.suppressScrollFetch = false;
-        this.scrollToBottomPending = false;
-        this.pendingRestoreVvalue = -1.0;
 
         Platform.runLater(() -> {
-            clearGifRegistry();
-            chatMessagesContainer.getChildren().clear();
+            virtualList.clear();
             messageItemMap.clear();
             activeEditItems.clear();
             messageInputBox.clearReply();
@@ -409,16 +403,14 @@ public class ChatSection extends VBox {
             chatHeader.setChannel(channel);
             messageInputBox.setPromptText("Message #" + channel.getChannelName());
 
-            installScrollListeners();
             fetchPage(channel.getChannelId(), null, true);
         });
     }
 
     public void clearAndShowWelcome() {
-        removeScrollListeners();
         Platform.runLater(() -> {
-            clearGifRegistry();
-            chatMessagesContainer.getChildren().clear();
+            virtualList.clear();
+            messageItemMap.clear();
             activeTextChannelId = null;
             messageInputBox.clearReply();
             attachmentBarSlot.clear();
@@ -462,7 +454,6 @@ public class ChatSection extends VBox {
             chatHeader.setMode(ChatHeader.Mode.CHAT, null);
             chatView.setMouseTransparent(false);
             activeIds.forEach(this::sendStreamUnwatch);
-            Platform.runLater(this::rehookAllGifCells);
         });
     }
 
@@ -518,41 +509,15 @@ public class ChatSection extends VBox {
         Platform.runLater(() -> {
             if (payload.getChannelId() == null
                     || !payload.getChannelId().equals(activeTextChannelId)) return;
-
-            EmojiMessageItem item = buildMessageItem(payload);
-            chatMessagesContainer.getChildren().add(item);
-            registerGifsForMessage(payload.getMessageId(), item, true);
-            registerCodeBlocksForMessage(item);
-            if (isAtBottom) scheduleScrollToBottom();
+            virtualList.appendMessage(payload);
         });
     }
 
     public void removeMessage(UUID messageId) {
         Platform.runLater(() -> {
-            EmojiMessageItem item = messageItemMap.remove(messageId);
-            if (item == null) return;
-
-            disposeAndUnregisterGifsFor(messageId);
-
-            double contentH = chatMessagesContainer.getHeight();
-            double viewportH = chatScrollPane.getViewportBounds().getHeight();
-            double scrollable = Math.max(1, contentH - viewportH);
-            double pixelsBefore = chatScrollPane.getVvalue() * scrollable;
-
-            suppressScrollFetch = true;
-            chatScrollPane.setOpacity(0);
-            chatMessagesContainer.getChildren().remove(item);
-
-            ChangeListener<Number>[] l = new ChangeListener[1];
-            l[0] = (obs, oldH, newH) -> {
-                chatMessagesContainer.heightProperty().removeListener(l[0]);
-                double newScrollable = Math.max(1, newH.doubleValue() - viewportH);
-                chatScrollPane.setVvalue(clamp(pixelsBefore / newScrollable,
-                        chatScrollPane.getVmin(), chatScrollPane.getVmax()));
-                chatScrollPane.setOpacity(1);
-                suppressScrollFetch = false;
-            };
-            chatMessagesContainer.heightProperty().addListener(l[0]);
+            if (!virtualList.containsId(messageId)) return;
+            virtualList.removeById(messageId);
+            messageItemMap.remove(messageId);
 
             if (currentReplyTarget != null
                     && currentReplyTarget.getMessageId().equals(messageId)) {
@@ -564,19 +529,55 @@ public class ChatSection extends VBox {
 
     public void addReaction(UUID messageId, String emojiChar, boolean isSelf) {
         Platform.runLater(() -> {
-            EmojiMessageItem item = messageItemMap.get(messageId);
-            if (item == null) return;
-            item.getBubble().getReactionBar().incrementReaction(emojiChar, isSelf);
-            if (isAtBottom) scheduleScrollToBottom();
+            applyReactionToModel(virtualList.payload(messageId), emojiChar, isSelf, true);
+            EmojiMessageItem live = messageItemMap.get(messageId);
+            if (live != null) live.getBubble().getReactionBar().incrementReaction(emojiChar, isSelf);
         });
     }
 
     public void removeReaction(UUID messageId, String emojiChar, boolean isSelf) {
         Platform.runLater(() -> {
-            EmojiMessageItem item = messageItemMap.get(messageId);
-            if (item != null)
-                item.getBubble().getReactionBar().decrementReaction(emojiChar, isSelf);
+            applyReactionToModel(virtualList.payload(messageId), emojiChar, isSelf, false);
+            EmojiMessageItem live = messageItemMap.get(messageId);
+            if (live != null) live.getBubble().getReactionBar().decrementReaction(emojiChar, isSelf);
         });
+    }
+
+    /**
+     * Keeps a message payload's reaction list in step with a reaction event so a
+     * virtualized cell that is currently off-screen shows the right reactions when
+     * it is next rebuilt. Mirrors the grouping logic in {@link #buildMessageItem}.
+     */
+    private void applyReactionToModel(MessageReceivedPayload p, String emojiChar, boolean isSelf, boolean add) {
+        if (p == null) return;
+        List<ChannelMessageReactionAdd> list = p.getReactions();
+        if (list == null) {
+            list = new ArrayList<>();
+            p.setReactions(list);
+        }
+        UUID myId = App.getUser() != null ? App.getUser().getUserId() : null;
+        if (add) {
+            list.add(ChannelMessageReactionAdd.builder()
+                    .messageId(p.getMessageId())
+                    .userId(isSelf ? myId : null)
+                    .emoji(emojiChar)
+                    .build());
+            return;
+        }
+        for (int i = list.size() - 1; i >= 0; i--) {
+            ChannelMessageReactionAdd r = list.get(i);
+            boolean rSelf = myId != null && myId.equals(r.getUserId());
+            if (emojiChar.equals(r.getEmoji()) && rSelf == isSelf) {
+                list.remove(i);
+                return;
+            }
+        }
+        for (int i = list.size() - 1; i >= 0; i--) {
+            if (emojiChar.equals(list.get(i).getEmoji())) {
+                list.remove(i);
+                return;
+            }
+        }
     }
 
     // ── Typing ────────────────────────────────────────────────────────────────
@@ -636,16 +637,12 @@ public class ChatSection extends VBox {
         pendingFetchChannelId = channelId;
         pendingFetchBefore = before;
         pendingFetchIsInitialLoad = isInitialLoad;
-        pendingFetchChip = buildLoadingChip();
-        chatMessagesContainer.getChildren().add(0, pendingFetchChip);
         fetchService.restart();
     }
 
     private void onFetchSucceeded() {
         FetchResult result = fetchService.getValue();
         if (result == null) return;
-
-        chatMessagesContainer.getChildren().remove(result.chip());
 
         if (!result.channelId().equals(activeTextChannelId)) {
             isFetchingHistory = false;
@@ -660,10 +657,9 @@ public class ChatSection extends VBox {
         }
 
         Collections.reverse(page);
-        List<Node> newNodes = buildMessageNodes(page);
 
-        if (result.isInitialLoad()) loadInitialPage(newNodes, page);
-        else prependWithAnchoredScroll(newNodes, page);
+        if (result.isInitialLoad()) virtualList.setInitial(page);
+        else virtualList.prepend(page);
 
         oldestMessageTimestamp = page.get(0).getSentAt();
         if (page.size() < PAGE_SIZE) allHistoryLoaded = true;
@@ -672,263 +668,10 @@ public class ChatSection extends VBox {
 
     private void onFetchFailed() {
         log.error("Failed to fetch messages", fetchService.getException());
-        chatMessagesContainer.getChildren().remove(pendingFetchChip);
         isFetchingHistory = false;
     }
 
-    // ── Scroll logic ──────────────────────────────────────────────────────────
-
-    private void loadInitialPage(List<Node> newNodes, List<MessageReceivedPayload> page) {
-        isAtBottom = true;
-        chatMessagesContainer.getChildren().setAll(newNodes);
-        for (MessageReceivedPayload msg : page) {
-            EmojiMessageItem item = messageItemMap.get(msg.getMessageId());
-            if (item != null) {
-                registerGifsForMessage(msg.getMessageId(), item, true);
-                registerCodeBlocksForMessage(item);
-            }
-        }
-        rehookAllGifCells();
-        // Hide the pane until the burst settles: the content height jumps from ~0
-        // to full in one pulse, so pinning to the bottom is a visible top→bottom
-        // snap. Hiding makes that happen off-screen.
-        scheduleScrollToBottom(true);
-    }
-
-    private void prependWithAnchoredScroll(List<Node> newNodes,
-                                           List<MessageReceivedPayload> page) {
-        double contentH = chatMessagesContainer.getHeight();
-        double viewportH = chatScrollPane.getViewportBounds().getHeight();
-        double scrollable = Math.max(0, contentH - viewportH);
-        double pixelsBefore = chatScrollPane.getVvalue() * scrollable;
-
-        for (MessageReceivedPayload msg : page) {
-            EmojiMessageItem item = messageItemMap.get(msg.getMessageId());
-            if (item != null) registerGifsForMessage(msg.getMessageId(), item, false);
-        }
-
-        suppressScrollFetch = true;
-        chatScrollPane.setOpacity(0);
-        chatMessagesContainer.getChildren().addAll(0, newNodes);
-
-        ChangeListener<Number>[] l = new ChangeListener[1];
-        l[0] = (obs, oldH, newH) -> {
-            chatMessagesContainer.heightProperty().removeListener(l[0]);
-            double addedH = newH.doubleValue() - contentH;
-            double newScrollable = Math.max(1, newH.doubleValue() - viewportH);
-            chatScrollPane.setVvalue(clamp((pixelsBefore + addedH) / newScrollable,
-                    chatScrollPane.getVmin(), chatScrollPane.getVmax()));
-            chatScrollPane.setOpacity(1);
-            suppressScrollFetch = false;
-            Platform.runLater(this::rehookAllGifCells);
-        };
-        chatMessagesContainer.heightProperty().addListener(l[0]);
-    }
-
-    private void scheduleScrollToBottom() {
-        scheduleScrollToBottom(false);
-    }
-
-    /**
-     * Pins the view to the bottom across the next several layout pulses.
-     *
-     * <p>A single {@code setVvalue(vmax)} is unreliable here: on channel load the
-     * viewport height can still be 0 when the content height settles, and JavaFX
-     * resets a ScrollPane's {@code vvalue} to the top whenever its content grows
-     * taller — so a value set before the content/viewport settle gets discarded.
-     * Rather than try to catch the one perfect moment with a height listener (which
-     * can miss and then never re-fire), we re-assert the bottom for a short burst of
-     * frames until the content height is stable. The burst self-cancels the instant
-     * the user scrolls up ({@code isAtBottom} flips false), the channel changes, or
-     * scroll is frozen.
-     *
-     * @param hideUntilSettled hide the scroll pane until the content height has fully
-     *        settled. Used on the initial channel load: the content height grows in
-     *        several pulses over ~150ms (the messages, then code blocks and avatars
-     *        rendering in stages), and each growth makes JavaFX yank the scroll to
-     *        the top before the burst re-pins it — a visible top→bottom flicker on
-     *        every step. Hiding until everything settles makes the whole sequence
-     *        happen off-screen so the messages simply appear already at the bottom.
-     *        New messages pass {@code false} — already at the bottom, nothing to mask.
-     */
-    private void scheduleScrollToBottom(boolean hideUntilSettled) {
-        // While the load hide-burst is running it already pins to the bottom every
-        // frame, so ignore redundant requests (gif/code resize callbacks, new
-        // messages) that would otherwise supersede it and reveal the pane early.
-        if (loadHiding && !hideUntilSettled) {
-            log.debug("[DBG] schedule(hide={}) IGNORED — loadHiding active", hideUntilSettled);
-            return;
-        }
-
-        log.debug("[DBG] schedule(hide={}) — isAtBottom={} pending={} loadHiding={} contentH={} viewportH={} vvalue={}",
-                hideUntilSettled, isAtBottom, scrollToBottomPending, loadHiding,
-                chatMessagesContainer.getHeight(), chatScrollPane.getViewportBounds().getHeight(),
-                chatScrollPane.getVvalue());
-
-        if (!isAtBottom || pendingRestoreVvalue >= 0 || restoringScroll || scrollFrozen) {
-            log.debug("[DBG] schedule REJECTED by guard");
-            if (hideUntilSettled) { chatScrollPane.setOpacity(1); loadHiding = false; }
-            return;
-        }
-
-        final UUID channelAtSchedule = activeTextChannelId;
-        scrollToBottomPending = true;
-        if (hideUntilSettled) {
-            loadHiding = true;
-            chatScrollPane.setOpacity(0);
-        }
-        if (scrollBurstTimer != null) scrollBurstTimer.stop();
-
-        // Finish once the content height has been unchanged for this long (so async
-        // growth from code blocks / images is captured). The load burst waits longer
-        // because it also reveals the pane; new-message bursts only need to re-pin
-        // briefly. Hard cap so we never spin indefinitely.
-        final long settleNanos = hideUntilSettled ? 140_000_000L : 40_000_000L;
-        final long capNanos = 600_000_000L;
-        final boolean hide = hideUntilSettled;
-
-        scrollBurstTimer = new AnimationTimer() {
-            long startNanos = 0;
-            long lastChangeNanos = 0;
-            double lastH = -1;
-            int frame = 0;
-
-            @Override
-            public void handle(long now) {
-                if (startNanos == 0) { startNanos = now; lastChangeNanos = now; }
-                if (!isAtBottom
-                        || !Objects.equals(channelAtSchedule, activeTextChannelId)
-                        || scrollFrozen) {
-                    log.debug("[DBG] burst(hide={}) ABORT frame={} isAtBottom={} frozen={}",
-                            hide, frame, isAtBottom, scrollFrozen);
-                    finish();
-                    return;
-                }
-                double vmax = chatScrollPane.getVmax();
-                double before = chatScrollPane.getVvalue();
-                chatScrollPane.setVvalue(vmax);
-                double after = chatScrollPane.getVvalue();
-
-                double h = chatMessagesContainer.getHeight();
-                double viewportH = chatScrollPane.getViewportBounds().getHeight();
-                boolean changed = (h != lastH || viewportH <= 0);
-                log.debug("[DBG] burst(hide={}) frame={} contentH={} viewportH={} vvalue {}->{} vmax={} changed={} sinceChange={}ms sinceStart={}ms",
-                        hide, frame, h, viewportH, before, after, vmax, changed,
-                        (now - lastChangeNanos) / 1_000_000, (now - startNanos) / 1_000_000);
-                frame++;
-                if (changed) {
-                    lastChangeNanos = now;
-                    lastH = h;
-                }
-                if ((viewportH > 0 && now - lastChangeNanos >= settleNanos)
-                        || now - startNanos >= capNanos) {
-                    log.debug("[DBG] burst(hide={}) FINISH frame={} sinceChange={}ms sinceStart={}ms finalVvalue={}",
-                            hide, frame, (now - lastChangeNanos) / 1_000_000,
-                            (now - startNanos) / 1_000_000, chatScrollPane.getVvalue());
-                    finish();
-                }
-            }
-
-            private void finish() {
-                stop();
-                scrollToBottomPending = false;
-                chatScrollPane.setOpacity(1);
-                loadHiding = false;
-                if (scrollBurstTimer == this) scrollBurstTimer = null;
-            }
-        };
-        chatMessagesContainer.requestLayout();
-        scrollBurstTimer.start();
-    }
-
-    private void installScrollListeners() {
-        // setActiveChannel() removes listeners synchronously but installs them inside a
-        // deferred Platform.runLater; if two calls land close enough together the second
-        // call's removal can run before the first call's install, leaving no listener to
-        // remove and letting both installs attach — guard here so that can never leak a
-        // duplicate onto vvalueProperty regardless of call ordering.
-        if (scrollListener != null) {
-            chatScrollPane.vvalueProperty().removeListener(scrollListener);
-        }
-        scrollListener = (obs, oldVal, newVal) -> {
-            /*log.debug("[DBG] LISTENER vvalue {}->{} pending={} loadHiding={} isAtBottom={} frozen={} contentH={} viewportH={}",
-                    oldVal, newVal, scrollToBottomPending, loadHiding, isAtBottom, scrollFrozen,
-                    chatMessagesContainer.getHeight(), chatScrollPane.getViewportBounds().getHeight());*/
-            if (scrollFrozen) {
-                if (!inScrollCorrection && frozenVvalue >= 0) {
-                    inScrollCorrection = true;
-                    chatScrollPane.setVvalue(frozenVvalue);
-                    inScrollCorrection = false;
-                }
-                return;
-            }
-            if (pendingRestoreVvalue >= 0) {
-                double delta = Math.abs(newVal.doubleValue() - pendingRestoreVvalue);
-                log.debug("[scroll] ChatSection scroll during restore — newVal={} pending={} delta={}", newVal, pendingRestoreVvalue, delta);
-                if (delta < 0.005) {
-                    isAtBottom = pendingRestoreVvalue >= chatScrollPane.getVmax() - 0.02;
-                    pendingRestoreVvalue = -1.0;
-                    log.debug("[scroll] ChatSection restore confirmed — isAtBottom={}", isAtBottom);
-                    updateScrollToBottomBtn();
-                } else {
-                    // vvalue was pushed away from target (e.g., by the FX layout reset).
-                    // Clear first to prevent re-entry, then re-apply immediately.
-                    double target = pendingRestoreVvalue;
-                    pendingRestoreVvalue = -1.0;
-                    chatScrollPane.setVvalue(target);
-                    isAtBottom = target >= chatScrollPane.getVmax() - 0.02;
-                    log.debug("[scroll] ChatSection re-applied after layout reset — target={} isAtBottom={}", target, isAtBottom);
-                    updateScrollToBottomBtn();
-                }
-                return;
-            }
-            if (scrollToBottomPending) {
-                // A scroll-to-bottom burst is active. JavaFX resets vvalue toward 0
-                // whenever the content grows taller; snap it back to the bottom
-                // SYNCHRONOUSLY here (mirrors the scrollFrozen correction) so no
-                // intermediate frame is painted off-bottom — that is what removes the
-                // flicker. Return before the prefetch check below: the transient low
-                // value is a skin artifact, NOT the user scrolling toward the top, so
-                // it must not trigger a history fetch (doing so caused a feedback loop
-                // of fetch → content grows → reset → fetch).
-                if (!inScrollCorrection && newVal.doubleValue() < chatScrollPane.getVmax()) {
-                    inScrollCorrection = true;
-                    chatScrollPane.setVvalue(chatScrollPane.getVmax());
-                    inScrollCorrection = false;
-                }
-                return;
-            }
-
-            double contentH = chatMessagesContainer.getHeight();
-            double viewportH = chatScrollPane.getViewportBounds().getHeight();
-            if (contentH <= viewportH) {
-                isAtBottom = true;
-            } else {
-                isAtBottom = newVal.doubleValue() >= chatScrollPane.getVmax() - 0.02;
-            }
-            updateScrollToBottomBtn();
-
-            if (suppressScrollFetch || allHistoryLoaded || isFetchingHistory) return;
-            if (newVal.doubleValue() <= PREFETCH_THRESHOLD) fetchOlderMessages();
-        };
-        chatScrollPane.vvalueProperty().addListener(scrollListener);
-    }
-
-    private void removeScrollListeners() {
-        if (scrollListener != null) {
-            chatScrollPane.vvalueProperty().removeListener(scrollListener);
-            scrollListener = null;
-        }
-        if (scrollBurstTimer != null) {
-            scrollBurstTimer.stop();
-            scrollBurstTimer = null;
-            // The timer's finish() (which restores opacity) won't run when stopped
-            // externally, so restore it here in case we stopped mid hide-burst.
-            chatScrollPane.setOpacity(1);
-            loadHiding = false;
-        }
-        scrollToBottomPending = false;
-    }
+    // ── Scroll-to-bottom button ───────────────────────────────────────────────
 
     private void updateScrollToBottomBtn() {
         if (isAtBottom) markActiveChannelReadNow(activeTextChannelId);
@@ -948,28 +691,6 @@ public class ChatSection extends VBox {
             ft.setOnFinished(e -> scrollToBottomBtn.setVisible(false));
             ft.play();
         }
-    }
-
-    private static double clamp(double v, double min, double max) {
-        return Math.max(min, Math.min(max, v));
-    }
-
-    /**
-     * vvalue is a proportion of the scrollable range, so restoring the same proportion against
-     * content that grew while the channel was away silently scrolls further down than the user
-     * actually was — up to the new bottom if they were previously at the (old) bottom. Re-derives
-     * the target from the absolute pixel offset the user was really at, so returning lands them
-     * exactly where they left off, with any new messages below, out of view until they scroll.
-     */
-    private static double reanchorTargetVvalue(double target, double oldContentHeight, double oldViewportHeight,
-                                                double newContentHeight, double newViewportHeight) {
-        if (oldContentHeight < 0 || oldViewportHeight <= 0 || newContentHeight <= oldContentHeight + 0.5) {
-            return target;
-        }
-        double oldRange = Math.max(oldContentHeight - oldViewportHeight, 0);
-        double oldScrollY = target * oldRange;
-        double newRange = Math.max(newContentHeight - newViewportHeight, 0);
-        return newRange > 0 ? clamp(oldScrollY / newRange, 0.0, 1.0) : 0.0;
     }
 
     /**
@@ -993,77 +714,6 @@ public class ChatSection extends VBox {
                 log.warn("Failed to mark channel {} as read: {}", channelId, e.getMessage());
             }
         });
-    }
-
-    // ── GIF registry ──────────────────────────────────────────────────────────
-
-    private void registerGifsForMessage(UUID messageId, EmojiMessageItem item,
-                                        boolean withScrollCallback) {
-        List<GifMessageCell> cells = new ArrayList<>();
-        collectGifCells(item, cells);
-        if (cells.isEmpty()) return;
-
-        gifCellsByMessage.put(messageId, cells);
-
-        if (withScrollCallback) {
-            final UUID channelAtRegister = activeTextChannelId;
-            for (GifMessageCell cell : cells) {
-                cell.setOnSizeCommitted(() -> {
-                    if (isAtBottom
-                            && Objects.equals(channelAtRegister, activeTextChannelId))
-                        scheduleScrollToBottom();
-                });
-            }
-        }
-    }
-
-    private void disposeAndUnregisterGifsFor(UUID messageId) {
-        List<GifMessageCell> cells = gifCellsByMessage.remove(messageId);
-        if (cells != null) cells.forEach(GifMessageCell::dispose);
-    }
-
-    private void clearGifRegistry() {
-        gifCellsByMessage.values().forEach(cells -> cells.forEach(GifMessageCell::dispose));
-        gifCellsByMessage.clear();
-    }
-
-    private void rehookAllGifCells() {
-        gifCellsByMessage.values().forEach(cells -> cells.forEach(GifMessageCell::rehookScrollPane));
-    }
-
-    private void collectGifCells(Node node, List<GifMessageCell> out) {
-        if (node instanceof GifMessageCell cell) {
-            out.add(cell);
-        } else if (node instanceof javafx.scene.Parent p) {
-            for (Node child : p.getChildrenUnmodifiable()) collectGifCells(child, out);
-        }
-    }
-
-    // ── Code block scroll anchoring ───────────────────────────────────────────
-
-    /**
-     * Re-anchors the scroll to the bottom once a code block realises its final
-     * height (RichTextFX lays out a pulse later). Mirrors the GIF size callback.
-     */
-    private void registerCodeBlocksForMessage(EmojiMessageItem item) {
-        List<CodeBlockView> blocks = new ArrayList<>();
-        collectCodeBlocks(item, blocks);
-        if (blocks.isEmpty()) return;
-        final UUID channelAtRegister = activeTextChannelId;
-        for (CodeBlockView block : blocks) {
-            block.setOnResize(() -> {
-                if (isAtBottom && Objects.equals(channelAtRegister, activeTextChannelId))
-                    scheduleScrollToBottom();
-            });
-        }
-    }
-
-    private void collectCodeBlocks(Node node, List<CodeBlockView> out) {
-        if (node instanceof CodeBlockView block) {
-            out.add(block);
-        } else if (node instanceof javafx.scene.Parent p) {
-            for (Node child : p.getChildrenUnmodifiable()) collectCodeBlocks(child, out);
-        }
     }
 
     // ── Drag-and-drop ─────────────────────────────────────────────────────────
@@ -1177,13 +827,7 @@ public class ChatSection extends VBox {
         fadeOut.play();
     }
 
-    // ── Node builders ─────────────────────────────────────────────────────────
-
-    private List<Node> buildMessageNodes(List<MessageReceivedPayload> msgs) {
-        List<Node> nodes = new ArrayList<>(msgs.size());
-        for (MessageReceivedPayload m : msgs) nodes.add(buildMessageItem(m));
-        return nodes;
-    }
+    // ── Node builder (VirtualMessageList cell factory) ───────────────────────
 
     private EmojiMessageItem buildMessageItem(MessageReceivedPayload msg) {
         boolean isOwn = msg.getSenderId() != null
@@ -1601,162 +1245,38 @@ public class ChatSection extends VBox {
 
         activeEditItems.add(msg.getMessageId());
 
-        double viewportH = chatScrollPane.getViewportBounds().getHeight();
-        double contentH  = chatMessagesContainer.getHeight();
-        double scrollable = Math.max(1, contentH - viewportH);
-        double pixelsBefore = chatScrollPane.getVvalue() * scrollable;
-        boolean wasAtBottom = isAtBottom;
-
-        MessageEditBox editBox = new MessageEditBox(msg.getContent() != null ? msg.getContent() : "", msg.isHasAttachments());
-
+        MessageEditBox editBox = new MessageEditBox(
+                msg.getContent() != null ? msg.getContent() : "", msg.isHasAttachments());
         editBox.setOnSave(trimmed -> {
             if (!trimmed.equals(msg.getContent())) sendEditMessage(msg.getMessageId(), trimmed);
         });
-        editBox.setOnDismiss(() ->
-                cancelEditMode(msg.getMessageId(), item, editBox, oldBubble, contentCol));
-
-        suppressScrollFetch = true;
+        editBox.setOnDismiss(() -> {
+            activeEditItems.remove(msg.getMessageId());
+            contentCol.getChildren().remove(editBox);
+            oldBubble.setVisible(true);
+            oldBubble.setManaged(true);
+        });
         oldBubble.setVisible(false);
         oldBubble.setManaged(false);
         contentCol.getChildren().add(bubbleIdx, editBox);
-
         editBox.activate();
-
-        ChangeListener<Number>[] l = new ChangeListener[1];
-        l[0] = (obs, oldH, newH) -> {
-            chatMessagesContainer.heightProperty().removeListener(l[0]);
-            double newScrollable = Math.max(1, newH.doubleValue() - viewportH);
-            if (wasAtBottom) {
-                chatScrollPane.setVvalue(chatScrollPane.getVmax());
-            } else {
-                chatScrollPane.setVvalue(clamp(pixelsBefore / newScrollable,
-                        chatScrollPane.getVmin(), chatScrollPane.getVmax()));
-            }
-            suppressScrollFetch = false;
-        };
-        chatMessagesContainer.heightProperty().addListener(l[0]);
-    }
-
-    private void cancelEditMode(UUID messageId, EmojiMessageItem item, VBox wrapper,
-                                EmojiMessageContent oldBubble, VBox contentCol) {
-        activeEditItems.remove(messageId);
-
-        double viewportH  = chatScrollPane.getViewportBounds().getHeight();
-        double contentH   = chatMessagesContainer.getHeight();
-        double scrollable = Math.max(1, contentH - viewportH);
-        double pixelsBefore = chatScrollPane.getVvalue() * scrollable;
-
-        suppressScrollFetch = true;
-        contentCol.getChildren().remove(wrapper);
-        oldBubble.setVisible(true);
-        oldBubble.setManaged(true);
-
-        ChangeListener<Number>[] l = new ChangeListener[1];
-        l[0] = (obs, oldH, newH) -> {
-            chatMessagesContainer.heightProperty().removeListener(l[0]);
-            double newScrollable = Math.max(1, newH.doubleValue() - viewportH);
-            chatScrollPane.setVvalue(clamp(pixelsBefore / newScrollable,
-                    chatScrollPane.getVmin(), chatScrollPane.getVmax()));
-            suppressScrollFetch = false;
-        };
-        chatMessagesContainer.heightProperty().addListener(l[0]);
+        // Flowless re-lays-out on the height change; no scroll math needed.
     }
 
     public void updateMessage(ChannelMessageEditedPayload p) {
         Platform.runLater(() -> {
-            EmojiMessageItem item = messageItemMap.get(p.getMessageId());
-            if (item == null) return;
+            MessageReceivedPayload target = virtualList.payload(p.getMessageId());
+            if (target == null) return;
+            if (target.getMessageType() == MessageReceivedPayload.MessageType.GIF
+                    || target.getMessageType() == MessageReceivedPayload.MessageType.URL_IMAGE) return;
 
-            MessageReceivedPayload originalPayload = item.getPayload();
-            VBox contentCol = item.getContentCol();
-            EmojiMessageContent oldBubble = item.getBubble();
-
-            // Only update text-type messages (not GIFs or URL images)
-            if (originalPayload.getMessageType() == MessageReceivedPayload.MessageType.GIF) return;
-            if (originalPayload.getMessageType() == MessageReceivedPayload.MessageType.URL_IMAGE) return;
-
-            int bubbleIdx = contentCol.getChildren().indexOf(oldBubble);
-            if (bubbleIdx < 0) return;
-
-            EmojiMessageContent newBubble;
-            if (originalPayload.getMessageType() == MessageReceivedPayload.MessageType.CODE) {
-                String lang = p.getCodeLanguage() != null
-                        ? p.getCodeLanguage() : originalPayload.getCodeLanguage();
-                newBubble = EmojiMessageContent.ofCode(p.getContent(), lang);
-                originalPayload.setCodeLanguage(lang);
-            } else {
-                newBubble = EmojiMessageContent.of(p.getContent());
+            target.setContent(p.getContent());
+            target.setEdited(true);
+            if (target.getMessageType() == MessageReceivedPayload.MessageType.CODE
+                    && p.getCodeLanguage() != null) {
+                target.setCodeLanguage(p.getCodeLanguage());
             }
-            VBox.setMargin(newBubble, new Insets(0, 0, 0, -EmojiMessageContent.H_PAD));
-
-            boolean isOwn = originalPayload.getSenderId() != null
-                    && originalPayload.getSenderId().equals(App.getUser().getUserId());
-
-            newBubble.setDeleteVisibleSupplier(() -> isOwn || App.getPermissionManager().has(Permission.DELETE_OTHERS_MSGS));
-            newBubble.setOnDelete(() -> sendDeleteMessage(originalPayload.getMessageId()));
-            newBubble.setOnReply(bubble -> openReplyBar(originalPayload));
-            newBubble.setOnAllPopupsClosed(item::onAllPopupsClosed);
-            if (isOwn) {
-                newBubble.setEditVisible(true);
-                newBubble.setOnEdit(() -> startEditMode(originalPayload, item));
-            }
-            newBubble.setOnAddReaction((bubble, emoji) -> {
-                if (emoji == null) {
-                    messageInputBox.getEmojiPicker().setOnEmojiSelected(picked -> {
-                        sendAddReactionMessage(originalPayload.getMessageId(), picked);
-                        messageInputBox.getEmojiPicker().hide();
-                    });
-                    javafx.geometry.Bounds b = bubble.localToScreen(bubble.getBoundsInLocal());
-                    if (b != null) {
-                        double x = b.getMinX();
-                        double y = b.getMinY() - 444 - 4;
-                        if (y < 0) y = b.getMaxY() + 4;
-                        messageInputBox.getEmojiPicker().show(item.getScene().getWindow(), x, y);
-                    }
-                } else {
-                    sendAddReactionMessage(originalPayload.getMessageId(), emoji);
-                }
-            });
-
-            // Detach the new bubble's bar (mirrors buildMessageItem), then swap out
-            // the old detached bar so only one reaction row exists after the edit.
-            EmojiReactionBar newBar = newBubble.detachReactionBar();
-            VBox.setMargin(newBar, new Insets(0, 0, 0, 0));
-
-            EmojiReactionBar existingBar = null;
-            for (Node n : contentCol.getChildren()) {
-                if (n instanceof EmojiReactionBar rb) { existingBar = rb; break; }
-            }
-            if (existingBar != null) {
-                newBar.getReactions().putAll(existingBar.getReactions());
-                contentCol.getChildren().remove(existingBar);
-            }
-            newBar.setOnReactionAdded(emojiChar ->
-                    EmojiData.emojiFromUnicodeString(emojiChar).ifPresent(emoji ->
-                            sendAddReactionMessage(originalPayload.getMessageId(), emoji)));
-            newBar.setOnReactionRemoved(emojiChar ->
-                    EmojiData.emojiFromUnicodeString(emojiChar).ifPresent(emoji ->
-                            sendRemoveReactionMessage(originalPayload.getMessageId(), emoji)));
-            newBar.setOnPickerRequested(coords -> {
-                messageInputBox.getEmojiPicker().setOnEmojiSelected(emoji -> {
-                    sendAddReactionMessage(originalPayload.getMessageId(), emoji);
-                    messageInputBox.getEmojiPicker().hide();
-                });
-                messageInputBox.getEmojiPicker().show(
-                        item.getScene().getWindow(), coords[0], coords[1]);
-            });
-
-            originalPayload.setContent(p.getContent());
-            originalPayload.setEdited(true);
-
-            contentCol.getChildren().set(bubbleIdx, newBubble);
-            contentCol.getChildren().add(newBar);
-            item.setBubble(newBubble);
-            item.setEdited(true);
-
-            if (!newBar.getReactions().isEmpty()) {
-                newBar.rebuildWithoutAnimation();
-            }
+            virtualList.refreshId(p.getMessageId());
         });
     }
 
@@ -1778,17 +1298,6 @@ public class ChatSection extends VBox {
 
     // ── Misc helpers ──────────────────────────────────────────────────────────
 
-    private Label buildLoadingChip() {
-        Label chip = new Label("Loading messages…");
-        chip.setStyle("-fx-text-fill: -color-fg-muted; -fx-font-size: 11px;" +
-                "-fx-padding: 4 12 4 12; -fx-background-color: -color-bg-subtle;" +
-                "-fx-background-radius: 10px;");
-        chip.setMaxWidth(Double.MAX_VALUE);
-        chip.setAlignment(Pos.CENTER);
-        VBox.setMargin(chip, new Insets(4, 16, 4, 16));
-        return chip;
-    }
-
     public static String truncate(String text, int maxChars) {
         if (text.length() <= maxChars) return text;
         BreakIterator bi = BreakIterator.getCharacterInstance();
@@ -1806,23 +1315,21 @@ public class ChatSection extends VBox {
     // ── View construction ─────────────────────────────────────────────────────
 
     /**
-     * Builds the chat content area (scroll pane + input row).
+     * Builds the chat content area (virtualized message list + input row).
      * No header is created here — the header lives at the ChatSection level.
      */
     private VBox createChatView() {
         VBox container = new VBox();
         VBox.setVgrow(container, Priority.ALWAYS);
 
-        chatScrollPane = new ScrollPane();
-        chatScrollPane.setFitToWidth(true);
-        chatScrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-        chatScrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.ALWAYS);
-        chatScrollPane.setStyle("-fx-background-color: -color-bg-default;");
-
-        chatMessagesContainer = new VBox(12);
-        chatMessagesContainer.setPadding(new Insets(16, 16, 8, 16));
-        chatMessagesContainer.setAlignment(Pos.BOTTOM_LEFT);
-        chatScrollPane.setContent(chatMessagesContainer);
+        virtualList = new VirtualMessageList();
+        virtualList.setMessageNodeFactory(this::buildMessageItem);
+        virtualList.setOnNearTop(this::fetchOlderMessages);
+        virtualList.setOnCellRetired((id, node) -> messageItemMap.remove(id, node));
+        virtualList.setOnAtBottomChanged(atBottom -> {
+            isAtBottom = atBottom;
+            updateScrollToBottomBtn();
+        });
 
         scrollToBottomBtn = new Button();
         FontIcon chevronIcon = new FontIcon(Feather.CHEVRON_DOWN);
@@ -1834,10 +1341,10 @@ public class ChatSection extends VBox {
         scrollToBottomBtn.setOnAction(e -> {
             isAtBottom = true;
             updateScrollToBottomBtn();
-            chatScrollPane.setVvalue(chatScrollPane.getVmax());
+            virtualList.scrollToBottom();
         });
 
-        scrollPaneWrapper = new StackPane(chatScrollPane, scrollToBottomBtn);
+        scrollPaneWrapper = new StackPane(virtualList, scrollToBottomBtn);
         StackPane.setAlignment(scrollToBottomBtn, Pos.BOTTOM_RIGHT);
         StackPane.setMargin(scrollToBottomBtn, new Insets(0, 24, 14, 0));
         VBox.setVgrow(scrollPaneWrapper, Priority.ALWAYS);
@@ -1971,167 +1478,25 @@ public class ChatSection extends VBox {
         attachmentBarSlot.setTopCornersRounded(!replyOpen);
     }
 
-    // ── Scroll freeze / save / restore ────────────────────────────────────────
+    // ── Scroll freeze / save / restore (page navigation) ─────────────────────
 
-    public void freezeScroll() {
-        if (activeTextChannelId == null) return;
-        frozenVvalue = chatScrollPane.getVvalue();
-        scrollFrozen = true;
+    /** No-op: opening a modal doesn't mutate the list, so there is nothing to rebase. */
+    public void freezeScroll() { }
 
-        frozenHeightListener = (obs, oldH, newH) -> {
-            if (!scrollFrozen || isAtBottom) return;
-            double dH = newH.doubleValue() - oldH.doubleValue();
-            if (Math.abs(dH) < 0.5) return;
-            double viewportH = chatScrollPane.getViewportBounds().getHeight();
-            double oldScrollable = Math.max(1.0, oldH.doubleValue() - viewportH);
-            double pixelPos = frozenVvalue * oldScrollable;
-            double newScrollable = Math.max(1.0, newH.doubleValue() - viewportH);
-            frozenVvalue = clamp(pixelPos / newScrollable,
-                    chatScrollPane.getVmin(), chatScrollPane.getVmax());
-            inScrollCorrection = true;
-            chatScrollPane.setVvalue(frozenVvalue);
-            inScrollCorrection = false;
-        };
-        chatMessagesContainer.heightProperty().addListener(frozenHeightListener);
-    }
-
-    public void unfreezeScroll() {
-        scrollFrozen = false;
-        if (frozenHeightListener != null) {
-            chatMessagesContainer.heightProperty().removeListener(frozenHeightListener);
-            frozenHeightListener = null;
-        }
-        double v = frozenVvalue;
-        frozenVvalue = -1.0;
-        if (v >= 0 && activeTextChannelId != null) {
-            chatScrollPane.setVvalue(v);
-            isAtBottom = v >= chatScrollPane.getVmax() - 0.02;
-        }
-    }
+    /** No-op: see {@link #freezeScroll()}. */
+    public void unfreezeScroll() { }
 
     public void saveScrollPosition() {
-        if (activeTextChannelId != null) {
-            savedVvalue = chatScrollPane.getVvalue();
-            savedContentHeight = chatMessagesContainer.getHeight();
-            savedViewportHeight = chatScrollPane.getViewportBounds().getHeight();
-            isAtBottom = savedVvalue >= chatScrollPane.getVmax() - 0.02;
-            log.debug("[scroll] ChatSection.saveScrollPosition channel={} vvalue={} contentH={} viewportH={}",
-                    activeTextChannelId, savedVvalue, savedContentHeight, savedViewportHeight);
-        } else {
-            log.debug("[scroll] ChatSection.saveScrollPosition skipped — no active channel");
-        }
-    }
-
-    public void restoreScrollNow() {
-        if (savedVvalue < 0 || activeTextChannelId == null) return;
-        double v = savedVvalue;
-        savedVvalue = -1.0;
-        chatScrollPane.setVvalue(v);
-        isAtBottom = v >= chatScrollPane.getVmax() - 0.02;
-    }
-
-    public double getSavedScrollVvalue() {
-        return savedVvalue;
-    }
-
-    public void directSetVvalue(double v) {
-        if (activeTextChannelId == null || v < 0) return;
-        chatScrollPane.setVvalue(v);
-        isAtBottom = v >= chatScrollPane.getVmax() - 0.02;
+        if (activeTextChannelId != null) virtualList.saveAnchor();
     }
 
     public void notifyPageResumed() {
-        if (activeTextChannelId == null) {
-            log.debug("[scroll] ChatSection.notifyPageResumed skipped — no active channel");
-            return;
-        }
-
-        // Unlike a fresh selection, resuming to a channel that was already active does NOT mark
-        // it read immediately: messages may have arrived while this page wasn't visible (e.g. the
-        // user was on the Home page), and they haven't actually seen those yet. The logic below
-        // marks it read right away only if there's no scrollbar (everything already visible), and
-        // otherwise waits for the scroll listener to confirm the user has scrolled to the bottom.
-
-        // The container may have been detached from the scene (e.g. user was on the Home page)
-        // while messages were appended to it, so its layout bounds are stale until a fresh pass
-        // runs. Force one synchronously so the height check below reflects reality, not whatever
-        // it measured before the last batch of messages arrived.
-        chatScrollPane.applyCss();
-        chatScrollPane.layout();
-
-        double currentViewportH = chatScrollPane.getViewportBounds().getHeight();
-        double newContentHeight = chatMessagesContainer.getHeight();
-
-        // No scrollbar needed (few enough messages to fit the viewport) means every message is
-        // already fully visible — there is no scroll gesture the user could perform to "confirm"
-        // they've seen it, so treat it as read immediately instead of waiting on a vvalue change
-        // event that may never fire (setting vvalue to a value it already holds fires no event).
-        if (currentViewportH > 0 && newContentHeight <= currentViewportH) {
-            savedVvalue = -1.0;
-            savedContentHeight = -1.0;
-            savedViewportHeight = -1.0;
-            pendingRestoreVvalue = -1.0;
-            isAtBottom = true;
-            updateScrollToBottomBtn();
-            rehookAllGifCells();
-            log.debug("[scroll] ChatSection.notifyPageResumed — content fits viewport, marking at-bottom immediately");
-            return;
-        }
-
-        if (savedVvalue < 0) {
-            log.debug("[scroll] ChatSection.notifyPageResumed skipped — savedVvalue={} channel={}", savedVvalue, activeTextChannelId);
-            return;
-        }
-
-        double target = savedVvalue;
-        double oldContentHeight = savedContentHeight;
-        double oldViewportHeight = savedViewportHeight;
-        savedVvalue = -1.0;
-        savedContentHeight = -1.0;
-        savedViewportHeight = -1.0;
-
-        if (currentViewportH > 0) {
-            target = reanchorTargetVvalue(target, oldContentHeight, oldViewportHeight, newContentHeight, currentViewportH);
-        }
-        log.debug("[scroll] ChatSection.notifyPageResumed channel={} target={} viewportHeightNow={}", activeTextChannelId, target, currentViewportH);
-
-        if (currentViewportH > 0) {
-            if (target < 0.005) {
-                // Restoring to top: layout will reset vvalue to 0 anyway and no change event
-                // will fire (already 0), so there is nothing to re-apply.
-                isAtBottom = false;
-                pendingRestoreVvalue = -1.0;
-                log.debug("[scroll] ChatSection restore-to-top confirmed immediately");
-            } else {
-                // Non-zero target: when the page is re-shown the FX layout pass resets vvalue
-                // to 0. The scroll listener catches that deviation and re-applies the target.
-                pendingRestoreVvalue = target;
-                isAtBottom = false;
-                log.debug("[scroll] ChatSection restore pending — scroll listener will re-apply on layout reset");
-            }
-        } else {
-            pendingRestoreVvalue = target;
-            isAtBottom = false;
-            ChangeListener<javafx.geometry.Bounds>[] l = new ChangeListener[1];
-            l[0] = (obs, oldBounds, newBounds) -> {
-                if (newBounds.getHeight() <= 0) return;
-                chatScrollPane.viewportBoundsProperty().removeListener(l[0]);
-                log.debug("[scroll] ChatSection viewportBounds listener fired — restoring vvalue={}", pendingRestoreVvalue);
-                double liveContentHeight = chatMessagesContainer.getHeight();
-                if (liveContentHeight <= newBounds.getHeight()) {
-                    // Content fits after all (e.g. window grew, or few messages) — nothing to
-                    // scroll to, and setting the same vvalue again wouldn't fire a change event.
-                    pendingRestoreVvalue = -1.0;
-                    isAtBottom = true;
-                    updateScrollToBottomBtn();
-                    return;
-                }
-                pendingRestoreVvalue = reanchorTargetVvalue(
-                        pendingRestoreVvalue, oldContentHeight, oldViewportHeight, liveContentHeight, newBounds.getHeight());
-                chatScrollPane.setVvalue(pendingRestoreVvalue);
-            };
-            chatScrollPane.viewportBoundsProperty().addListener(l[0]);
-        }
-        rehookAllGifCells();
+        if (activeTextChannelId == null) return;
+        virtualList.restoreAnchor();
+        // Mark the channel read if the resume lands the viewport on the newest message
+        // (VirtualMessageList also fires onAtBottomChanged, which routes here too).
+        Platform.runLater(() -> {
+            if (virtualList.isAtBottom()) markActiveChannelReadNow(activeTextChannelId);
+        });
     }
 }

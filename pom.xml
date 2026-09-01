@@ -175,6 +175,14 @@
             <artifactId>richtextfx</artifactId>
             <version>0.11.7</version>
         </dependency>
+        <!-- https://mvnrepository.com/artifact/org.fxmisc.flowless/flowless
+             Used directly by komm.ui.chat.virtual for the virtualized DM message list
+             (also a transitive dep of richtextfx; pinned here because we depend on it). -->
+        <dependency>
+            <groupId>org.fxmisc.flowless</groupId>
+            <artifactId>flowless</artifactId>
+            <version>0.7.4</version>
+        </dependency>
         <!-- https://mvnrepository.com/artifact/io.livekit/livekit-server -->
         <dependency>
             <groupId>io.livekit</groupId>

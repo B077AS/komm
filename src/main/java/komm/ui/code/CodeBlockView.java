@@ -155,6 +155,20 @@ public class CodeBlockView extends VBox {
         });
     }
 
+    /**
+     * Releases the underlying RichTextFX {@link CodeArea} (unsubscribes its internal
+     * reactive plumbing). Call when the owning message row is permanently discarded —
+     * e.g. a virtualized message list retiring an off-screen cell.
+     */
+    public void dispose() {
+        onResize = null;
+        try {
+            codeArea.dispose();
+        } catch (Exception ignored) {
+            // CodeArea.dispose() can throw if already torn down / never fully initialised.
+        }
+    }
+
     private HBox buildHeader() {
         FontIcon codeIcon = new FontIcon(MaterialDesignC.CODE_BRACES);
         codeIcon.getStyleClass().add("custom-icon-15");
