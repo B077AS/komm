@@ -352,6 +352,9 @@
                         <option>--add-opens=javafx.graphics/com.sun.javafx.scene=ALL-UNNAMED</option>
                         <option>--add-opens=javafx.graphics/com.sun.javafx.scene.text=ALL-UNNAMED</option>
                         <option>--add-opens=javafx.controls/javafx.scene.control.skin=ALL-UNNAMED</option>
+                        <option>-XX:G1PeriodicGCInterval=30000</option>
+                        <option>-XX:MinHeapFreeRatio=10</option>
+                        <option>-XX:MaxHeapFreeRatio=20</option>
                     </options>
                 </configuration>
             </plugin>
