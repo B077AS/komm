@@ -84,7 +84,7 @@ Both WebSockets speak the same envelope format — `{ "type": "WS_MESSAGE_TYPE",
 
 Voice and video run on a dedicated daemon thread (`webrtc-mta-thread`) using native WebRTC ([webrtc-java](https://github.com/devopvoid/webrtc-java)) with LiveKit signaling against the SFU embedded in each komm-server. Joining or leaving a voice channel is a WebSocket message; media flows peer-to-SFU directly.
 
-On Linux, the client ships a **custom build of webrtc-java** (fork branch `x11-pipewire-0.14.0`) patched with X11 capture fixes and PipeWire portal support — that's what makes screen sharing work natively on Wayland, no XWayland workarounds.
+On Linux, screen sharing works natively on Wayland via webrtc-java's built-in PipeWire/xdg-desktop-portal support — no XWayland workarounds needed.
 
 ### The audio pipeline
 
@@ -198,7 +198,7 @@ On first launch the client creates its app data directory — `%APPDATA%\Komm` o
 |---|---|
 | Language / runtime | Java 21 |
 | UI | JavaFX 22, [AtlantaFX](https://github.com/mkpaz/atlantafx) themes, Ikonli icon packs, RichTextFX, emojifx |
-| Voice / video | [webrtc-java](https://github.com/devopvoid/webrtc-java) 0.14.0 (custom Linux build with X11 + PipeWire patches), LiveKit signaling |
+| Voice / video | [webrtc-java](https://github.com/devopvoid/webrtc-java) 0.17.0, LiveKit signaling |
 | Audio DSP | RNNoise (rnnoise4j), Silero VAD via ONNX Runtime, WebRTC AEC3/AGC2, mp3spi |
 | System integration | JNA / JNA Platform (WASAPI loopback, PipeWire patch bay), JNativeHook (global hotkeys) |
 | Networking | Java `HttpClient`, Tyrus WebSocket client, Spring WebSocket/messaging (client-side) |
