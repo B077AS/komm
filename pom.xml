@@ -143,7 +143,7 @@
         <dependency>
             <groupId>dev.onvoid.webrtc</groupId>
             <artifactId>webrtc-java</artifactId>
-            <version>0.16.0</version>
+            <version>0.17.0</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/org.bouncycastle/bcpkix-jdk18on -->
         <dependency>
@@ -305,15 +305,23 @@
                     <version>${javafx.version}</version>
                     <classifier>linux</classifier>
                 </dependency>
-                <!-- NO webrtc-java native classifier deps here (linux-x86_64 removed,
-                     windows-x86_64 was removed earlier for the same reason): the fixed
-                     native libraries from the B077AS/webrtc-java fork branch
-                     fix/windows-desktop-capture ship in src/main/resources/
-                     (webrtc-java-windows-x86_64.dll, libwebrtc-java-linux-x86_64.so —
-                     the linux one adds the any-screen-content Wayland portal picker).
-                     Including a classifier dep would shade the official native lib
-                     into the fat jar alongside ours and make NativeLoader's pick
-                     dependent on shade ordering. -->
+                <!-- Stock upstream natives as of webrtc-java 0.17.0 — the Windows WGC
+                     ABI mismatch, the libyuv crop bug and the Wayland/PipeWire portal
+                     picker are all fixed upstream now, so the custom B077AS/webrtc-java
+                     fork build (fix/windows-desktop-capture, x11-pipewire-0.14.0) is no
+                     longer needed. -->
+                <dependency>
+                    <groupId>dev.onvoid.webrtc</groupId>
+                    <artifactId>webrtc-java</artifactId>
+                    <version>0.17.0</version>
+                    <classifier>windows-x86_64</classifier>
+                </dependency>
+                <dependency>
+                    <groupId>dev.onvoid.webrtc</groupId>
+                    <artifactId>webrtc-java</artifactId>
+                    <version>0.17.0</version>
+                    <classifier>linux-x86_64</classifier>
+                </dependency>
             </dependencies>
         </profile>
     </profiles>
