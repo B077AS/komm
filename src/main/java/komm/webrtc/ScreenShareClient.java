@@ -192,7 +192,12 @@ public class ScreenShareClient {
             // the transceiver direction. No new AddTrackRequest needed.
             sender.replaceTrack(track);
             applyBitrateSettings(); // re-apply: replaceTrack may reset encoding params
-            setSenderTransceiverDirection(RTCRtpTransceiverDirection.SEND_ONLY);
+            for (RTCRtpTransceiver t : publisherPc.getTransceivers()) {
+                if (t.getSender() == sender) {
+                    t.setDirection(RTCRtpTransceiverDirection.SEND_ONLY);
+                    break;
+                }
+            }
             triggerRenegotiation();
         }
 
@@ -307,7 +312,12 @@ public class ScreenShareClient {
         if (!firstShare && sender != null) {
             // A previous share was live on this sender; wind it down like stopSharing().
             // (The retired track itself is disposed in dispose(), same as a normal stop.)
-            setSenderTransceiverDirection(RTCRtpTransceiverDirection.INACTIVE);
+            for (RTCRtpTransceiver t : publisherPc.getTransceivers()) {
+                if (t.getSender() == sender) {
+                    t.setDirection(RTCRtpTransceiverDirection.INACTIVE);
+                    break;
+                }
+            }
             triggerRenegotiation();
         }
 
@@ -322,7 +332,12 @@ public class ScreenShareClient {
         log.info("[ScreenShare] Stopping");
 
         if (sender != null) {
-            setSenderTransceiverDirection(RTCRtpTransceiverDirection.INACTIVE);
+            for (RTCRtpTransceiver t : publisherPc.getTransceivers()) {
+                if (t.getSender() == sender) {
+                    t.setDirection(RTCRtpTransceiverDirection.INACTIVE);
+                    break;
+                }
+            }
         }
 
         releaseDesktopResources();
@@ -334,38 +349,6 @@ public class ScreenShareClient {
         return sharing.get();
     }
 
-    /**
-     * Finds the publisher transceiver bound to {@link #sender} and sets its
-     * direction. webrtc-java 0.18+ hands out a fresh {@code RTCRtpTransceiver} /
-     * {@code RTCRtpSender} wrapper instance on every call to {@code
-     * getTransceivers()} / {@code getSender()} — comparing them with {@code ==}
-     * (as this used to) would never match the retained {@link #sender} field, so
-     * this uses identity-based {@code equals()} instead. Every wrapper handed out
-     * by this call is a query result we own and must dispose of; none of them are
-     * the actual track or sender, so disposing them never affects the live stream.
-     */
-    private void setSenderTransceiverDirection(RTCRtpTransceiverDirection direction) {
-        RTCRtpSender currentSender = sender;
-        if (currentSender == null) return;
-
-        RTCRtpTransceiver[] transceivers = publisherPc.getTransceivers();
-        try {
-            for (RTCRtpTransceiver t : transceivers) {
-                RTCRtpSender ts = t.getSender();
-                boolean match = ts.equals(currentSender);
-                ts.dispose();
-                if (match) {
-                    t.setDirection(direction);
-                    break;
-                }
-            }
-        } finally {
-            for (RTCRtpTransceiver t : transceivers) {
-                try { t.dispose(); } catch (Throwable ignored) {}
-            }
-        }
-    }
-
     public void dispose() {
         sharing.set(false);
         releaseDesktopResources();
@@ -373,12 +356,6 @@ public class ScreenShareClient {
         if (sender != null && publisherPc != null) {
             try {
                 publisherPc.removeTrack(sender);
-            } catch (Throwable ignored) {
-            }
-            // RTCRtpSender is not owned by the peer connection (webrtc-java 0.18+) —
-            // we must release our own reference once we're done with it.
-            try {
-                sender.dispose();
             } catch (Throwable ignored) {
             }
             sender = null;
