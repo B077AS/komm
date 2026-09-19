@@ -12,8 +12,8 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven.compiler.release>21</maven.compiler.release>
-        <javafx.version>22</javafx.version>
+        <maven.compiler.release>25</maven.compiler.release>
+        <javafx.version>25</javafx.version>
         <lombok.version>1.18.46</lombok.version>
         <!-- Dev-run hub override: mvn javafx:run -Dapi.url=... [-Dwebsocket.url=...]
              Empty by default. javafx:run forks the app JVM, so a bare -D on the mvn
@@ -309,7 +309,8 @@
                      ABI mismatch, the libyuv crop bug and the Wayland/PipeWire portal
                      picker are all fixed upstream now, so the custom B077AS/webrtc-java
                      fork build (fix/windows-desktop-capture, x11-pipewire-0.14.0) is no
-                     longer needed. -->
+                     longer needed. Pinned to 0.17.0 — 0.18.0 broke on Linux; do not bump
+                     without confirming a Linux run first. -->
                 <dependency>
                     <groupId>dev.onvoid.webrtc</groupId>
                     <artifactId>webrtc-java</artifactId>
@@ -360,6 +361,11 @@
                         <option>--add-opens=javafx.graphics/com.sun.javafx.scene=ALL-UNNAMED</option>
                         <option>--add-opens=javafx.graphics/com.sun.javafx.scene.text=ALL-UNNAMED</option>
                         <option>--add-opens=javafx.controls/javafx.scene.control.skin=ALL-UNNAMED</option>
+                        <!-- JEP 472 (JDK 24+): native access via JNI/JNA/webrtc-java now warns
+                             unless explicitly granted; will be a hard error in a future JDK.
+                             javafx.graphics/javafx.media are real modules here (module path);
+                             jnativehook, JNA and webrtc-java load as the unnamed module. -->
+                        <option>--enable-native-access=javafx.graphics,javafx.media,ALL-UNNAMED</option>
                         <option>-XX:G1PeriodicGCInterval=30000</option>
                         <option>-XX:MinHeapFreeRatio=10</option>
                         <option>-XX:MaxHeapFreeRatio=20</option>
@@ -370,7 +376,7 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.15.0</version>
                 <configuration>
-                    <release>21</release>
+                    <release>25</release>
                     <annotationProcessorPaths>
                         <path>
                             <groupId>org.projectlombok</groupId>
@@ -396,6 +402,11 @@
                                     <mainClass>komm.Launcher</mainClass>
                                     <manifestEntries>
                                         <Implementation-Version>${project.version}</Implementation-Version>
+                                        <!-- The shaded jar runs everything as the unnamed module (java -jar),
+                                             so this single attribute covers jnativehook/JNA/webrtc-java/JavaFX
+                                             alike; see the javafx-maven-plugin's native-access option above
+                                             for the dev-run (real module path) equivalent. -->
+                                        <Enable-Native-Access>ALL-UNNAMED</Enable-Native-Access>
                                     </manifestEntries>
                                 </transformer>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>

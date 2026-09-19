@@ -771,6 +771,11 @@ public class HomePage extends StackPane {
     // ─── List view ────────────────────────────────────────────────────────────
 
     private void showListView() {
+        // The Messages tab owns centerContainer while active (see switchView()/
+        // navigateToDm()) — callers here can fire from background events (a cross-page
+        // sync on navigation, a modal's post-action refresh) regardless of which tab is
+        // showing, and must never steal centerContainer away from an open DM view.
+        if (currentViewMode == ViewMode.MESSAGES) return;
         if (currentViewMode == ViewMode.SERVERS) {
             centerContainer.getChildren().setAll(buildServerCardList());
         } else {
@@ -904,7 +909,12 @@ public class HomePage extends StackPane {
     public void refreshCurrentView() {
         if (loadDataService.isRunning()) return;
         hasError = false;
-        centerContainer.getChildren().setAll(loadingNode);
+        // Reachable from modals (join/create server) while the Messages tab is open —
+        // still refresh the underlying data, but don't show the loading spinner over
+        // the DM view; showListView() picks up currentViewMode once the fetch lands.
+        if (currentViewMode != ViewMode.MESSAGES) {
+            centerContainer.getChildren().setAll(loadingNode);
+        }
         loadDataService.restart();
     }
 
@@ -1051,6 +1061,9 @@ public class HomePage extends StackPane {
 
     private void showError() {
         hasError = true;
+        // Same rationale as showListView(): never steal centerContainer from an open
+        // DM view. switchView() shows errorNode itself once the user leaves Messages.
+        if (currentViewMode == ViewMode.MESSAGES) return;
         centerContainer.getChildren().setAll(errorNode);
     }
 

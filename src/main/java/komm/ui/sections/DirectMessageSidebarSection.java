@@ -50,6 +50,16 @@ public class DirectMessageSidebarSection extends VBox {
     private final VBox conversationList = new VBox(2);
     private final List<ConversationSummary> conversations = new ArrayList<>();
     private final Set<UUID> unreadPartners = new HashSet<>();
+    /**
+     * Partners we've locally marked read (mark-read PATCH in flight or done) whose
+     * unread flag a {@link #reload()} must not resurrect. reload()'s GET can be
+     * issued before the read happens and resolve after it — the {@code
+     * selectedPartnerId} exclusion in its reseed only protects the conversation
+     * that's still open at that moment, not one the user has since navigated away
+     * from. Cleared once a reseed sees the server agree it's read, or a genuinely
+     * new message arrives (which must win over a stale "locally read" mark).
+     */
+    private final Set<UUID> locallyReadPartners = new HashSet<>();
     private BiConsumer<UUID, String> onConversationSelected;
     private UUID selectedPartnerId;
 
@@ -160,14 +170,23 @@ public class DirectMessageSidebarSection extends VBox {
             // lets a cleared dot get stuck forever if the server's flag ever lagged.
             // Exclude the currently selected conversation: reload() races the mark-read
             // call fired when opening it, so a stale "still unread" snapshot must not
-            // resurrect the dot for the conversation the user just opened.
+            // resurrect the dot for the conversation the user just opened. Also exclude
+            // any partner in locallyReadPartners: that guards a conversation the user
+            // has since navigated away from, which this GET may have been in flight
+            // for since before the read happened.
             unreadPartners.clear();
-            conversations.stream()
-                    .filter(ConversationSummary::isHasUnread)
-                    .map(ConversationSummary::getPartnerId)
-                    .filter(id -> !id.equals(selectedPartnerId))
-                    .forEach(unreadPartners::add);
-            unreadPartners.addAll(App.getAndClearPendingDmUnreadPartners());
+            for (ConversationSummary c : conversations) {
+                UUID partnerId = c.getPartnerId();
+                if (!c.isHasUnread()) {
+                    locallyReadPartners.remove(partnerId); // server confirms it's read — drop the override
+                    continue;
+                }
+                if (partnerId.equals(selectedPartnerId) || locallyReadPartners.contains(partnerId)) continue;
+                unreadPartners.add(partnerId);
+            }
+            Set<UUID> newlyPending = App.getAndClearPendingDmUnreadPartners();
+            locallyReadPartners.removeAll(newlyPending); // a fresh message supersedes an earlier local "read" mark
+            unreadPartners.addAll(newlyPending);
             unreadPartners.remove(selectedPartnerId);
             App.setDmUnread(!unreadPartners.isEmpty());
             renderConversations();
@@ -226,6 +245,7 @@ public class DirectMessageSidebarSection extends VBox {
     }
 
     private void callMarkRead(UUID partnerId) {
+        locallyReadPartners.add(partnerId);
         Thread.ofVirtual().start(() -> {
             try {
                 App.getServices().hub().getDirectMessageService().markConversationRead(partnerId);
@@ -246,6 +266,7 @@ public class DirectMessageSidebarSection extends VBox {
             boolean pageVisible = dmPage != null && dmPage.getScene() != null;
             if (!pageVisible || !partnerId.equals(selectedPartnerId)) {
                 unreadPartners.add(partnerId);
+                locallyReadPartners.remove(partnerId); // a genuinely new message overrides any earlier "read" mark
             }
         }
 
@@ -337,6 +358,7 @@ public class DirectMessageSidebarSection extends VBox {
     public void removeConversation(UUID partnerId) {
         conversations.removeIf(c -> c.getPartnerId().equals(partnerId));
         if (partnerId.equals(selectedPartnerId)) selectedPartnerId = null;
+        locallyReadPartners.remove(partnerId);
         // Drop any unread state for this partner — if it was the last unread
         // conversation, clear the global DM badge (messages tab + home icon dots).
         if (unreadPartners.remove(partnerId) && unreadPartners.isEmpty()) {
