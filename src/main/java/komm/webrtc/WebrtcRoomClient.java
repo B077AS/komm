@@ -858,9 +858,9 @@ public class WebrtcRoomClient {
         @Override public void onRemoveStream(MediaStream stream)            {}
         @Override public void onDataChannel(RTCDataChannel channel)         {}
         @Override public void onRenegotiationNeeded()                       {}
-        @Override public void onRemoveTrack(RTCRtpReceiver receiver)        {}
-        @Override public void onAddTrack(RTCRtpReceiver r, MediaStream[] s) {}
-        @Override public void onTrack(RTCRtpTransceiver transceiver)        {}
+        @Override public void onRemoveTrack(RTCRtpReceiver receiver)        { receiver.dispose(); }
+        @Override public void onAddTrack(RTCRtpReceiver r, MediaStream[] s) { r.dispose(); }
+        @Override public void onTrack(RTCRtpTransceiver transceiver)        { transceiver.dispose(); }
     }
 
     private class SubscriberObserver implements PeerConnectionObserver {
@@ -868,7 +868,12 @@ public class WebrtcRoomClient {
             if (livekitSignaling != null) livekitSignaling.sendIceCandidate(candidate, false);
         }
         @Override public void onTrack(RTCRtpTransceiver transceiver) {
-            MediaStreamTrack track = transceiver.getReceiver().getTrack();
+            // webrtc-java 0.18+: the receiver (and transceiver itself) is a query
+            // result we own — dispose both once the track has been retrieved and
+            // handed off. This only releases our JNI-side wrapper reference; the
+            // track itself is unaffected and keeps delivering frames to its sink.
+            RTCRtpReceiver rtpReceiver = transceiver.getReceiver();
+            MediaStreamTrack track = rtpReceiver.getTrack();
             String mid = transceiver.getMid();
             log.debug("[Subscriber] onTrack: kind={} mid={} id={}", track.getKind(), mid, track.getId());
 
@@ -892,6 +897,9 @@ public class WebrtcRoomClient {
                     }
                 }
             }
+
+            rtpReceiver.dispose();
+            transceiver.dispose();
         }
         @Override public void onIceConnectionChange(RTCIceConnectionState state) {
             log.debug("[Subscriber] ICE state: {}", state);
@@ -910,8 +918,8 @@ public class WebrtcRoomClient {
         @Override public void onAddStream(MediaStream stream)               {}
         @Override public void onRemoveStream(MediaStream stream)            {}
         @Override public void onDataChannel(RTCDataChannel channel)         {}
-        @Override public void onRemoveTrack(RTCRtpReceiver receiver)        {}
-        @Override public void onAddTrack(RTCRtpReceiver r, MediaStream[] s) {}
+        @Override public void onRemoveTrack(RTCRtpReceiver receiver)        { receiver.dispose(); }
+        @Override public void onAddTrack(RTCRtpReceiver r, MediaStream[] s) { r.dispose(); }
     }
 
     // ── Remote audio routing ──────────────────────────────────────────────────
@@ -1446,9 +1454,20 @@ public class WebrtcRoomClient {
             if (other != null) other.addIceCandidate(candidate);
         }
         @Override public void onTrack(RTCRtpTransceiver transceiver) {
-            if (isPublisherSide) return;
-            MediaStreamTrack track = transceiver.getReceiver().getTrack();
-            if (!(track instanceof AudioTrack remoteTrack)) return;
+            if (isPublisherSide) {
+                transceiver.dispose();
+                return;
+            }
+
+            // webrtc-java 0.18+: dispose the receiver/transceiver query results once
+            // the track has been retrieved — does not affect the track itself.
+            RTCRtpReceiver rtpReceiver = transceiver.getReceiver();
+            MediaStreamTrack track = rtpReceiver.getTrack();
+            if (!(track instanceof AudioTrack remoteTrack)) {
+                rtpReceiver.dispose();
+                transceiver.dispose();
+                return;
+            }
 
             UserVoiceReceiver receiver = new UserVoiceReceiver(1.0f, UserSettings.getInstance().getOutputDevice());
             remoteTrack.addSink(receiver);
@@ -1456,6 +1475,9 @@ public class WebrtcRoomClient {
             micTestRemoteTrack = remoteTrack;
             micTestReceiver    = receiver;
             log.info("[MicTest] Loopback track connected");
+
+            rtpReceiver.dispose();
+            transceiver.dispose();
         }
         @Override public void onConnectionChange(RTCPeerConnectionState s)          {}
         @Override public void onIceCandidateError(RTCPeerConnectionIceErrorEvent e) {
@@ -1468,8 +1490,8 @@ public class WebrtcRoomClient {
         @Override public void onRemoveStream(MediaStream stream)            {}
         @Override public void onDataChannel(RTCDataChannel channel)         {}
         @Override public void onRenegotiationNeeded()                       {}
-        @Override public void onRemoveTrack(RTCRtpReceiver receiver)        {}
-        @Override public void onAddTrack(RTCRtpReceiver r, MediaStream[] s) {}
+        @Override public void onRemoveTrack(RTCRtpReceiver receiver)        { receiver.dispose(); }
+        @Override public void onAddTrack(RTCRtpReceiver r, MediaStream[] s) { r.dispose(); }
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
