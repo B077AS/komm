@@ -341,7 +341,7 @@ public class App extends Application {
     }
 
     private void initializeLauncherUpdateCheck() {
-        new LauncherUpdateService().start();
+        Thread.ofVirtual().start(new LauncherUpdateService()::run);
     }
 
     public static void disconnectFromVoice() {
