@@ -4,7 +4,7 @@
 </h1>
 
 <p align="center">
-  <b>The desktop client for <a href="https://kommvoice.com">Komm</a> — a free, self-hosted voice, video &amp; text chat platform.</b><br>
+  <b>The desktop client for <a href="https://kommvoice.com">Komm</a> - a free, self-hosted voice, video &amp; text chat platform.</b><br>
   Voice &amp; video · HD screen sharing · Rich messaging · Soundboards · Global hotkeys · Windows &amp; Linux
 </p>
 
@@ -20,45 +20,59 @@
 
 ## What is Komm?
 
-Komm is a modern chat platform built around a simple idea: **your community's messages and voice traffic belong on hardware you control.** Every community runs on its own self-hosted server — crystal-clear WebRTC voice channels, HD screen sharing, rich messaging, soundboards, roles & permissions, moderation tools and global hotkeys — without handing your conversations to anyone else. Free, no ads, no tracking, on Windows 10/11 and Linux (both X11 and Wayland, with native PipeWire support).
+Komm is a modern chat platform built around a simple idea: **your community's messages and voice traffic belong on hardware you control.** Every community runs on its own self-hosted server - crystal-clear WebRTC voice channels, HD screen sharing, rich messaging, soundboards, roles & permissions, moderation tools and global hotkeys - without handing your conversations to anyone else. Free, no ads, no tracking, on Windows 10/11 and Linux (both X11 and Wayland, with native PipeWire support).
 
-The platform has three pieces — you choose how many to run:
+The platform has three pieces - you choose how many to run:
 
 | Piece | Role | Who runs it |
 |---|---|---|
 | **komm** (this repo) (+ [komm-launcher](https://github.com/B077AS/komm-launcher)) | Desktop client for Windows & Linux, kept up to date by the launcher | Everyone |
 | [komm-server](https://github.com/B077AS/komm-server) | A community's own server: channels, messages, voice rooms, permissions. One JAR, embedded database | Community owners |
-| [komm-hub](https://github.com/B077AS/komm-hub) | The network's directory: accounts, friends, DMs, and the CA that vouches for servers | Almost nobody — most people use [kommvoice.com](https://kommvoice.com) |
+| [komm-hub](https://github.com/B077AS/komm-hub) | The network's directory: accounts, friends, DMs, and the CA that vouches for servers | Almost nobody - most people use [kommvoice.com](https://kommvoice.com) |
 
 This repo is the app everyone actually looks at: a native-feeling JavaFX desktop client that talks to the hub for your account, friends and DMs, and connects **directly** to each community's own server for chat and voice. Messages and voice never pass through the hub.
 
-> 📥 **Just want to use Komm?** Don't build this repo — grab the [launcher](https://kommvoice.com/download) (Windows installer / Linux AppImage). It installs the client and keeps it up to date automatically, every time you start the app.
+> 📥 **Just want to use Komm?** Don't build this repo - grab the [launcher](https://kommvoice.com/download) (Windows installer / Linux AppImage). It installs the client and keeps it up to date automatically, every time you start the app.
 
 ## Features
 
-- **Crystal-clear voice** — low-latency WebRTC voice channels with a custom DSP pipeline: echo cancellation (AEC3), RNNoise noise suppression, automatic gain control and Silero-VAD voice activity detection (see [The audio pipeline](#the-audio-pipeline))
-- **HD screen sharing with system audio** — multiple people can stream at once; viewers can pop streams out into separate windows, with live viewer counts. System audio is captured natively — WASAPI loopback on Windows, PipeWire on Linux
-- **Video** — camera support in voice channels
-- **Rich text chat** — channels and DMs with editing, deletion, emoji reactions, typing indicators, GIF search, file attachments and unread/read state
-- **Code snippets** — dedicated code blocks with automatic language detection and syntax highlighting (Java, JavaScript, Python, Go, HTML, CSS)
-- **Soundboards** — server-wide soundboards plus your own personal one, triggered by click or global hotkey
-- **Friends & DMs** — friend requests, direct messages and pokes, delivered over the hub WebSocket wherever you are
-- **Roles & permissions** — the client renders custom roles and enforces fine-grained per-channel permissions with bitmask speed
-- **Moderation tools** — kick, ban, server mute/deafen, move members between voice channels — right from the member list
-- **Global hotkeys** — mute, deafen and soundboard triggers work system-wide (JNativeHook), even while you're in a game. Fully rebindable
-- **Connection insight** — live ping graphs and packet-loss tracking for you and everyone in your voice channel
-- **Themes** — light and dark themes (AtlantaFX), with Windows system-theme detection
-- **Invite links** — `komm://` protocol handler registered on install, so invite links open straight in the app
+- **Crystal-clear voice** - low-latency WebRTC voice channels with a custom DSP pipeline: echo cancellation (AEC3), RNNoise noise suppression, automatic gain control and Silero-VAD voice activity detection (see [The audio pipeline](#the-audio-pipeline))
+- **HD screen sharing with system audio** - multiple people can stream at once; viewers can pop streams out into separate windows, with live viewer counts. System audio is captured natively - WASAPI loopback on Windows, PipeWire on Linux
+- **Video** - camera support in voice channels
+- **Rich text chat** - channels and DMs with editing, deletion, emoji reactions, typing indicators, GIF search, file attachments and unread/read state
+- **Code snippets** - dedicated code blocks with automatic language detection and syntax highlighting (Java, JavaScript, Python, Go, HTML, CSS)
+- **Soundboards** - server-wide soundboards plus your own personal one, triggered by click or global hotkey
+- **Friends & DMs** - friend requests, direct messages and pokes, delivered over the hub WebSocket wherever you are
+- **Roles & permissions** - the client renders custom roles and enforces fine-grained per-channel permissions with bitmask speed
+- **Moderation tools** - kick, ban, server mute/deafen, move members between voice channels - right from the member list
+- **Global hotkeys** - mute, deafen and soundboard triggers work system-wide (JNativeHook), even while you're in a game. Fully rebindable
+- **Connection insight** - live ping graphs and packet-loss tracking for you and everyone in your voice channel
+- **Themes** - light and dark themes (AtlantaFX), with Windows system-theme detection
+- **Invite links** - `komm://` protocol handler registered on install, so invite links open straight in the app
 
 ## Architecture
 
+**Trust bootstrap** (once, when a server is created) - the hub acts as a CA and is the only reason the diagram below can skip domain names and public certs entirely:
+
 ```
-┌────────────┐   60-second ticket    ┌───────────────┐
-│   Client   │ ────────────────────► │  Komm Server  │  ← channels, messages,
-│ (this repo)│      (direct)         │ (komm-server) │    voice, files, permissions
-└─────┬──────┘                       └───────┬───────┘
-      │ account, friends, DMs               │ X.509 mutual auth (mTLS)
-      ▼                                     ▼
+┌────────────────┐                                  ┌────────────────┐
+│  Komm Server   │ ───────────────────────────────► │    komm-hub    │
+│ (installation) │ ◄─────────────────────────────── │       CA       │
+└────────────────┘                                  └────────────────┘
+```
+
+1. The server generates an EC P-384 keypair and a CSR (`CN=installationId`), and sends it with a one-time setup token from `POST /api/installations/create`.
+2. The hub validates both, signs the CSR with its own CA key, and returns an X.509 certificate with **both `serverAuth` and `clientAuth` EKUs** - the same cert works as a TLS server certificate for clients and as a client certificate back to the hub.
+
+**Runtime** (every session):
+
+```           
+┌─────────────┐     ticket + TLS      ┌───────────────┐
+│   Client    │ ────────────────────► │  Komm Server  │  ← channels, messages,
+│ (this repo) │ (CN-pinned to hub CA) │ (komm-server) │    voice, files, permissions
+└─────┬───────┘                       └───────┬───────┘
+      │ account, friends, DMs                 │ X.509 mutual auth (mTLS)
+      ▼                                       ▼
 ┌──────────────────────────────────────────────┐
 │              komm-hub  ·  CA                 │  ← accounts, friends, DMs,
 │  accounts · directory · certificate signing  │    directory, website
@@ -67,28 +81,29 @@ This repo is the app everyone actually looks at: a native-feeling JavaFX desktop
 
 **How the client joins a community server:**
 
-1. You log in to the hub once — sessions are ES384-signed JWTs, and the refresh token is stored locally so the app signs you back in on startup.
+1. You log in to the hub once - sessions are ES384-signed JWTs, and the refresh token is stored locally so the app signs you back in on startup.
 2. When you open a community, the client asks the hub for a ticket. The hub verifies your membership, checks the server is online and its certificate isn't revoked, and issues a short-lived (**60 s**) single-purpose JWT ticket.
-3. The client connects **directly** to that community's server with the ticket — over TLS: the server presents a certificate signed by the hub's CA, and the client verifies it belongs to exactly that installation (the client fetches the hub CA once per session over the hub's regular HTTPS). It then receives the server's own session tokens, and from that point the hub is out of the loop — every message and voice packet flows straight between you and the community's hardware.
+3. The client connects **directly** to that community's server with the ticket - over TLS: the server presents the certificate the hub issued it, and the client checks it belongs to exactly that installation by matching its `CN` against the hub's CA (fetched once per session from `GET /api/auth/ca`). The ticket is what authenticates the client, at the application layer. It then receives the server's own session tokens, and from that point the hub is out of the loop - every message and voice packet flows straight between you and the community's hardware.
+4. Separately, the server keeps a **persistent, genuinely mutual TLS** connection to the hub (`/ws/installations`): both sides present the certificate from the bootstrap step above, so each authenticates the other. This is the channel the hub uses to proxy permission checks and moderation events through to an online installation.
 
 ### Two connections, one client
 
 The `ServiceContainer` holds two independent connection stacks:
 
-- **`HubConnection`** — always available after login. HTTP client + token manager + services for your account, friends, DMs, server directory and GIF search, plus the hub WebSocket (`AppWebSocketClient`) for real-time friend/DM/status events.
-- **`InstallationConnection`** — created when you enter a community server. A separate HTTP client and token manager for that server's REST API, plus its own WebSocket (`InstallationWsClient`) for channel messages, voice presence, typing, reactions, permission changes and moderation events.
+- **`HubConnection`** - always available after login. HTTP client + token manager + services for your account, friends, DMs, server directory and GIF search, plus the hub WebSocket (`AppWebSocketClient`) for real-time friend/DM/status events.
+- **`InstallationConnection`** - created when you enter a community server. A separate HTTP client and token manager for that server's REST API, plus its own WebSocket (`InstallationWsClient`) for channel messages, voice presence, typing, reactions, permission changes and moderation events.
 
-Both WebSockets speak the same envelope format — `{ "type": "WS_MESSAGE_TYPE", "payload": {...} }` — and dispatch each message type to a registered handler (70+ handlers under `websocket/handlers/`).
+Both WebSockets speak the same envelope format - `{ "type": "WS_MESSAGE_TYPE", "payload": {...} }` - and dispatch each message type to a registered handler (70+ handlers under `websocket/handlers/`).
 
 ### Voice & media
 
 Voice and video run on a dedicated daemon thread (`webrtc-mta-thread`) using native WebRTC ([webrtc-java](https://github.com/devopvoid/webrtc-java)) with LiveKit signaling against the SFU embedded in each komm-server. Joining or leaving a voice channel is a WebSocket message; media flows peer-to-SFU directly.
 
-On Linux, screen sharing works natively on Wayland via webrtc-java's built-in PipeWire/xdg-desktop-portal support — no XWayland workarounds needed.
+On Linux, screen sharing works natively on Wayland via webrtc-java's built-in PipeWire/xdg-desktop-portal support - no XWayland workarounds needed.
 
 ### The audio pipeline
 
-Your microphone doesn't go straight to the network — every 20 ms frame runs through a DSP chain on its own processing thread:
+Your microphone doesn't go straight to the network - every 20 ms frame runs through a DSP chain on its own processing thread:
 
 ```
 mic ─► capture ─► AEC3 ─► RNNoise / WebRTC-NS ─► AGC2 ─► Silero VAD ─► WebRTC track ─► SFU
@@ -114,43 +129,43 @@ mic ─► capture ─► AEC3 ─► RNNoise / WebRTC-NS ─► AGC2 ─► Sil
 | `ui/modals/` | Everything modal: user/server/channel/installation settings, invites, screen share picker, profiles |
 | `ui/code/`, `ui/emojis/`, `ui/gifs/` | Code blocks (RSyntaxTextArea tokenizers + RichTextFX), emoji rendering & pickers, GIF search |
 | `utils/` | App config, global hotkeys, audio device discovery, ping/packet-loss history, user settings |
-| `update/` | `LauncherUpdateService` — checks and self-updates the launcher that started this client (see below) |
+| `update/` | `LauncherUpdateService` - checks and self-updates the launcher that started this client (see below) |
 
 A few rules keep the client sane:
 
-- **`AppState` is the single source of truth** for mic/speaker/user status — UI components bind to its JavaFX properties and never touch WebRTC or the WebSocket directly.
+- **`AppState` is the single source of truth** for mic/speaker/user status - UI components bind to its JavaFX properties and never touch WebRTC or the WebSocket directly.
 - UI mutations happen on the FX thread (`Platform.runLater`); HTTP calls happen off it (virtual threads).
 - `PermissionManager` mirrors the server's role/channel permission model with bitmask checks, updated in real time over WebSocket.
 
 ### Keeping the launcher up to date
 
-The client's `update/LauncherUpdateService` does something a little unusual: once per start, it checks whether the **[komm-launcher](https://github.com/B077AS/komm-launcher)** that started it is out of date, and if so, downloads and swaps the launcher's files in the background — not just its own jar. It has to be the client that does this, not the launcher: by the time the client is running, the launcher process has already exited, so there's nothing left to check on its own behalf.
+The client's `update/LauncherUpdateService` does something a little unusual: once per start, it checks whether the **[komm-launcher](https://github.com/B077AS/komm-launcher)** that started it is out of date, and if so, downloads and swaps the launcher's files in the background - not just its own jar. It has to be the client that does this, not the launcher: by the time the client is running, the launcher process has already exited, so there's nothing left to check on its own behalf.
 
-- It reads `System.getProperty("launcher.version")` — a value the launcher forwards when it spawns the client — and compares it against the latest release tag from `GET api.github.com/repos/B077AS/komm-launcher/releases/latest`, verifying the per-OS asset it downloads against the SHA-256 digest GitHub reports for it. A missing value (an old launcher, from before this existed) is always treated as outdated.
-- On Windows it overwrites `app/komm-launcher.jar` next to the running install; on Linux it overwrites the `.AppImage` at `$APPIMAGE` (an AppImage is one opaque unit — there's no "just the launcher part" to update). Both are safe to replace while in use — the launcher process is already gone, and POSIX file semantics mean the currently-running AppImage keeps working until it next exits.
-- It's entirely best-effort and silent: any failure is logged and swallowed, since a failed launcher self-update must never interfere with the client actually running. No UI, no restart prompt — the new launcher is just what's there the next time the user opens the app.
+- It reads `System.getProperty("launcher.version")` - a value the launcher forwards when it spawns the client - and compares it against the latest release tag from `GET api.github.com/repos/B077AS/komm-launcher/releases/latest`, verifying the per-OS asset it downloads against the SHA-256 digest GitHub reports for it. A missing value (an old launcher, from before this existed) is always treated as outdated.
+- On Windows it overwrites `app/komm-launcher.jar` next to the running install; on Linux it overwrites the `.AppImage` at `$APPIMAGE` (an AppImage is one opaque unit - there's no "just the launcher part" to update). Both are safe to replace while in use - the launcher process is already gone, and POSIX file semantics mean the currently-running AppImage keeps working until it next exits.
+- It's entirely best-effort and silent: any failure is logged and swallowed, since a failed launcher self-update must never interfere with the client actually running. No UI, no restart prompt - the new launcher is just what's there the next time the user opens the app.
 
 See [komm-launcher's README](https://github.com/B077AS/komm-launcher#how-the-launcher-updates-itself) for the full mechanics, including why Windows and Linux need genuinely different update artifacts.
 
 ## Getting the app (users)
 
-Download the **launcher** from [kommvoice.com/download](https://kommvoice.com/download) — a Windows installer or Linux AppImage. It installs the client into your app data directory and updates it automatically on every start. Create an account, join a community via an invite link, done.
+Download the **launcher** from [kommvoice.com/download](https://kommvoice.com/download) - a Windows installer or Linux AppImage. It installs the client into your app data directory and updates it automatically on every start. Create an account, join a community via an invite link, done.
 
-> Komm is currently in **closed beta** — registration on the official hub needs an invite key. [Request access](https://kommvoice.com/#beta-access) from the website.
+> Komm is currently in **closed beta** - registration on the official hub needs an invite key. [Request access](https://kommvoice.com/#beta-access) from the website.
 
 ### Linux prerequisites
 
-Komm relies on the standard PipeWire audio stack. Most modern desktop distros (Fedora, Ubuntu 22.04+, Arch with a desktop environment) ship all of this out of the box — but on a minimal install make sure the following are present:
+Komm relies on the standard PipeWire audio stack. Most modern desktop distros (Fedora, Ubuntu 22.04+, Arch with a desktop environment) ship all of this out of the box - but on a minimal install make sure the following are present:
 
 | Component | Why Komm needs it |
 |---|---|
-| `pipewire` | The audio/video server itself — voice, playback and screen capture all run through it |
-| `wireplumber` | PipeWire's session manager — without it PipeWire routes nothing |
-| `pipewire-pulse` | PulseAudio compatibility — Komm captures system audio for screen sharing through the PulseAudio API |
-| `pipewire-alsa` | ALSA routing — Java's audio (mic capture & voice playback) reaches PipeWire through the ALSA layer |
+| `pipewire` | The audio/video server itself - voice, playback and screen capture all run through it |
+| `wireplumber` | PipeWire's session manager - without it PipeWire routes nothing |
+| `pipewire-pulse` | PulseAudio compatibility - Komm captures system audio for screen sharing through the PulseAudio API |
+| `pipewire-alsa` | ALSA routing - Java's audio (mic capture & voice playback) reaches PipeWire through the ALSA layer |
 | `alsa-utils` | ALSA utilities so audio devices are properly set up and visible |
 | `pulseaudio-utils` / `libpulse` | Provides `pactl`, used to set up the screen-share audio tap |
-| PipeWire CLI tools (`pw-dump`, `pw-link`) | Used to wire other apps' audio into the screen-share stream — part of `pipewire` on Arch, `pipewire-bin` on Debian/Ubuntu, `pipewire-utils` on Fedora |
+| PipeWire CLI tools (`pw-dump`, `pw-link`) | Used to wire other apps' audio into the screen-share stream - part of `pipewire` on Arch, `pipewire-bin` on Debian/Ubuntu, `pipewire-utils` on Fedora |
 
 For example, on Arch:
 
@@ -164,7 +179,7 @@ or Debian/Ubuntu:
 sudo apt install pipewire wireplumber pipewire-pulse pipewire-alsa alsa-utils pulseaudio-utils
 ```
 
-If some of these are missing, the app still runs — but you may end up with no audio devices, or screen sharing without system audio (the client logs a warning telling you which tool it couldn't find). For screen sharing on Wayland you'll also want `xdg-desktop-portal` with the backend for your desktop (GNOME/KDE ship it by default).
+If some of these are missing, the app still runs - but you may end up with no audio devices, or screen sharing without system audio (the client logs a warning telling you which tool it couldn't find). For screen sharing on Wayland you'll also want `xdg-desktop-portal` with the backend for your desktop (GNOME/KDE ship it by default).
 
 ## Building from source (developers)
 
@@ -180,17 +195,17 @@ mvn javafx:run -Dapi.url=https://kommvoice.com
 # Build a fat JAR for distribution (bundles Windows + Linux JavaFX natives)
 mvn clean package -Ppackage
 
-# Production fat JAR — same, but baked for the official hub (https://kommvoice.com)
+# Production fat JAR - same, but baked for the official hub (https://kommvoice.com)
 mvn clean package -Ppackage,prod
 ```
 
-By default the client points at a hub on `localhost` — the pom's `hub.url` / `hub.ws.url` properties are baked into `app.properties` at build time, and the `prod` profile switches them to the official hub. To bake any other hub: `-Dhub.url=https://my-hub -Dhub.ws.url=wss://my-hub/ws`. The production URLs end up **only inside the jar**: after packaging, the prod profile restores the localhost values in `target/classes`, so running the main class straight from your IDE after a prod build still targets your local hub.
+By default the client points at a hub on `localhost` - the pom's `hub.url` / `hub.ws.url` properties are baked into `app.properties` at build time, and the `prod` profile switches them to the official hub. To bake any other hub: `-Dhub.url=https://my-hub -Dhub.ws.url=wss://my-hub/ws`. The production URLs end up **only inside the jar**: after packaging, the prod profile restores the localhost values in `target/classes`, so running the main class straight from your IDE after a prod build still targets your local hub.
 
-For dev runs, a `-Dapi.url=` override wins over whatever is baked, no rebuild needed — the hub's WebSocket endpoint is derived from it automatically (`http → ws`, `https → wss`, plus `/ws`). Pass `-Dwebsocket.url=` as well only if your hub's WebSocket lives somewhere non-standard.
+For dev runs, a `-Dapi.url=` override wins over whatever is baked, no rebuild needed - the hub's WebSocket endpoint is derived from it automatically (`http → ws`, `https → wss`, plus `/ws`). Pass `-Dwebsocket.url=` as well only if your hub's WebSocket lives somewhere non-standard.
 
-To develop end-to-end, run a local [komm-hub](https://github.com/B077AS/komm-hub) (and a [komm-server](https://github.com/B077AS/komm-server) registered against it) — or point at the official hub with the override above.
+To develop end-to-end, run a local [komm-hub](https://github.com/B077AS/komm-hub) (and a [komm-server](https://github.com/B077AS/komm-server) registered against it) - or point at the official hub with the override above.
 
-On first launch the client creates its app data directory — `%APPDATA%\Komm` on Windows, `~/.config/Komm` on Linux — where it keeps your settings and credentials (the refresh token lives under `config/credentials`).
+On first launch the client creates its app data directory - `%APPDATA%\Komm` on Windows, `~/.config/Komm` on Linux - where it keeps your settings and credentials (the refresh token lives under `config/credentials`).
 
 ## Tech stack
 
@@ -204,28 +219,28 @@ On first launch the client creates its app data directory — `%APPDATA%\Komm` o
 | Networking | Java `HttpClient`, Tyrus WebSocket client, Spring WebSocket/messaging (client-side) |
 | Code highlighting | RSyntaxTextArea's `TokenMaker` parsers, used headlessly (Java, JavaScript, Python, Go, HTML, CSS) |
 | Serialization / crypto | Gson, BouncyCastle (CSR generation for hosting installations in-app), hub-CA TLS trust for community-server connections |
-| Build | Maven — `javafx-maven-plugin` for dev, `maven-shade-plugin` for the distributable fat JAR |
+| Build | Maven - `javafx-maven-plugin` for dev, `maven-shade-plugin` for the distributable fat JAR |
 
 ## Related repositories
 
 | Repo | What it is |
 |---|---|
-| komm | This repo — desktop client (JavaFX, Windows & Linux) |
-| [komm-launcher](https://github.com/B077AS/komm-launcher) | Auto-updating launcher — Windows installer & Linux AppImage |
+| komm | This repo - desktop client (JavaFX, Windows & Linux) |
+| [komm-launcher](https://github.com/B077AS/komm-launcher) | Auto-updating launcher - Windows installer & Linux AppImage |
 | [komm-server](https://github.com/B077AS/komm-server) | Self-hosted community server (single JAR, embedded database) |
 | [komm-hub](https://github.com/B077AS/komm-hub) | Accounts, friends & DMs, server directory, CA, and the kommvoice.com website |
 
 ## FAQ
 
-**Is Komm really free?** Yes — the client, launcher, server and hub are all free. No ads, no tracking, no paid tiers.
+**Is Komm really free?** Yes - the client, launcher, server and hub are all free. No ads, no tracking, no paid tiers.
 
-**Do I need to host anything?** No. Install the launcher, create an account and join communities via invite links. Hosting your own server is optional — it's for communities that want full ownership of their data.
+**Do I need to host anything?** No. Install the launcher, create an account and join communities via invite links. Hosting your own server is optional - it's for communities that want full ownership of their data.
 
-**Does it really work on Wayland?** Yes — screen capture goes through the PipeWire portal (xdg-desktop-portal) via a patched native WebRTC build, and system-audio capture uses PipeWire directly. No XWayland tricks.
+**Does it really work on Wayland?** Yes - screen capture goes through the PipeWire portal (xdg-desktop-portal) via a patched native WebRTC build, and system-audio capture uses PipeWire directly. No XWayland tricks.
 
-**Can the hub read my community's messages?** No. After a one-time 60-second ticket exchange, the client talks directly to the community's server — messages, voice and files never pass through the hub.
+**Can the hub read my community's messages?** No. After a one-time 60-second ticket exchange, the client talks directly to the community's server - messages, voice and files never pass through the hub.
 
-**How do updates work?** The launcher checks GitHub directly for a new client release on every start and swaps in the new JAR automatically. The client returns the favor: it checks whether the *launcher* itself is out of date (also straight from GitHub) and self-updates it in the background too (see [Keeping the launcher up to date](#keeping-the-launcher-up-to-date)). No hub involved in either direction — install once, forget about it.
+**How do updates work?** The launcher checks GitHub directly for a new client release on every start and swaps in the new JAR automatically. The client returns the favor: it checks whether the *launcher* itself is out of date (also straight from GitHub) and self-updates it in the background too (see [Keeping the launcher up to date](#keeping-the-launcher-up-to-date)). No hub involved in either direction - install once, forget about it.
 
 ## License
 
