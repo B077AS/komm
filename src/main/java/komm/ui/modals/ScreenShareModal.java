@@ -29,6 +29,7 @@ import komm.ui.screenshare.SourceCard;
 import komm.ui.screenshare.WindowIconFetcher;
 import komm.ui.screenshare.ScreenShareQuality;
 import komm.ui.screenshare.SourceSelection;
+import komm.ui.utils.IconColorUtil;
 import komm.webrtc.audio.AudioLoopbackCapture;
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign2.*;
@@ -608,8 +609,7 @@ public class ScreenShareModal extends HBox {
 
     /** Wayland: no source grid — explain that the desktop portal picks the source. */
     private Node createPortalInfoView() {
-        FontIcon icon = new FontIcon(MaterialDesignM.MONITOR);
-        icon.getStyleClass().add("custom-icon-35");
+        FontIcon icon = IconColorUtil.colored(MaterialDesignM.MONITOR, "-color-fg-muted", 35);
         icon.setOpacity(0.25);
 
         Label title = new Label("Your system will ask what to share");

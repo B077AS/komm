@@ -16,6 +16,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import komm.App;
+import komm.ui.utils.IconColorUtil;
 import komm.websocket.messages.payloads.MessageReceivedPayload;
 import lombok.extern.slf4j.Slf4j;
 import org.kordamp.ikonli.feather.Feather;
@@ -115,8 +116,7 @@ public class AttachmentDisplayBuilder {
         );
         VBox.setMargin(chip, new Insets(4, 0, 0, 0));
 
-        FontIcon icon = new FontIcon(AttachmentBarSlot.resolveIcon(mime, fileName));
-        icon.getStyleClass().add("custom-icon-24-emphasis");
+        FontIcon icon = IconColorUtil.colored(AttachmentBarSlot.resolveIcon(mime, fileName), "-color-accent-emphasis", 24);
 
         VBox info = new VBox(2);
         Label nameLbl = new Label(fileName);

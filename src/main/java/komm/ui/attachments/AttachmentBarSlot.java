@@ -11,6 +11,7 @@ import javafx.scene.control.ScrollPane;
 import javafx.scene.layout.*;
 import javafx.scene.shape.Rectangle;
 import javafx.util.Duration;
+import komm.ui.utils.IconColorUtil;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -194,8 +195,7 @@ public class AttachmentBarSlot extends VBox {
         chip.setMinWidth(160.0);
 
         // File type icon
-        FontIcon icon = new FontIcon(resolveIcon(att.mimeType(), att.fileName()));
-        icon.getStyleClass().add("custom-icon-24-emphasis");
+        FontIcon icon = IconColorUtil.colored(resolveIcon(att.mimeType(), att.fileName()), "-color-accent-emphasis", 24);
 
         // Name + size
         VBox info = new VBox(1);

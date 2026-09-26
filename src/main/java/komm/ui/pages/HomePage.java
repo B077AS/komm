@@ -22,6 +22,7 @@ import komm.ui.cards.ServerCard;
 import komm.ui.modals.ConfirmationModal;
 import komm.ui.modals.CreateInstallationModal;
 import komm.ui.modals.CreateInviteModal;
+import komm.ui.utils.IconColorUtil;
 import komm.ui.modals.CreateServerModal;
 import komm.ui.modals.DownloadInstallationModal;
 import komm.ui.modals.EditServerModal;
@@ -858,8 +859,7 @@ public class HomePage extends StackPane {
     // ─── Empty state ──────────────────────────────────────────────────────────
 
     private Node buildEmptyState(org.kordamp.ikonli.Ikon iconCode, String title, String subtitle) {
-        FontIcon icon = new FontIcon(iconCode);
-        icon.getStyleClass().add("custom-icon-72");
+        FontIcon icon = IconColorUtil.colored(iconCode, "-color-accent-emphasis", 72);
         icon.setOpacity(0.12);
 
         Label titleLbl = new Label(title);
@@ -892,8 +892,7 @@ public class HomePage extends StackPane {
     }
 
     private VBox buildErrorNode() {
-        FontIcon icon = new FontIcon(MaterialDesignL.LAN_DISCONNECT);
-        icon.getStyleClass().add("custom-icon-72");
+        FontIcon icon = IconColorUtil.colored(MaterialDesignL.LAN_DISCONNECT, "-color-accent-emphasis", 72);
         icon.setOpacity(0.12);
         Label title = new Label("Failed to load data");
         title.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: -color-fg-default;");

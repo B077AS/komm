@@ -22,6 +22,7 @@ import komm.ui.chat.virtual.VirtualMessageList;
 import komm.ui.code.CodeDetector;
 import komm.ui.code.CodeLanguage;
 import komm.ui.customnodes.CustomNotification;
+import komm.ui.utils.IconColorUtil;
 import komm.ui.modals.CodeMessageModal;
 import komm.ui.emojis.EmojiMessageContent;
 import komm.ui.emojis.EmojiMessageItem;
@@ -524,8 +525,7 @@ public class DmChatSection extends VBox {
         if (dragOverlayVisible) return;
         dragOverlayVisible = true;
         if (dragOverlay == null) {
-            FontIcon icon = new FontIcon(Feather.UPLOAD);
-            icon.getStyleClass().add("custom-icon-35-emphasis");
+            FontIcon icon = IconColorUtil.colored(Feather.UPLOAD, "-color-accent-emphasis", 35);
             Label title = new Label("Drop your files");
             title.setStyle("-fx-font-size: 22px; -fx-font-weight: bold; -fx-text-fill: -color-fg-default;");
             Label subtitle = new Label("Files will be added to your message");
@@ -1085,8 +1085,7 @@ public class DmChatSection extends VBox {
         view.setAlignment(Pos.CENTER);
         VBox.setVgrow(view, Priority.ALWAYS);
         view.setStyle("-fx-background-color: -color-bg-default;");
-        FontIcon icon = new FontIcon(Feather.MESSAGE_CIRCLE);
-        icon.getStyleClass().add("custom-icon-72");
+        FontIcon icon = IconColorUtil.colored(Feather.MESSAGE_CIRCLE, "-color-accent-emphasis", 72);
         icon.setOpacity(0.12);
         Label title = new Label("Your messages");
         title.setStyle("-fx-font-size: 20px; -fx-font-weight: bold; -fx-text-fill: -color-fg-default;");

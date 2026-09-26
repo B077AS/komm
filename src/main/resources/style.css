@@ -5733,12 +5733,6 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 	-fx-scale-y: 0.85;
 }
 
-.custom-icon {
-	-fx-icon-color: -color-fg-default;
-	-fx-fill: -color-fg-default;
-	-fx-icon-size: 75px;
-}
-
 /* ── Legacy server-card (kept for compatibility) ─────────────────── */
 .server-card {
 	-fx-border-color: -color-border-default;
@@ -5826,47 +5820,6 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 }
 
 
-.custom-icon-14 {
-	-fx-icon-color: -color-fg-subtle;
-	-fx-fill: -color-fg-subtle;
-	-fx-icon-size: 14px;
-}
-
-.custom-icon-14-white {
-	-fx-icon-color: white;
-	-fx-fill: white;
-	-fx-icon-size: 13px;
-}
-
-.custom-icon-15 {
-	-fx-icon-color: -color-fg-muted;;
-	-fx-fill: -color-fg-muted;;
-	-fx-icon-size: 15px;
-}
-
-.custom-icon-18 {
-	-fx-icon-color: -color-accent-emphasis;
-	-fx-fill: -color-accent-emphasis;
-	-fx-icon-size: 18px;
-}
-
-.custom-icon-24-emphasis {
-	-fx-icon-color: -color-accent-emphasis;
-	-fx-fill: -color-accent-emphasis;
-	-fx-icon-size: 24px;
-}
-
-.custom-icon-35-emphasis {
-	-fx-icon-color: -color-accent-emphasis;
-	-fx-fill: -color-accent-emphasis;
-	-fx-icon-size: 35px;
-}
-
-.custom-icon-35 {
-	-fx-icon-color: -color-fg-muted;
-	-fx-fill: -color-fg-muted;
-	-fx-icon-size: 35px;
-}
 
 /*.custom-dark-icon-button .font-icon, .custom-dark-icon-button .ikonli-font-icon {
 	-fx-icon-color: -color-fg-emphasis;
@@ -6278,27 +6231,6 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 	-fx-fill: rgb(255, 110, 110);
 }
 
-/* Icon-only helper classes used by ProfileSection.updateToggleButtonState */
-.custom-icon-20 .ikonli-font-icon,
-.custom-icon-20.ikonli-font-icon {
-	-fx-icon-size: 20px;
-}
-
-.custom-icon-20-muted .ikonli-font-icon,
-.custom-icon-20-muted.ikonli-font-icon {
-	-fx-icon-color: rgb(225, 90, 90);
-	-fx-fill: rgb(225, 90, 90);
-	-fx-icon-size: 20px;
-}
-
-/* User-initiated mute/deafen in ProfileSection — purple accent */
-.custom-icon-20-accent .ikonli-font-icon,
-.custom-icon-20-accent.ikonli-font-icon {
-	-fx-icon-color: -color-accent-emphasis;
-	-fx-fill: -color-accent-emphasis;
-	-fx-icon-size: 20px;
-}
-
 /* Status-row icons on ConnectedUserCard (makeIcon) */
 .muted-status-icon {
 	-fx-icon-color: rgb(225, 90, 90);
@@ -6314,19 +6246,6 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 
 .button:showing {
 	-fx-background-color: derive(-color-bg-middle, 20%);
-}
-
-
-.custom-icon-24 {
-	-fx-icon-color: -color-fg-subtle;
-	-fx-fill: -color-fg-subtle;
-	-fx-icon-size: 24px;
-}
-
-.custom-icon-72 {
-	-fx-icon-color: -color-accent-emphasis;
-	-fx-fill: -color-accent-emphasis;
-	-fx-icon-size: 72px;
 }
 
 

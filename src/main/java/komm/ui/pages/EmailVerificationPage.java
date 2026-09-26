@@ -31,6 +31,7 @@ import javafx.util.Duration;
 import komm.App;
 import komm.api.HttpStatusException;
 import komm.ui.customnodes.CustomNotification;
+import komm.ui.utils.IconColorUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.kordamp.ikonli.feather.Feather;
 import org.kordamp.ikonli.javafx.FontIcon;
@@ -114,8 +115,7 @@ public class EmailVerificationPage extends BorderPane {
         VBox headerBox = new VBox(10);
         headerBox.setAlignment(Pos.CENTER);
 
-        FontIcon mailIcon = new FontIcon(Feather.MAIL);
-        mailIcon.getStyleClass().add("custom-icon-35-emphasis");
+        FontIcon mailIcon = IconColorUtil.colored(Feather.MAIL, "-color-accent-emphasis", 35);
 
         Label titleLabel = new Label("Check your inbox");
         titleLabel.setFont(Font.font("System", FontWeight.BOLD, 24));
