@@ -17,6 +17,7 @@ import komm.model.dto.summary.ServerSummary;
 import komm.model.permissions.Permission;
 import komm.ui.avatar.AvatarCache;
 import komm.ui.avatar.AvatarPreviewWidget;
+import komm.ui.utils.IconColorUtil;
 import komm.ui.customnodes.CustomNotification;
 import komm.ui.utils.IconColorUtil;
 import lombok.extern.slf4j.Slf4j;
@@ -303,8 +304,7 @@ public class AssignRoleModal extends HBox {
     }
 
     private VBox buildEmptyCustomRolesPlaceholder() {
-        FontIcon icon = new FontIcon(MaterialDesignS.SHIELD_OFF_OUTLINE);
-        icon.getStyleClass().add("custom-icon-35");
+        FontIcon icon = IconColorUtil.colored(MaterialDesignS.SHIELD_OFF_OUTLINE, "-color-fg-muted", 35);
 
         Label title = new Label("No Custom Roles");
         title.setStyle("-fx-font-size: 13px; -fx-font-weight: bold; -fx-text-fill: -color-fg-muted;");

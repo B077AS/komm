@@ -29,6 +29,7 @@ import komm.model.dto.request.BotUpdateRequest;
 import komm.model.dto.summary.BotSummary;
 import komm.model.dto.summary.ChannelSummary;
 import komm.model.dto.summary.ServerSummary;
+import komm.ui.utils.IconColorUtil;
 import komm.ui.avatar.AvatarColor;
 import komm.ui.cards.ChannelCard;
 import komm.ui.customnodes.CustomNotification;
@@ -257,8 +258,7 @@ public class BotsModal extends VBox {
         empty.setPadding(new Insets(32, 0, 32, 0));
         VBox.setVgrow(empty, Priority.ALWAYS);
 
-        FontIcon icon = new FontIcon(MaterialDesignR.ROBOT_OUTLINE);
-        icon.getStyleClass().add("custom-icon-72");
+        FontIcon icon = IconColorUtil.colored(MaterialDesignR.ROBOT_OUTLINE, "-color-accent-emphasis", 72);
         icon.setOpacity(0.12);
 
         Label text = new Label("No bots yet");

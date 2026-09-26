@@ -22,6 +22,7 @@ import komm.model.dto.summary.MainUserSummary.UserStatus;
 import komm.model.dto.summary.UserSummary;
 import komm.ui.avatar.AvatarCache;
 import komm.ui.avatar.AvatarColor;
+import komm.ui.utils.IconColorUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.kordamp.ikonli.feather.Feather;
 import org.kordamp.ikonli.javafx.FontIcon;
@@ -453,8 +454,7 @@ public class StartConversationModal extends VBox {
     }
 
     private VBox buildEmptyState(String message) {
-        FontIcon icon = new FontIcon(MaterialDesignM.MESSAGE_OUTLINE);
-        icon.getStyleClass().add("custom-icon-35");
+        FontIcon icon = IconColorUtil.colored(MaterialDesignM.MESSAGE_OUTLINE, "-color-fg-muted", 35);
         icon.setOpacity(0.25);
 
         Label lbl = new Label(message);

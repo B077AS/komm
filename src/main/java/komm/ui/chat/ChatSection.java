@@ -22,6 +22,7 @@ import komm.ui.attachments.AttachmentBarSlot;
 import komm.ui.chat.virtual.VirtualMessageList;
 import komm.ui.code.CodeDetector;
 import komm.ui.code.CodeLanguage;
+import komm.ui.utils.IconColorUtil;
 import komm.ui.customnodes.CustomNotification;
 import komm.ui.modals.CodeMessageModal;
 import komm.model.dto.summary.ServerSummary;
@@ -758,8 +759,7 @@ public class ChatSection extends VBox {
         dragOverlayVisible = true;
 
         if (dragOverlay == null) {
-            FontIcon icon = new FontIcon(Feather.UPLOAD);
-            icon.getStyleClass().add("custom-icon-35-emphasis");
+            FontIcon icon = IconColorUtil.colored(Feather.UPLOAD, "-color-accent-emphasis", 35);
 
             Label title = new Label("Drop your files");
             title.setStyle("""

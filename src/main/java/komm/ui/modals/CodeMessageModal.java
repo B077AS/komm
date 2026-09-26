@@ -17,6 +17,7 @@ import komm.App;
 import komm.ui.code.CodeAreaSupport;
 import komm.ui.code.CodeHighlighter;
 import komm.ui.code.CodeLanguage;
+import komm.ui.utils.IconColorUtil;
 import org.fxmisc.flowless.VirtualizedScrollPane;
 import org.fxmisc.richtext.CodeArea;
 import org.kordamp.ikonli.javafx.FontIcon;
@@ -78,8 +79,7 @@ public class CodeMessageModal extends VBox {
     // ── Header ──────────────────────────────────────────────────────────────────
 
     private HBox buildHeader() {
-        FontIcon icon = new FontIcon(MaterialDesignC.CODE_BRACES);
-        icon.getStyleClass().add("custom-icon-20-accent");
+        FontIcon icon = IconColorUtil.colored(MaterialDesignC.CODE_BRACES, "-color-accent-emphasis", 20);
         StackPane iconWrap = new StackPane(icon);
         iconWrap.setMinSize(40, 40);
         iconWrap.setMaxSize(40, 40);

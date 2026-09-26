@@ -24,6 +24,7 @@ import komm.ui.avatar.AvatarColor;
 import komm.ui.customnodes.CustomNotification;
 import komm.ui.modals.ConfirmationModal;
 import komm.ui.pages.HomePage;
+import komm.ui.utils.IconColorUtil;
 import komm.ui.profile.UserProfilePopup;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -593,8 +594,7 @@ public class FriendsSection extends VBox {
     }
 
     private VBox buildEmptyBox() {
-        FontIcon icon = new FontIcon(MaterialDesignA.ACCOUNT_CIRCLE_OUTLINE);
-        icon.getStyleClass().add("custom-icon-24");
+        FontIcon icon = IconColorUtil.colored(MaterialDesignA.ACCOUNT_CIRCLE_OUTLINE, "-color-fg-subtle", 24);
         Label lbl = new Label(switch (currentTab) {
             case FRIENDS -> "No friends yet. Send a request!";
             case RECEIVED -> "No incoming requests.";

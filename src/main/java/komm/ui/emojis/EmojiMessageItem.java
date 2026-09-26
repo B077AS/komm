@@ -24,6 +24,7 @@ import komm.model.permissions.Permission;
 import komm.ui.avatar.AvatarCache;
 import komm.ui.avatar.AvatarColor;
 import komm.ui.profile.UserProfilePopup;
+import komm.ui.utils.IconColorUtil;
 import komm.websocket.messages.payloads.MessageReceivedPayload;
 import lombok.Getter;
 import lombok.Setter;
@@ -470,8 +471,7 @@ public class EmojiMessageItem extends HBox {
         Button heartBtn = buildActionButton(heartGlyph);
         heartBtn.setOnAction(e -> bubble.fireQuickReact(heart));
 
-        FontIcon reactIcon = new FontIcon(MaterialDesignE.EMOTICON_OUTLINE);
-        reactIcon.getStyleClass().add("custom-icon-15");
+        FontIcon reactIcon = IconColorUtil.colored(MaterialDesignE.EMOTICON_OUTLINE, "-color-fg-muted", 15);
 
         Button reactBtn = buildActionButton(reactIcon);
         reactBtn.setOnMouseClicked(e -> {
@@ -486,8 +486,7 @@ public class EmojiMessageItem extends HBox {
             e.consume();
         });
 
-        FontIcon replyIcon = new FontIcon(MaterialDesignR.REPLY);
-        replyIcon.getStyleClass().add("custom-icon-15");
+        FontIcon replyIcon = IconColorUtil.colored(MaterialDesignR.REPLY, "-color-fg-muted", 15);
 
         Button replyBtn = buildActionButton(replyIcon);
         replyBtn.setOnAction(e -> bubble.fireReply());
@@ -496,8 +495,7 @@ public class EmojiMessageItem extends HBox {
 
         if (isOwnMessage && payload.getMessageType() != MessageReceivedPayload.MessageType.GIF
                 && payload.getMessageType() != MessageReceivedPayload.MessageType.URL_IMAGE) {
-            FontIcon editIcon = new FontIcon(MaterialDesignP.PENCIL_OUTLINE);
-            editIcon.getStyleClass().add("custom-icon-15");
+            FontIcon editIcon = IconColorUtil.colored(MaterialDesignP.PENCIL_OUTLINE, "-color-fg-muted", 15);
             Button editBtn = buildActionButton(editIcon);
             editBtn.setOnAction(e -> bubble.fireEdit());
             bar.getChildren().add(editBtn);

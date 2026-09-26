@@ -22,6 +22,7 @@ import komm.model.dto.summary.MainUserSummary.UserStatus;
 import komm.ui.avatar.AvatarColor;
 import komm.ui.customnodes.StatusComboBox;
 import komm.ui.customnodes.StatusMessageEditor;
+import komm.ui.utils.IconColorUtil;
 import komm.ui.modals.EditUserModal;
 import komm.utils.AudioDeviceService;
 
@@ -163,8 +164,7 @@ public class ProfileSection extends VBox {
     }
 
     private void applyServerLockedButtonState(Button button, Ikon offIcon) {
-        FontIcon icon = new FontIcon(offIcon);
-        icon.getStyleClass().add("custom-icon-20-muted");
+        FontIcon icon = IconColorUtil.colored(offIcon, "rgb(225, 90, 90)", 20);
         button.setGraphic(icon);
         button.getStyleClass().remove("custom-toolbar-button");
         if (!button.getStyleClass().contains("custom-toolbar-button-muted"))
@@ -431,8 +431,8 @@ public class ProfileSection extends VBox {
 
     private void updateToggleButtonState(Button button, boolean enabled, Ikon onIcon, Ikon offIcon) {
         if (button == null) return;
-        FontIcon icon = new FontIcon(enabled ? onIcon : offIcon);
-        icon.getStyleClass().add(enabled ? "custom-icon-20" : "custom-icon-20-accent");
+        FontIcon icon = IconColorUtil.colored(enabled ? onIcon : offIcon,
+                enabled ? "-color-fg-default" : "-color-accent-emphasis", 20);
         button.setGraphic(icon);
         button.getStyleClass().remove("toolbar-button-base");
         if (enabled) {

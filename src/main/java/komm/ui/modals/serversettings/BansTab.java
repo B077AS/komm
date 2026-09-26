@@ -22,6 +22,7 @@ import komm.model.dto.response.MemberPageResponse;
 import komm.model.dto.response.UserLookupResponse;
 import komm.model.dto.response.UserStatusDto;
 import komm.model.dto.summary.BannedUserSummary;
+import komm.ui.utils.IconColorUtil;
 import komm.model.dto.summary.ServerMemberSummary;
 import komm.model.dto.summary.ServerSummary;
 import komm.ui.avatar.AvatarCache;
@@ -155,8 +156,7 @@ public class BansTab implements ServerSettingsTab {
         externalSpinner.setVisible(false);
         externalSpinner.setManaged(false);
 
-        FontIcon banIcon = new FontIcon(MaterialDesignA.ACCOUNT_CANCEL_OUTLINE);
-        banIcon.getStyleClass().add("custom-icon-14-white");
+        FontIcon banIcon = IconColorUtil.colored(MaterialDesignA.ACCOUNT_CANCEL_OUTLINE, "white", 13);
 
         Button externalBanBtn = new Button("Ban", banIcon);
         externalBanBtn.getStyleClass().addAll(Styles.SMALL);

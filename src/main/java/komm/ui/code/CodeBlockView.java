@@ -20,6 +20,7 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.util.Duration;
+import komm.ui.utils.IconColorUtil;
 import lombok.Getter;
 import org.fxmisc.richtext.CodeArea;
 import org.fxmisc.richtext.Caret;
@@ -170,8 +171,7 @@ public class CodeBlockView extends VBox {
     }
 
     private HBox buildHeader() {
-        FontIcon codeIcon = new FontIcon(MaterialDesignC.CODE_BRACES);
-        codeIcon.getStyleClass().add("custom-icon-15");
+        FontIcon codeIcon = IconColorUtil.colored(MaterialDesignC.CODE_BRACES, "-color-fg-muted", 15);
 
         Label langLabel = new Label(language.getDisplayName());
         langLabel.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: -color-fg-muted;");
@@ -200,8 +200,7 @@ public class CodeBlockView extends VBox {
                 + "-fx-border-width: 0 0 1px 0;");
 
         if (expandable) {
-            toggleIcon = new FontIcon(MaterialDesignC.CHEVRON_DOWN);
-            toggleIcon.getStyleClass().add("custom-icon-15");
+            toggleIcon = IconColorUtil.colored(MaterialDesignC.CHEVRON_DOWN, "-color-fg-muted", 15);
             toggleLabel = new Label("Show more");
             toggleLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: -color-accent-fg;");
             Button toggleBtn = new Button(null, toggleIcon);
