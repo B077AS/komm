@@ -191,7 +191,7 @@ public class GeneralChannelTab implements ChannelSettingsTab {
                 (selected
                         ? "-fx-background-color: -color-accent-subtle; -fx-border-color: -color-accent-emphasis;"
                         : "-fx-background-color: -color-bg-subtle;    -fx-border-color: -color-border-default;") +
-                        " -fx-background-radius: 8; -fx-border-radius: 8; -fx-border-width: 1.5; -fx-cursor: hand;"
+                        " -fx-background-radius: 3; -fx-border-radius: 3; -fx-border-width: 1.5; -fx-cursor: hand;"
         );
     }
 

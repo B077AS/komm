@@ -100,7 +100,7 @@ public class UserProfileModal extends HBox {
         panel.setPrefWidth(210);
         panel.setMinWidth(210);
         panel.setMaxWidth(210);
-        panel.setStyle("-fx-background-color: rgba(255,255,255,0.03); -fx-background-radius: 12px 0 0 12px;");
+        panel.setStyle("-fx-background-color: rgba(255,255,255,0.03); -fx-background-radius: 4px 0 0 4px;");
 
         // Avatar slot — styled as accent ring from the start
         avatarSlot = new StackPane();
@@ -258,7 +258,7 @@ public class UserProfileModal extends HBox {
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
         Button closeBtn = new Button(null, new FontIcon(MaterialDesignC.CLOSE));
-        closeBtn.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE);
+        closeBtn.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE, "modal-close-button");
         closeBtn.setOnAction(e -> App.closeModal());
 
         header.getChildren().addAll(title, actionsMenu, spacer, closeBtn);
@@ -468,7 +468,7 @@ public class UserProfileModal extends HBox {
         HBox pill = new HBox(6, icon, lbl);
         pill.setAlignment(Pos.CENTER_LEFT);
         pill.setPadding(new Insets(4, 10, 4, 8));
-        pill.setStyle("-fx-background-color: rgba(255,255,255,0.07); -fx-background-radius: 6;");
+        pill.setStyle("-fx-background-color: rgba(255,255,255,0.07); -fx-background-radius: 3;");
         return pill;
     }
 

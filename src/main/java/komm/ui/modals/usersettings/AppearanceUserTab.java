@@ -71,17 +71,17 @@ public class AppearanceUserTab implements UserSettingsTab {
         if (active) {
             box.setStyle(
                 "-fx-background-color: rgba(255,255,255,0.06);" +
-                "-fx-background-radius: 8px;" +
+                "-fx-background-radius: 3px;" +
                 "-fx-border-color: " + theme.getSwatchColor() + ";" +
-                "-fx-border-radius: 8px;" +
+                "-fx-border-radius: 3px;" +
                 "-fx-border-width: 2px;");
         } else {
             applyIdleStyle(box);
             box.setOnMouseEntered(e -> box.setStyle(
                 "-fx-background-color: rgba(255,255,255,0.04);" +
-                "-fx-background-radius: 8px;" +
+                "-fx-background-radius: 3px;" +
                 "-fx-border-color: transparent;" +
-                "-fx-border-radius: 8px;" +
+                "-fx-border-radius: 3px;" +
                 "-fx-border-width: 2px;" +
                 "-fx-cursor: hand;"));
             box.setOnMouseExited(e -> applyIdleStyle(box));
@@ -97,9 +97,9 @@ public class AppearanceUserTab implements UserSettingsTab {
 
     private static void applyIdleStyle(VBox box) {
         box.setStyle(
-            "-fx-background-radius: 8px;" +
+            "-fx-background-radius: 3px;" +
             "-fx-border-color: transparent;" +
-            "-fx-border-radius: 8px;" +
+            "-fx-border-radius: 3px;" +
             "-fx-border-width: 2px;" +
             "-fx-cursor: hand;");
     }

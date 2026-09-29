@@ -28,7 +28,7 @@ public class ConfirmationModal extends VBox {
         Region headerFillerRegion = new Region();
 
         Button closeButton = new Button(null, new FontIcon(MaterialDesignC.CLOSE));
-        closeButton.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE);
+        closeButton.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE, "modal-close-button");
         closeButton.setOnAction(event -> {
             App.closeModal();
         });

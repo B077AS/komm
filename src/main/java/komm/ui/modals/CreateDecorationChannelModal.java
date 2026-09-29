@@ -121,7 +121,7 @@ public class CreateDecorationChannelModal extends VBox {
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
         Button closeBtn = new Button(null, new FontIcon(MaterialDesignC.CLOSE));
-        closeBtn.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE);
+        closeBtn.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE, "modal-close-button");
         closeBtn.setOnAction(e -> App.closeModal());
 
         header.getChildren().addAll(title, spacer, closeBtn);
@@ -200,6 +200,7 @@ public class CreateDecorationChannelModal extends VBox {
         card.setPadding(new Insets(10));
         card.setAlignment(Pos.TOP_LEFT);
         card.setMinHeight(100);
+        card.setMaxHeight(Region.USE_PREF_SIZE);
         card.setPrefWidth(0);
         card.setMaxWidth(Double.MAX_VALUE);
         card.setCursor(Cursor.HAND);
@@ -219,11 +220,11 @@ public class CreateDecorationChannelModal extends VBox {
     private void applyCardStyle(VBox card, boolean selected) {
         if (selected) {
             card.setStyle(" -fx-border-color: -color-accent-emphasis;"
-                    + " -fx-border-width: 1.5px; -fx-border-radius: 8px; -fx-background-radius: 8px;");
+                    + " -fx-border-width: 1.5px; -fx-border-radius: 3px; -fx-background-radius: 3px;");
         } else {
             card.setStyle("-fx-background-color: -color-bg-default;"
                     + " -fx-border-color: -color-border-muted;"
-                    + " -fx-border-width: 1.5px; -fx-border-radius: 8px; -fx-background-radius: 8px;");
+                    + " -fx-border-width: 1.5px; -fx-border-radius: 3px; -fx-background-radius: 3px;");
         }
     }
 
@@ -243,7 +244,7 @@ public class CreateDecorationChannelModal extends VBox {
         r.setPrefHeight(28);
         r.setMaxWidth(Double.MAX_VALUE);
         r.setStyle("-fx-border-color: -color-border-muted; -fx-border-width: 1px;"
-                + " -fx-border-style: dashed; -fx-border-radius: 3px;");
+                + " -fx-border-style: dashed; -fx-border-radius: 1px;");
         return r;
     }
 

@@ -129,7 +129,7 @@ public class ServerInfoModal extends HBox {
         pane.setPrefWidth(240);
         pane.setMinWidth(240);
         pane.setMaxWidth(240);
-        pane.setStyle("-fx-background-color: rgba(255,255,255,0.03); -fx-background-radius: 12px 0 0 12px;");
+        pane.setStyle("-fx-background-color: rgba(255,255,255,0.03); -fx-background-radius: 4px 0 0 4px;");
 
         VBox avatarSection = new VBox(0);
         avatarSection.setPadding(new Insets(24, 20, 18, 20));
@@ -234,7 +234,7 @@ public class ServerInfoModal extends HBox {
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
         Button closeButton = new Button(null, new FontIcon(MaterialDesignC.CLOSE));
-        closeButton.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE);
+        closeButton.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE, "modal-close-button");
         closeButton.setOnAction(e -> App.closeModal());
 
         header.getChildren().addAll(new VBox(2, title, subtitle), spacer, closeButton);

@@ -141,7 +141,7 @@ public class GifPickerPopup {
         sidebar.setPadding(new Insets(10, 0, 10, 0));
         sidebar.setStyle(
             "-fx-background-color: -color-bg-subtle;" +
-            "-fx-background-radius: 8px 0 0 8px;" +
+            "-fx-background-radius: 3px 0 0 3px;" +
             "-fx-border-color: transparent -color-border-default transparent transparent;" +
             "-fx-border-width: 0 1px 0 0;"
         );
@@ -164,7 +164,7 @@ public class GifPickerPopup {
         btn.setPrefSize(36, 36);
         btn.setMaxSize(36, 36);
         btn.setAlignment(Pos.CENTER);
-        btn.setStyle("-fx-background-radius: 6px; -fx-cursor: hand;");
+        btn.setStyle("-fx-background-radius: 3px; -fx-cursor: hand;");
         return btn;
     }
 
@@ -278,8 +278,8 @@ public class GifPickerPopup {
 
     private void updateSidebarStyles() {
         if (searchTabBtn == null || favoritesTabBtn == null) return;
-        String activeBg = "-fx-background-color: -color-neutral-muted; -fx-background-radius: 6px; -fx-cursor: hand;";
-        String inactiveBg = "-fx-background-color: transparent; -fx-background-radius: 6px; -fx-cursor: hand;";
+        String activeBg = "-fx-background-color: -color-neutral-muted; -fx-background-radius: 3px; -fx-cursor: hand;";
+        String inactiveBg = "-fx-background-color: transparent; -fx-background-radius: 3px; -fx-cursor: hand;";
 
         boolean searchActive = activeTab == Tab.SEARCH;
         searchTabBtn.setStyle(searchActive ? activeBg : inactiveBg);
@@ -473,7 +473,7 @@ public class GifPickerPopup {
         cell.setMaxWidth(CELL_WIDTH);
         cell.setMinHeight(cellHeight);
         cell.setMaxHeight(cellHeight);
-        cell.setStyle("-fx-background-color: -color-bg-subtle; -fx-background-radius: 6px; -fx-cursor: hand;");
+        cell.setStyle("-fx-background-color: -color-bg-subtle; -fx-background-radius: 3px; -fx-cursor: hand;");
 
         Rectangle clip = new Rectangle(CELL_WIDTH, cellHeight);
         clip.setArcWidth(10);
@@ -539,7 +539,7 @@ public class GifPickerPopup {
         btn.setPrefSize(26, 26);
         btn.setMaxSize(26, 26);
         btn.setAlignment(Pos.CENTER);
-        btn.setStyle("-fx-background-color: rgba(0,0,0,0.45); -fx-background-radius: 5px; -fx-cursor: hand;");
+        btn.setStyle("-fx-background-color: rgba(0,0,0,0.45); -fx-background-radius: 2px; -fx-cursor: hand;");
         btn.getChildren().setAll(buildStarIcon(isFavRef[0]));
 
         btn.setOnMouseClicked(e -> {

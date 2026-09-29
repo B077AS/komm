@@ -53,7 +53,7 @@ public class InviteLinkModal extends VBox {
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
         Button closeBtn = new Button(null, new FontIcon(MaterialDesignC.CLOSE));
-        closeBtn.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE);
+        closeBtn.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE, "modal-close-button");
         closeBtn.setOnAction(e -> App.closeModal());
 
         header.getChildren().addAll(new VBox(2, title, subtitle), spacer, closeBtn);
@@ -82,9 +82,9 @@ public class InviteLinkModal extends VBox {
         linkCard.setPadding(new Insets(12, 10, 12, 14));
         linkCard.setStyle(
                 "-fx-background-color: -color-bg-subtle;" +
-                "-fx-background-radius: 8;" +
+                "-fx-background-radius: 3;" +
                 "-fx-border-color: -color-border-default;" +
-                "-fx-border-radius: 8;" +
+                "-fx-border-radius: 3;" +
                 "-fx-border-width: 1;");
 
         FontIcon clockIcon = new FontIcon(MaterialDesignC.CLOCK_OUTLINE);

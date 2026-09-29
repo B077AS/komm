@@ -106,7 +106,7 @@ public class StartConversationModal extends VBox {
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
         Button closeBtn = new Button(null, new FontIcon(MaterialDesignC.CLOSE));
-        closeBtn.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE);
+        closeBtn.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE, "modal-close-button");
         closeBtn.setFocusTraversable(false);
         closeBtn.setOnAction(e -> App.closeModal());
 
@@ -126,7 +126,7 @@ public class StartConversationModal extends VBox {
         filterField.setPromptText("Search friends…");
         filterField.getStyleClass().add(Styles.SMALL);
         filterField.setMaxWidth(Double.MAX_VALUE);
-        filterField.setStyle("-fx-background-radius: 20px; -fx-padding: 5px 12px; -fx-font-size: 12px;");
+        filterField.setStyle("-fx-background-radius: 4px; -fx-padding: 5px 12px; -fx-font-size: 12px;");
         HBox.setHgrow(filterField, Priority.ALWAYS);
 
         HBox filterRow = new HBox(8, filterField);
@@ -365,11 +365,11 @@ public class StartConversationModal extends VBox {
     private void applyRowStyle(VBox row, boolean highlighted) {
         boolean isSelected = row.getUserData() instanceof UUID id && id.equals(selectedPartnerId);
         if (isSelected) {
-            row.setStyle("-fx-background-color: -color-accent-subtle; -fx-background-radius: 8px; -fx-cursor: hand;");
+            row.setStyle("-fx-background-color: -color-accent-subtle; -fx-background-radius: 3px; -fx-cursor: hand;");
         } else if (highlighted) {
-            row.setStyle("-fx-background-color: -color-bg-subtle; -fx-background-radius: 8px; -fx-cursor: hand;");
+            row.setStyle("-fx-background-color: -color-bg-subtle; -fx-background-radius: 3px; -fx-cursor: hand;");
         } else {
-            row.setStyle("-fx-background-color: transparent; -fx-background-radius: 8px; -fx-cursor: hand;");
+            row.setStyle("-fx-background-color: transparent; -fx-background-radius: 3px; -fx-cursor: hand;");
         }
     }
 
@@ -446,7 +446,7 @@ public class StartConversationModal extends VBox {
         Label chip = new Label("Loading…");
         chip.setStyle("-fx-text-fill: -color-fg-muted; -fx-font-size: 11px;" +
                 "-fx-padding: 4 12 4 12; -fx-background-color: -color-bg-subtle;" +
-                "-fx-background-radius: 10px;");
+                "-fx-background-radius: 4px;");
         chip.setMaxWidth(Double.MAX_VALUE);
         chip.setAlignment(Pos.CENTER);
         VBox.setMargin(chip, new Insets(8, 8, 8, 8));

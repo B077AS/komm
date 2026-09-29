@@ -87,7 +87,7 @@ public class InfoUserTab implements UserSettingsTab {
         Label versionPill = new Label("v" + (version != null && !version.isBlank() ? version : "dev"));
         versionPill.setStyle(
                 "-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: -color-fg-emphasis;" +
-                "-fx-background-color: -color-accent-emphasis; -fx-background-radius: 20px;" +
+                "-fx-background-color: -color-accent-emphasis; -fx-background-radius: 4px;" +
                 "-fx-padding: 3 10 3 10;");
         HBox.setMargin(versionPill, new Insets(2, 0, 0, 0));
 
@@ -107,9 +107,9 @@ public class InfoUserTab implements UserSettingsTab {
         hero.setPadding(new Insets(20));
         hero.setStyle(
                 "-fx-background-color: linear-gradient(to bottom right, -color-accent-muted, rgba(255,255,255,0.03));" +
-                "-fx-background-radius: 14px;" +
+                "-fx-background-radius: 4px;" +
                 "-fx-border-color: -color-accent-emphasis;" +
-                "-fx-border-radius: 14px;" +
+                "-fx-border-radius: 4px;" +
                 "-fx-border-width: 1px;");
         return hero;
     }
@@ -199,7 +199,7 @@ public class InfoUserTab implements UserSettingsTab {
         StackPane badge = new StackPane(fi);
         badge.setMinSize(38, 38);
         badge.setMaxSize(38, 38);
-        badge.setStyle("-fx-background-color: -color-accent-muted; -fx-background-radius: 11px;");
+        badge.setStyle("-fx-background-color: -color-accent-muted; -fx-background-radius: 3px;");
 
         Label lbl = new Label(label);
         lbl.setStyle("-fx-font-size: 11.5px; -fx-font-weight: bold;");
@@ -226,9 +226,9 @@ public class InfoUserTab implements UserSettingsTab {
     private static void applyTileStyle(VBox tile, boolean hover) {
         tile.setStyle(
                 "-fx-background-color: rgba(255,255,255," + (hover ? "0.06" : "0.03") + ");" +
-                "-fx-background-radius: 12px;" +
+                "-fx-background-radius: 4px;" +
                 "-fx-border-color: " + (hover ? "-color-accent-emphasis" : "-color-border-default") + ";" +
-                "-fx-border-radius: 12px;" +
+                "-fx-border-radius: 4px;" +
                 "-fx-border-width: 1px;" +
                 "-fx-cursor: hand;");
     }

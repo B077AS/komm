@@ -107,7 +107,7 @@ public class CreateServerModal extends HBox {
         pane.setPrefWidth(290);
         pane.setMinWidth(290);
         pane.setMaxWidth(290);
-        pane.setStyle("-fx-background-color: rgba(255,255,255,0.03); -fx-background-radius: 12px 0 0 12px;" );
+        pane.setStyle("-fx-background-color: rgba(255,255,255,0.03); -fx-background-radius: 4px 0 0 4px;" );
         pane.getChildren().add(avatarWidget);
         return pane;
     }
@@ -138,7 +138,7 @@ public class CreateServerModal extends HBox {
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
         closeButton = new Button(null, new FontIcon(MaterialDesignC.CLOSE));
-        closeButton.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE);
+        closeButton.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE, "modal-close-button");
         closeButton.setOnAction(e -> App.closeModal());
 
         header.getChildren().addAll(new HBox(10, titleGroup), spacer, closeButton);

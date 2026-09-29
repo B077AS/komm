@@ -161,16 +161,16 @@ public class StatusMessageEditor extends HBox {
         String bg = focused ? "-color-bg-default" : "transparent";
         setStyle(
                 "-fx-background-color: " + bg + ";" +
-                        "-fx-background-radius: 8px;" +
+                        "-fx-background-radius: 3px;" +
                         "-fx-border-color: " + border + ";" +
-                        "-fx-border-radius: 8px;" +
+                        "-fx-border-radius: 3px;" +
                         "-fx-border-width: 1.5px;"
         );
     }
 
     private String tileStyle(boolean hovered) {
         return "-fx-background-color: " + (hovered ? "-color-neutral-subtle" : "transparent") + ";" +
-                "-fx-background-radius: 6px;" +
+                "-fx-background-radius: 3px;" +
                 "-fx-cursor: hand;";
     }
 

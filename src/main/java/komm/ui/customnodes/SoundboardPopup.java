@@ -97,7 +97,7 @@ public class SoundboardPopup extends Popup {
         VBox side = new VBox(0);
         side.setMinWidth(150);
         side.setMaxWidth(150);
-        side.setStyle("-fx-background-color: rgba(255,255,255,0.03); -fx-background-radius: 12px 0 0 12px;");
+        side.setStyle("-fx-background-color: rgba(255,255,255,0.03); -fx-background-radius: 4px 0 0 4px;");
 
         Label title = new Label("SOUNDBOARD");
         title.setStyle("-fx-font-size: 10px; -fx-font-weight: bold; -fx-text-fill: -color-fg-subtle; -fx-padding: 14 0 6 14;");
@@ -141,7 +141,7 @@ public class SoundboardPopup extends Popup {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
         Button close = new Button(null, new FontIcon(MaterialDesignC.CLOSE));
-        close.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE);
+        close.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE, "modal-close-button");
         close.setFocusTraversable(false);
         close.setOnAction(e -> hide());
         header.getChildren().addAll(title, spacer, close);
@@ -526,6 +526,7 @@ public class SoundboardPopup extends Popup {
         slot.setMaxSize(SLOT_W, SLOT_H);
         slot.getStyleClass().add("soundboard-slot");
         slot.setFocusTraversable(false);
+        NotchShape.apply(slot);
 
         if (!playable) {
             slot.setOpacity(0.45);

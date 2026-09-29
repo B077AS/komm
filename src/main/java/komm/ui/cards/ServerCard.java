@@ -175,7 +175,7 @@ public class ServerCard extends HBox {
         badge.setAlignment(Pos.CENTER);
         badge.setPadding(new Insets(2, 8, 2, 8));
         badge.setMaxWidth(Region.USE_PREF_SIZE);
-        badge.setStyle("-fx-background-color: " + bgColor + "; -fx-background-radius: 3px;");
+        badge.setStyle("-fx-background-color: " + bgColor + "; -fx-background-radius: 1px;");
         Label lbl = new Label(formatRole(role));
         lbl.setStyle("-fx-font-size: 10px; -fx-font-weight: bold; -fx-text-fill: " + fgColor + ";");
         badge.getChildren().add(lbl);
@@ -201,7 +201,7 @@ public class ServerCard extends HBox {
         badge.setAlignment(Pos.CENTER);
         badge.setPadding(new Insets(2, 9, 2, 9));
         badge.setMaxWidth(Region.USE_PREF_SIZE);
-        badge.setStyle("-fx-background-color: " + bgColor + "; -fx-background-radius: 4px;");
+        badge.setStyle("-fx-background-color: " + bgColor + "; -fx-background-radius: 2px;");
         return badge;
     }
 

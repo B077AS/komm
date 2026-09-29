@@ -103,9 +103,9 @@ public class InstallationCard extends HBox {
         pane.setPrefSize(62, 62);
         pane.setStyle(
                 "-fx-background-color: -color-accent-subtle;" +
-                "-fx-background-radius: 14px;" +
+                "-fx-background-radius: 4px;" +
                 "-fx-border-color: -color-accent-muted;" +
-                "-fx-border-radius: 14px;" +
+                "-fx-border-radius: 4px;" +
                 "-fx-border-width: 1px;"
         );
         FontIcon icon = new FontIcon(MaterialDesignS.SERVER);
@@ -140,7 +140,7 @@ public class InstallationCard extends HBox {
         badge.setAlignment(Pos.CENTER);
         badge.setPadding(new Insets(2, 9, 2, 9));
         badge.setMaxWidth(Region.USE_PREF_SIZE);
-        badge.setStyle("-fx-background-color: " + bgColor + "; -fx-background-radius: 4px;");
+        badge.setStyle("-fx-background-color: " + bgColor + "; -fx-background-radius: 2px;");
         return badge;
     }
 
@@ -161,7 +161,7 @@ public class InstallationCard extends HBox {
         chip.setAlignment(Pos.CENTER_LEFT);
         chip.setPadding(new Insets(3, 10, 3, 8));
         chip.setMaxWidth(Region.USE_PREF_SIZE);
-        chip.setStyle("-fx-background-color: -color-accent-subtle; -fx-background-radius: 5px;");
+        chip.setStyle("-fx-background-color: -color-accent-subtle; -fx-background-radius: 2px;");
         return chip;
     }
 

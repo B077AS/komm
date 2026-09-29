@@ -83,7 +83,7 @@ public class CreateInstallationModal extends VBox {
         HBox.setHgrow(filler, Priority.ALWAYS);
 
         closeButton = new Button(null, new FontIcon(MaterialDesignC.CLOSE));
-        closeButton.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE);
+        closeButton.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE, "modal-close-button");
         closeButton.setOnAction(event -> App.closeModal());
         closeButton.setFocusTraversable(false);
 
@@ -167,7 +167,7 @@ public class CreateInstallationModal extends VBox {
         badge.setAlignment(Pos.CENTER);
         badge.setPadding(new Insets(2, 6, 2, 6));
         badge.setMaxWidth(Region.USE_PREF_SIZE);
-        badge.setStyle("-fx-background-color: " + bgColor + "; -fx-background-radius: 4px;");
+        badge.setStyle("-fx-background-color: " + bgColor + "; -fx-background-radius: 2px;");
         return badge;
     }
 

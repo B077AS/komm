@@ -52,7 +52,7 @@ public class MicActivityMeter extends VBox {
     public MicActivityMeter() {
         setSpacing(6);
         setPadding(new Insets(10, 12, 10, 12));
-        setStyle("-fx-background-color: -color-bg-subtle; -fx-background-radius: 8px;");
+        setStyle("-fx-background-color: -color-bg-subtle; -fx-background-radius: 3px;");
 
         Label caption = new Label("MIC LEVEL");
         caption.setStyle("-fx-font-size: 10px; -fx-text-fill: -color-fg-subtle; -fx-font-weight: bold;");

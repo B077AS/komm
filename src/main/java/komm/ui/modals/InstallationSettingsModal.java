@@ -71,7 +71,7 @@ public class InstallationSettingsModal extends HBox {
         pane.setPrefWidth(230);
         pane.setMinWidth(230);
         pane.setMaxWidth(230);
-        pane.setStyle("-fx-background-color: rgba(255,255,255,0.03); -fx-background-radius: 12px 0 0 12px;");
+        pane.setStyle("-fx-background-color: rgba(255,255,255,0.03); -fx-background-radius: 4px 0 0 4px;");
 
         VBox iconSection = new VBox(0);
         iconSection.setPadding(new Insets(24, 20, 18, 20));
@@ -92,9 +92,9 @@ public class InstallationSettingsModal extends HBox {
         pane.setPrefSize(80, 80);
         pane.setStyle(
                 "-fx-background-color: -color-accent-subtle;" +
-                "-fx-background-radius: 18px;" +
+                "-fx-background-radius: 4px;" +
                 "-fx-border-color: -color-accent-muted;" +
-                "-fx-border-radius: 18px;" +
+                "-fx-border-radius: 4px;" +
                 "-fx-border-width: 1.5px;"
         );
         FontIcon icon = new FontIcon(MaterialDesignS.SERVER);
@@ -186,7 +186,7 @@ public class InstallationSettingsModal extends HBox {
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
         closeButton = new Button(null, new FontIcon(MaterialDesignC.CLOSE));
-        closeButton.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE);
+        closeButton.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE, "modal-close-button");
         closeButton.setOnAction(e -> App.closeModal());
 
         header.getChildren().addAll(titleBox, spacer, closeButton);

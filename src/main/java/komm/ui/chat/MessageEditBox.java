@@ -76,10 +76,10 @@ public class MessageEditBox extends VBox {
 
         setStyle(
                 "-fx-background-color: -color-bg-subtle;" +
-                "-fx-background-radius: 4px;" +
+                "-fx-background-radius: 2px;" +
                 "-fx-border-color: -color-border-muted;" +
                 "-fx-border-width: 1px;" +
-                "-fx-border-radius: 4px;"
+                "-fx-border-radius: 2px;"
         );
         getChildren().addAll(editRow, hintRow);
 

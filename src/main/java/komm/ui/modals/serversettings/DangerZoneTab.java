@@ -95,7 +95,7 @@ public class DangerZoneTab implements ServerSettingsTab {
         card.setMaxWidth(Double.MAX_VALUE);
         card.setStyle("-fx-background-color: -color-bg-subtle;"
                 + " -fx-border-color: -color-danger-emphasis;"
-                + " -fx-border-radius: 6; -fx-background-radius: 6;");
+                + " -fx-border-radius: 3; -fx-background-radius: 3;");
 
         content.getChildren().addAll(header, card);
         return wrapScroll(content);

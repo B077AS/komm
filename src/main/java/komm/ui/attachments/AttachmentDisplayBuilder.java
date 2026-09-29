@@ -109,9 +109,9 @@ public class AttachmentDisplayBuilder {
         chip.setMaxWidth(320);
         chip.setStyle(
                 "-fx-background-color: -color-bg-subtle;" +
-                        "-fx-background-radius: 8px;" +
+                        "-fx-background-radius: 3px;" +
                         "-fx-border-color: -color-border-muted;" +
-                        "-fx-border-radius: 8px;" +
+                        "-fx-border-radius: 3px;" +
                         "-fx-border-width: 1px;"
         );
         VBox.setMargin(chip, new Insets(4, 0, 0, 0));

@@ -118,7 +118,7 @@ public class GifMessageCell extends StackPane {
         errLabel.setStyle("-fx-text-fill: -color-fg-muted; -fx-font-size: 11px;");
         Button retryBtn = new Button("↺  Retry");
         retryBtn.setStyle("-fx-background-color: transparent; -fx-border-color: -color-fg-muted;" +
-                "-fx-border-radius: 4px; -fx-text-fill: -color-fg-muted; -fx-font-size: 11px;" +
+                "-fx-border-radius: 2px; -fx-text-fill: -color-fg-muted; -fx-font-size: 11px;" +
                 "-fx-padding: 2px 8px; -fx-cursor: hand;");
         retryBtn.setOnAction(e -> retry());
         errorBox = new VBox(4, errLabel, retryBtn);
@@ -128,7 +128,7 @@ public class GifMessageCell extends StackPane {
 
         getChildren().addAll(imageView, spinner, errorBox);
         setAlignment(Pos.CENTER);
-        setStyle("-fx-background-color: -color-bg-subtle; -fx-background-radius: 8px;");
+        setStyle("-fx-background-color: -color-bg-subtle; -fx-background-radius: 3px;");
         setCursor(javafx.scene.Cursor.HAND);
         applyClip(cellW, cellH);
 

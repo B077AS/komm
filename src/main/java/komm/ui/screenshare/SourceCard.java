@@ -53,7 +53,7 @@ public class SourceCard extends VBox {
         previewPane.setPrefSize(156, 88);
         previewPane.setMinSize(156, 88);
         previewPane.setMaxSize(156, 88);
-        previewPane.setStyle("-fx-background-color: -color-bg-elevated; -fx-background-radius: 6px;");
+        previewPane.setStyle("-fx-background-color: -color-bg-elevated; -fx-background-radius: 3px;");
 
         Rectangle clip = new Rectangle(156, 88);
         clip.setArcWidth(10);

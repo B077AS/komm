@@ -122,7 +122,7 @@ public class AddSoundModal extends VBox {
         StackPane iconWrap = new StackPane(icon);
         iconWrap.setMinSize(40, 40);
         iconWrap.setMaxSize(40, 40);
-        iconWrap.setStyle("-fx-background-color: -color-accent-subtle; -fx-background-radius: 10;");
+        iconWrap.setStyle("-fx-background-color: -color-accent-subtle; -fx-background-radius: 4;");
 
         Label title = new Label(editMode
                 ? (server ? "Edit server sound" : "Edit personal sound")
@@ -139,7 +139,7 @@ public class AddSoundModal extends VBox {
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
         closeButton = new Button(null, new FontIcon(MaterialDesignC.CLOSE));
-        closeButton.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE);
+        closeButton.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE, "modal-close-button");
         closeButton.setFocusTraversable(false);
         closeButton.setOnAction(e -> App.closeModal());
 
@@ -182,9 +182,9 @@ public class AddSoundModal extends VBox {
         emojiTile.setMaxSize(38, 38);
         emojiTile.setStyle(
                 "-fx-background-color: -color-bg-subtle;" +
-                "-fx-background-radius: 8;" +
+                "-fx-background-radius: 3;" +
                 "-fx-border-color: -color-border-default;" +
-                "-fx-border-radius: 8;" +
+                "-fx-border-radius: 3;" +
                 "-fx-border-width: 1;" +
                 "-fx-cursor: hand;");
         Tooltip.install(emojiTile, new Tooltip("Pick an emoji icon for this sound"));
@@ -287,8 +287,8 @@ public class AddSoundModal extends VBox {
 
         StackPane zone = new StackPane(content);
         zone.setMinHeight(126);
-        zone.setStyle("-fx-background-color: -color-bg-subtle; -fx-background-radius: 10;"
-                + " -fx-border-color: -color-border-muted; -fx-border-radius: 10;"
+        zone.setStyle("-fx-background-color: -color-bg-subtle; -fx-background-radius: 4;"
+                + " -fx-border-color: -color-border-muted; -fx-border-radius: 4;"
                 + " -fx-border-width: 1.5; -fx-border-style: segments(6, 5) line-cap round;"
                 + " -fx-cursor: hand;");
         zone.setOnMouseClicked(e -> browse());
@@ -316,7 +316,7 @@ public class AddSoundModal extends VBox {
         StackPane iconWrap = new StackPane(fileIcon);
         iconWrap.setMinSize(44, 44);
         iconWrap.setMaxSize(44, 44);
-        iconWrap.setStyle("-fx-background-color: -color-accent-subtle; -fx-background-radius: 10;");
+        iconWrap.setStyle("-fx-background-color: -color-accent-subtle; -fx-background-radius: 4;");
 
         Label name = new Label(fn);
         name.setStyle("-fx-font-size: 13px; -fx-font-weight: bold;");
@@ -340,15 +340,15 @@ public class AddSoundModal extends VBox {
         HBox card = new HBox(12, iconWrap, info, change);
         card.setAlignment(Pos.CENTER_LEFT);
         card.setPadding(new Insets(12));
-        card.setStyle("-fx-background-color: -color-bg-subtle; -fx-background-radius: 10;"
+        card.setStyle("-fx-background-color: -color-bg-subtle; -fx-background-radius: 4;"
                 + " -fx-border-color: " + (tooBig ? "-color-danger-emphasis" : "-color-border-default") + ";"
-                + " -fx-border-radius: 10; -fx-border-width: 1;");
+                + " -fx-border-radius: 4; -fx-border-width: 1;");
         fileSlot.getChildren().setAll(card);
     }
 
     private Label chip(String text, boolean danger) {
         Label l = new Label(text);
-        l.setStyle("-fx-font-size: 10.5px; -fx-padding: 2 9 2 9; -fx-background-radius: 20;"
+        l.setStyle("-fx-font-size: 10.5px; -fx-padding: 2 9 2 9; -fx-background-radius: 4;"
                 + " -fx-background-color: " + (danger ? "-color-danger-subtle" : "-color-neutral-muted") + ";"
                 + " -fx-text-fill: " + (danger ? "-color-danger-fg" : "-color-fg-default") + ";");
         return l;

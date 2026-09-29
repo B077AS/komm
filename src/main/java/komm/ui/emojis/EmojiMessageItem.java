@@ -201,7 +201,7 @@ public class EmojiMessageItem extends HBox {
                             "-fx-font-weight: bold;" +
                             "-fx-text-fill: white;" +
                             "-fx-background-color: -color-accent-emphasis;" +
-                            "-fx-background-radius: 3px;" +
+                            "-fx-background-radius: 1px;" +
                             "-fx-padding: 1 4 1 4;"
             );
             header = new HBox(8, nameLabel, botTag, timeLabel, editedLabel);
@@ -447,8 +447,8 @@ public class EmojiMessageItem extends HBox {
                 "-fx-background-color: -color-bg-default;" +
                         "-fx-border-color: -color-border-subtle;" +
                         "-fx-border-width: 1px;" +
-                        "-fx-border-radius: 8px;" +
-                        "-fx-background-radius: 8px;" +
+                        "-fx-border-radius: 3px;" +
+                        "-fx-background-radius: 3px;" +
                         "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.18), 6, 0, 0, 2);"
         );
         // Makes sure it doesn't stretch the layout
@@ -514,7 +514,10 @@ public class EmojiMessageItem extends HBox {
         btn.setPadding(new Insets(3));
         btn.setStyle(
                 "-fx-background-color: transparent;" +
-                        "-fx-background-radius: 6px;" +
+                        "-fx-background-radius: 3px;" +
+                        "-fx-border-color: transparent;" +
+                        "-fx-border-width: 0;" +
+                        "-fx-skin: \"javafx.scene.control.skin.ButtonSkin\";" +
                         "-fx-cursor: hand;"
         );
         return btn;

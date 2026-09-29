@@ -190,7 +190,7 @@ public class BotsModal extends VBox {
 
         Button closeBtn = new Button(null, new FontIcon(MaterialDesignC.CLOSE));
         closeBtn.setFocusTraversable(false);
-        closeBtn.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE);
+        closeBtn.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE, "modal-close-button");
         closeBtn.setOnAction(e -> App.closeModal());
 
         header.getChildren().addAll(title, spacer, closeBtn);
@@ -272,7 +272,7 @@ public class BotsModal extends VBox {
         HBox row = new HBox(10);
         row.setAlignment(Pos.CENTER_LEFT);
         row.setPadding(new Insets(8, 10, 8, 10));
-        row.setStyle("-fx-background-color: -color-bg-subtle; -fx-background-radius: 8px;");
+        row.setStyle("-fx-background-color: -color-bg-subtle; -fx-background-radius: 3px;");
 
         StackPane avatar = new StackPane();
         avatar.setPrefSize(32, 32);
@@ -386,7 +386,7 @@ public class BotsModal extends VBox {
         card.setCursor(Cursor.HAND);
         card.setStyle("-fx-background-color: -color-bg-subtle;"
                 + " -fx-border-color: -color-border-muted; -fx-border-width: 1.5px;"
-                + " -fx-border-radius: 8px; -fx-background-radius: 8px;");
+                + " -fx-border-radius: 3px; -fx-background-radius: 3px;");
 
         VBox textCol = new VBox(6);
         HBox.setHgrow(textCol, Priority.ALWAYS);

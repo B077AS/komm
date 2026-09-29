@@ -158,9 +158,9 @@ public class IconChannelTab implements ChannelSettingsTab {
         iconSlot.setAlignment(Pos.CENTER);
         iconSlot.setStyle(
                 "-fx-background-color: -color-bg-default;" +
-                "-fx-background-radius: 8;" +
+                "-fx-background-radius: 3;" +
                 "-fx-border-color: -color-border-default;" +
-                "-fx-border-radius: 8;" +
+                "-fx-border-radius: 3;" +
                 "-fx-border-width: 1;");
 
         selectedIconLabel = new Label("No icon selected");
@@ -180,9 +180,9 @@ public class IconChannelTab implements ChannelSettingsTab {
         previewPanel.setPadding(new Insets(10, 12, 10, 12));
         previewPanel.setStyle(
                 "-fx-background-color: -color-bg-subtle;" +
-                "-fx-background-radius: 8;" +
+                "-fx-background-radius: 3;" +
                 "-fx-border-color: -color-border-default;" +
-                "-fx-border-radius: 8;" +
+                "-fx-border-radius: 3;" +
                 "-fx-border-width: 1;");
 
         VBox pane = new VBox(8, ChannelSettingsUi.sectionLabel("ICON"), search, hint, gridScroll, previewPanel);

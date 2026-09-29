@@ -93,7 +93,7 @@ public class HostedServersTab implements InstallationSettingsTab {
         row.setStyle(
                 "-fx-background-color: -color-bg-subtle;" +
                 "-fx-border-color: -color-border-default;" +
-                "-fx-border-radius: 8; -fx-background-radius: 8;"
+                "-fx-border-radius: 3; -fx-background-radius: 3;"
         );
 
         StackPane avatar = buildServerAvatar(server);

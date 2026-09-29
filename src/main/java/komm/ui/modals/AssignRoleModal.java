@@ -86,7 +86,7 @@ public class AssignRoleModal extends HBox {
         panel.setPrefWidth(240);
         panel.setMinWidth(240);
         panel.setMaxWidth(240);
-        panel.setStyle("-fx-background-color: rgba(255,255,255,0.03); -fx-background-radius: 12px 0 0 12px;");
+        panel.setStyle("-fx-background-color: rgba(255,255,255,0.03); -fx-background-radius: 4px 0 0 4px;");
 
         // Avatar slot — empty until cache resolves
         avatarSlot = new StackPane();
@@ -182,7 +182,7 @@ public class AssignRoleModal extends HBox {
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
         Button closeBtn = new Button(null, new FontIcon(MaterialDesignC.CLOSE));
-        closeBtn.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE);
+        closeBtn.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE, "modal-close-button");
         closeBtn.setOnAction(e -> App.closeModal());
 
         header.getChildren().addAll(new VBox(2, title, subtitle), spacer, closeBtn);
@@ -248,10 +248,10 @@ public class AssignRoleModal extends HBox {
         HBox row = new HBox(8, icon, nameLbl, spacer, radio);
         row.setAlignment(Pos.CENTER_LEFT);
         row.setPadding(new Insets(7, 10, 7, 10));
-        row.setStyle("-fx-background-radius: 6;");
+        row.setStyle("-fx-background-radius: 3;");
         row.setOnMouseClicked(e -> radio.fire());
-        row.setOnMouseEntered(e -> row.setStyle("-fx-background-color: -color-bg-subtle; -fx-background-radius: 6;"));
-        row.setOnMouseExited(e  -> row.setStyle("-fx-background-radius: 6;"));
+        row.setOnMouseEntered(e -> row.setStyle("-fx-background-color: -color-bg-subtle; -fx-background-radius: 3;"));
+        row.setOnMouseExited(e  -> row.setStyle("-fx-background-radius: 3;"));
         return row;
     }
 
@@ -296,10 +296,10 @@ public class AssignRoleModal extends HBox {
         HBox row = new HBox(10, icon, nameLbl, spacer, checkbox);
         row.setAlignment(Pos.CENTER_LEFT);
         row.setPadding(new Insets(9, 12, 9, 12));
-        row.setStyle("-fx-background-radius: 6;");
+        row.setStyle("-fx-background-radius: 3;");
         row.setOnMouseClicked(e -> checkbox.fire());
-        row.setOnMouseEntered(e -> row.setStyle("-fx-background-color: -color-bg-subtle; -fx-background-radius: 6;"));
-        row.setOnMouseExited(e  -> row.setStyle("-fx-background-radius: 6;"));
+        row.setOnMouseEntered(e -> row.setStyle("-fx-background-color: -color-bg-subtle; -fx-background-radius: 3;"));
+        row.setOnMouseExited(e  -> row.setStyle("-fx-background-radius: 3;"));
         return row;
     }
 
