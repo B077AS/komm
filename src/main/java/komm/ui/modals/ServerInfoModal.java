@@ -234,7 +234,7 @@ public class ServerInfoModal extends HBox {
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
         Button closeButton = new Button(null, new FontIcon(MaterialDesignC.CLOSE));
-        closeButton.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE, "square-icon-button");
+        closeButton.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE);
         closeButton.setOnAction(e -> App.closeModal());
 
         header.getChildren().addAll(new VBox(2, title, subtitle), spacer, closeButton);

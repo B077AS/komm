@@ -258,7 +258,7 @@ public class UserProfileModal extends HBox {
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
         Button closeBtn = new Button(null, new FontIcon(MaterialDesignC.CLOSE));
-        closeBtn.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE, "square-icon-button");
+        closeBtn.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE);
         closeBtn.setOnAction(e -> App.closeModal());
 
         header.getChildren().addAll(title, actionsMenu, spacer, closeBtn);

@@ -282,7 +282,7 @@ public class EditUserModal extends HBox {
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
         closeButton = new Button(null, new FontIcon(MaterialDesignC.CLOSE));
-        closeButton.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE, "square-icon-button");
+        closeButton.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE);
         closeButton.setOnAction(e -> App.closeModal());
 
         header.getChildren().addAll(titleBox, spacer, closeButton);

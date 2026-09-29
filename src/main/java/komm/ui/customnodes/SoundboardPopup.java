@@ -141,7 +141,7 @@ public class SoundboardPopup extends Popup {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
         Button close = new Button(null, new FontIcon(MaterialDesignC.CLOSE));
-        close.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE, "square-icon-button");
+        close.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE);
         close.setFocusTraversable(false);
         close.setOnAction(e -> hide());
         header.getChildren().addAll(title, spacer, close);

@@ -96,7 +96,7 @@ public class CodeMessageModal extends VBox {
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
         Button closeButton = new Button(null, new FontIcon(MaterialDesignC.CLOSE));
-        closeButton.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE, "square-icon-button");
+        closeButton.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE);
         closeButton.setFocusTraversable(false);
         closeButton.setOnAction(e -> App.closeModal());
 

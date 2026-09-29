@@ -492,18 +492,11 @@ Text {
 }
 
 .button.button-circle {
-	-fx-background-radius: 50;
-	-fx-padding: 6px 8px 6px 8px;
+	-fx-background-radius: 3px;
+	-fx-padding: 5px;
 	-fx-content-display: graphic-only;
 	-fx-effect: none;
 	-fx-skin: "javafx.scene.control.skin.ButtonSkin";
-}
-
-/* Opt-out of button-circle's true-circle shape - soft square like the rest of
-   the UI instead (modal close buttons, attachment download, etc). */
-.button.button-circle.square-icon-button {
-	-fx-background-radius: 3px;
-	-fx-padding: 5px;
 }
 
 .button.left-pill {
@@ -2107,8 +2100,8 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 
 .menu-button.button-circle,
 .split-menu-button.button-circle {
-	-fx-background-radius: 50;
-	-fx-padding: 6px 8px 6px 8px;
+	-fx-background-radius: 3px;
+	-fx-padding: 5px;
 	-fx-content-display: graphic-only;
 	-fx-effect: none;
 }
@@ -3316,8 +3309,8 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 }
 
 .toggle-button.button-circle {
-	-fx-background-radius: 50;
-	-fx-padding: 6px 8px 6px 8px;
+	-fx-background-radius: 3px;
+	-fx-padding: 5px;
 	-fx-content-display: graphic-only;
 	-fx-effect: none;
 }
