@@ -53,7 +53,7 @@ public class DownloadInstallationModal extends VBox {
 		headerBox.setPadding(new Insets(10, 10, 0, 0));
 		Region headerFillerRegion = new Region();
 		Button closeButton = new Button(null, new FontIcon(MaterialDesignC.CLOSE));
-		closeButton.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE, "modal-close-button");
+		closeButton.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE, "square-icon-button");
 		closeButton.setOnAction(event -> App.closeModal());
 		headerBox.getChildren().addAll(headerFillerRegion, closeButton);
 		HBox.setHgrow(headerFillerRegion, Priority.ALWAYS);

@@ -61,7 +61,7 @@ public class RedeemBadgeModal extends VBox {
         HBox.setHgrow(headerFiller, Priority.ALWAYS);
 
         Button closeButton = new Button(null, new FontIcon(MaterialDesignC.CLOSE));
-        closeButton.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE, "modal-close-button");
+        closeButton.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE, "square-icon-button");
         closeButton.setOnAction(e -> App.closeModal());
 
         HBox headerBox = new HBox(headerFiller, closeButton);

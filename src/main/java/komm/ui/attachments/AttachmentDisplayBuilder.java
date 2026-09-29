@@ -137,7 +137,7 @@ public class AttachmentDisplayBuilder {
 
         // Download button — handler to be wired once the endpoint is ready
         Button dlBtn = new Button(null, new FontIcon(Feather.DOWNLOAD));
-        dlBtn.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE);
+        dlBtn.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE, "square-icon-button");
         dlBtn.setFocusTraversable(false);
         dlBtn.setOnAction(e -> handleDownload(msg, dlBtn, chip));
 

@@ -499,10 +499,11 @@ Text {
 	-fx-skin: "javafx.scene.control.skin.ButtonSkin";
 }
 
-/* Modal header close (X) buttons - soft square like the rest of the UI, not a circle. */
-.button.button-circle.modal-close-button {
+/* Opt-out of button-circle's true-circle shape - soft square like the rest of
+   the UI instead (modal close buttons, attachment download, etc). */
+.button.button-circle.square-icon-button {
 	-fx-background-radius: 3px;
-	-fx-padding: 4px 5px 4px 5px;
+	-fx-padding: 5px;
 }
 
 .button.left-pill {
@@ -5908,7 +5909,7 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 			rgba(255,255,255,0) 100%);
 }
 
-.toolbar-center { -fx-padding: 0; }
+.toolbar-center { -fx-padding: 7px 0 7px 0; }
 .toolbar-side   { -fx-padding: 0; }
 
 /* =====================================================================

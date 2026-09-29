@@ -83,7 +83,7 @@ public class CreateInstallationModal extends VBox {
         HBox.setHgrow(filler, Priority.ALWAYS);
 
         closeButton = new Button(null, new FontIcon(MaterialDesignC.CLOSE));
-        closeButton.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE, "modal-close-button");
+        closeButton.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE, "square-icon-button");
         closeButton.setOnAction(event -> App.closeModal());
         closeButton.setFocusTraversable(false);
 
