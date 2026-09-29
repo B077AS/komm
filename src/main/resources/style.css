@@ -486,6 +486,7 @@ Text {
 }
 
 .button.button-icon {
+	/*TODO*/
 	-fx-padding: 8px;
 	-fx-content-display: graphic-only;
 	-fx-skin: "javafx.scene.control.skin.ButtonSkin";

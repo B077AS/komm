@@ -29,16 +29,15 @@ import java.util.List;
  *
  * <p>Use these instead of calling {@code chooser.showXxxDialog(...)} directly.
  */
-public final class FileChooserUtil {
+public class FileChooserUtil {
 
     // Fully qualified to avoid clashing with the javafx.application.Platform import above.
     private static final boolean IS_LINUX = com.sun.jna.Platform.isLinux();
 
-    private FileChooserUtil() {}
-
     public static File showOpenDialog(FileChooser chooser, Window owner) {
         boolean wasMaximized = capture();
         try {
+            requestForeground(owner);
             return chooser.showOpenDialog(effectiveOwner(owner));
         } finally {
             restore(wasMaximized);
@@ -48,6 +47,7 @@ public final class FileChooserUtil {
     public static List<File> showOpenMultipleDialog(FileChooser chooser, Window owner) {
         boolean wasMaximized = capture();
         try {
+            requestForeground(owner);
             return chooser.showOpenMultipleDialog(effectiveOwner(owner));
         } finally {
             restore(wasMaximized);
@@ -57,9 +57,27 @@ public final class FileChooserUtil {
     public static File showSaveDialog(FileChooser chooser, Window owner) {
         boolean wasMaximized = capture();
         try {
+            requestForeground(owner);
             return chooser.showSaveDialog(effectiveOwner(owner));
         } finally {
             restore(wasMaximized);
+        }
+    }
+
+    /**
+     * Nudges the owner window to the front before raising a native dialog. Under
+     * {@code mvn javafx:run} the app is a child process forked from the terminal/IDE,
+     * so Windows' focus-stealing prevention can leave a freshly created chooser
+     * window unraised/unfocused (and therefore invisible) if that parent process —
+     * not the app — currently holds the foreground. Bringing the owner to front and
+     * focusing it first makes the chooser inherit an already-active owner instead of
+     * being subject to that restriction. No-op if there is no window (owner may
+     * legitimately be null for an unattached node).
+     */
+    private static void requestForeground(Window owner) {
+        if (owner instanceof Stage stage) {
+            stage.toFront();
+            stage.requestFocus();
         }
     }
 
