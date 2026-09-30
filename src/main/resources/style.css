@@ -2018,8 +2018,8 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 	-fx-background-radius: 3px, 2px;
 	/*-fx-effect: dropshadow(three-pass-box, -color-shadow-default, 8px, 0.6, 0, 2);*/
 	-fx-effect: dropshadow(three-pass-box, -color-shadow-default, 4px, 0.3, 0, 1);
-	-fx-scale-x: 0.85;
-	-fx-scale-y: 0.85;
+	/* Scale-down is applied in code (see ContextMenuScaleFix) — PopupControl
+	   doesn't route -fx-scale-x/-fx-scale-y through here. */
 }
 
 .context-menu>.scroll-arrow {
