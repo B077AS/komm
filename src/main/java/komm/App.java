@@ -27,6 +27,7 @@ import javafx.application.Platform;
 import javafx.concurrent.Worker;
 import komm.ui.chat.ChatSection;
 import komm.ui.pages.DirectMessagePage;
+import komm.ui.utils.ContextMenuIconFix;
 import komm.ui.utils.ContextMenuScaleFix;
 import lombok.Setter;
 import org.kordamp.ikonli.feather.Feather;
@@ -178,6 +179,7 @@ public class App extends Application {
     @Override
     public void start(Stage primaryStage) throws Exception {
         ContextMenuScaleFix.install();
+        ContextMenuIconFix.install();
 
         EmojiInitializer.initialize(EmojiVendor.TWITTER, Launcher.getEmojiDirectory())
                 .thenAccept(ok -> {
