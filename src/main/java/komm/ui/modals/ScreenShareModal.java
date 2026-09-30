@@ -617,7 +617,7 @@ public class ScreenShareModal extends HBox {
 
         Label text = new Label(
                 "Wayland doesn't let apps list screens and windows. When you press " +
-                "Start Sharing, the system dialog will open — pick the screen or " +
+                "Start Sharing, the system dialog will open - pick the screen or " +
                 "application to share there.");
         text.setWrapText(true);
         text.setMaxWidth(420);

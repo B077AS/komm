@@ -380,7 +380,7 @@ public class AudioUserTab implements UserSettingsTab {
         HBox meterHeaderRow = new HBox(8, meterSectionLabel, meterHeaderSpacer, testMicButton);
         meterHeaderRow.setAlignment(Pos.CENTER_LEFT);
 
-        Label meterHint = new Label("Click Test Microphone and speak — you'll hear yourself back, and the bar " +
+        Label meterHint = new Label("Click Test Microphone and speak - you'll hear yourself back, and the bar " +
                 "turns green while others would hear you. Every setting on this page previews live during the " +
                 "test; nothing is kept unless you hit Save Audio. If you're in a voice channel, testing mutes " +
                 "and deafens you until you stop. Use headphones to avoid feedback.");

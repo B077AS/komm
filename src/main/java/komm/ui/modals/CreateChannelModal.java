@@ -275,7 +275,7 @@ public class CreateChannelModal extends HBox {
     private void updateHeaderText(ChannelSettingsTab tab) {
         titleLabel.setText(tab.name());
         String modeVerb = isEditMode ? "Editing" : "Creating";
-        subtitleLabel.setText(tab.description() + " — " + modeVerb + " in " + server.getServerName());
+        subtitleLabel.setText(tab.description() + " - " + modeVerb + " in " + server.getServerName());
     }
 
     // ── Footer ────────────────────────────────────────────────────────────────

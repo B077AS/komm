@@ -81,7 +81,7 @@ public class InstallationCard extends HBox {
 
         String portText = installation.getInstallationPort() != 0
                 ? String.valueOf(installation.getInstallationPort())
-                : "—";
+                : "-";
         VBox portCell = buildStatCell("PORT", portText);
 
         statsArea.getChildren().addAll(hostedCell, statDivider, portCell);

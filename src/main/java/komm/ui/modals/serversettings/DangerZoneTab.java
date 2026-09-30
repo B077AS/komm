@@ -67,7 +67,7 @@ public class DangerZoneTab implements ServerSettingsTab {
     }
 
     @Override public String name() { return "Danger Zone"; }
-    @Override public String description() { return "Irreversible actions — proceed with caution"; }
+    @Override public String description() { return "Irreversible actions - proceed with caution"; }
     @Override public FontIcon icon() { return new FontIcon(MaterialDesignA.ALERT_OCTAGON); }
     @Override public Node getPane() { return pane; }
 
@@ -79,7 +79,7 @@ public class DangerZoneTab implements ServerSettingsTab {
         Label header = sectionLabel("Delete Server");
 
         Label warning = new Label(
-                "Permanently delete this server and everything in it — channels, messages, "
+                "Permanently delete this server and everything in it: channels, messages, "
                         + "attachments, roles, permissions and soundboards. All members are disconnected "
                         + "immediately. This cannot be undone.");
         warning.setWrapText(true);

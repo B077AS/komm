@@ -94,7 +94,7 @@ public class InfoUserTab implements UserSettingsTab {
         HBox titleRow = new HBox(10, name, versionPill);
         titleRow.setAlignment(Pos.CENTER_LEFT);
 
-        Label tagline = new Label("Voice, video and chat — built for your own communities.");
+        Label tagline = new Label("Voice, video and chat - built for your own communities.");
         tagline.setStyle("-fx-font-size: 12px; -fx-text-fill: -color-fg-muted;");
         tagline.setWrapText(true);
 

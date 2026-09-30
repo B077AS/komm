@@ -118,7 +118,7 @@ public class IconChannelTab implements ChannelSettingsTab {
         search.setPromptText("Search 2000+ icons…");
         search.setMaxWidth(Double.MAX_VALUE);
 
-        Label hint = new Label("Showing a random sample — search to find any icon by name");
+        Label hint = new Label("Showing a random sample - search to find any icon by name");
         hint.setStyle("-fx-font-size: 10.5px; -fx-text-fill: -color-fg-subtle;");
 
         // ── Icon grid in a scroll pane ────────────────────────────────────────

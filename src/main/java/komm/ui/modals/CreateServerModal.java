@@ -128,7 +128,7 @@ public class CreateServerModal extends HBox {
 
         Label title = new Label("Create New Server" );
         title.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;" );
-        Label subtitle = new Label("Configure your server below — avatar is optional." );
+        Label subtitle = new Label("Configure your server below - avatar is optional." );
         subtitle.setStyle("-fx-font-size: 11px; -fx-text-fill: -color-fg-muted;" );
 
         VBox titleGroup = new VBox(2, title, subtitle);

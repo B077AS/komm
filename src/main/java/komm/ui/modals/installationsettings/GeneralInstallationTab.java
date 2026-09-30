@@ -90,10 +90,10 @@ public class GeneralInstallationTab implements InstallationSettingsTab {
     private ScrollPane buildPane() {
         nameField.setPromptText("Loading…");
         ipField.setPromptText("Loading…");
-        apiPortField.setPromptText("—");
-        signalPortField.setPromptText("—");
-        tcpPortField.setPromptText("—");
-        mediaPortField.setPromptText("—");
+        apiPortField.setPromptText("-");
+        signalPortField.setPromptText("-");
+        tcpPortField.setPromptText("-");
+        mediaPortField.setPromptText("-");
 
         VBox content = new VBox(20);
         content.setPadding(new Insets(20, 28, 20, 28));
@@ -139,12 +139,12 @@ public class GeneralInstallationTab implements InstallationSettingsTab {
     // ── Populate ──────────────────────────────────────────────────────────────
 
     private void populate(InstallationDetailSummary d) {
-        nameField.setText(d.getInstallationName() != null ? d.getInstallationName() : "—");
-        ipField.setText(d.getIpAddress() != null && !d.getIpAddress().isBlank() ? d.getIpAddress() : "—");
-        apiPortField.setText(d.getInstallationPort() != 0 ? String.valueOf(d.getInstallationPort()) : "—");
-        signalPortField.setText(d.getSignalPort() != 0 ? String.valueOf(d.getSignalPort()) : "—");
-        tcpPortField.setText(d.getTcpPort() != 0 ? String.valueOf(d.getTcpPort()) : "—");
-        mediaPortField.setText(d.getMediaPort() != 0 ? String.valueOf(d.getMediaPort()) : "—");
+        nameField.setText(d.getInstallationName() != null ? d.getInstallationName() : "-");
+        ipField.setText(d.getIpAddress() != null && !d.getIpAddress().isBlank() ? d.getIpAddress() : "-");
+        apiPortField.setText(d.getInstallationPort() != 0 ? String.valueOf(d.getInstallationPort()) : "-");
+        signalPortField.setText(d.getSignalPort() != 0 ? String.valueOf(d.getSignalPort()) : "-");
+        tcpPortField.setText(d.getTcpPort() != 0 ? String.valueOf(d.getTcpPort()) : "-");
+        mediaPortField.setText(d.getMediaPort() != 0 ? String.valueOf(d.getMediaPort()) : "-");
         statusPlaceholder.getChildren().setAll(buildStatusBadge(d.getStatus()));
     }
 

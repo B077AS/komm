@@ -6647,6 +6647,20 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 	-fx-text-fill: -color-fg-subtle;
 }
 
+.soundboard-adv-card {
+	-fx-background-color: -color-bg-subtle;
+	-fx-background-radius: 6px;
+	-fx-border-color: -color-border-muted;
+	-fx-border-width: 1px;
+	-fx-border-radius: 6px;
+}
+
+.soundboard-adv-title {
+	-fx-font-size: 13px;
+	-fx-font-weight: bold;
+	-fx-text-fill: -color-fg-default;
+}
+
 .friend-card-row {
 	-fx-background-color: -color-bg-subtle;
 	-fx-background-radius: 3px;

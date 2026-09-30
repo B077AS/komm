@@ -210,7 +210,7 @@ public class AddSoundModal extends VBox {
         HBox emojiRow = new HBox(10, emojiTile, clearEmojiLabel);
         emojiRow.setAlignment(Pos.CENTER_LEFT);
 
-        Label emojiHint = new Label("Optional — shown as an icon before the sound name in the slot");
+        Label emojiHint = new Label("Optional - shown as an icon before the sound name in the slot");
         emojiHint.setStyle("-fx-font-size: 10.5px; -fx-text-fill: -color-fg-subtle;");
 
         VBox emojiSection = new VBox(7, sectionLabel("EMOJI (OPTIONAL)"), emojiRow, emojiHint);
