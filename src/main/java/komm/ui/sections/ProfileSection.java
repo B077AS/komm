@@ -432,7 +432,7 @@ public class ProfileSection extends VBox {
     private void updateToggleButtonState(Button button, boolean enabled, Ikon onIcon, Ikon offIcon) {
         if (button == null) return;
         FontIcon icon = IconColorUtil.colored(enabled ? onIcon : offIcon,
-                enabled ? "-color-fg-default" : "-color-accent-emphasis", 20);
+                enabled ? "-color-fg-default" : "rgb(225, 90, 90)", 20);
         button.setGraphic(icon);
         button.getStyleClass().remove("toolbar-button-base");
         if (enabled) {

@@ -6261,6 +6261,18 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 	-fx-border-color: rgba(160, 25, 25, 0.45);
 }
 
+/* .button.flat:hover resets background/border on any flat button; these
+   selectors need to out-specify it so hover keeps the toolbar bg + border. */
+.button.flat.audio-toggle-bordered:hover {
+	-fx-background-color: derive(-color-bg-default, 4%);
+	-fx-border-color: -color-accent-7;
+}
+
+.button.flat.audio-toggle-bordered.custom-toolbar-button-muted:hover {
+	-fx-background-color: rgba(160, 25, 25, 0.28);
+	-fx-border-color: rgb(225, 90, 90);
+}
+
 /* ---- Red icon color rules (restored) ---- */
 
 /* Muted button icons: red */
