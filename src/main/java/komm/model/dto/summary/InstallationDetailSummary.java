@@ -25,4 +25,6 @@ public class InstallationDetailSummary {
     // Only non-null for the owner while status is NOT_VERIFIED — the hub clears it in
     // the DB the moment the server activates, same as it always has.
     private String verificationCode;
+    private String osInfo;
+    private String serverVersion;
 }

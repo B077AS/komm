@@ -5,7 +5,6 @@ import javafx.animation.ScaleTransition;
 import javafx.concurrent.Service;
 import javafx.concurrent.Task;
 import javafx.geometry.Insets;
-import javafx.geometry.Orientation;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.*;
@@ -38,11 +37,13 @@ import java.util.List;
 import java.util.function.Consumer;
 
 /**
- * A single installation rendered as a compact status-page widget: a live status ring, a
- * headline uptime percentage, and a 90-day uptime bar strip (same idea as a big-tech status
- * page) fed by {@code GET /api/installations/{id}/uptime}. The bars/KPI load asynchronously
- * on top of the synchronously-available {@link InstallationSummary}, so the card never blocks
- * on the network to render.
+ * A single installation rendered as a dashboard-tile widget: an identity header (status ring,
+ * name, IP, status badge, options), a bordered 4-column stat tile grid (servers hosted / last
+ * seen / OS platform / komm-server version — the OS and version are reported by the JAR on every
+ * hub connect), and a boxed "90-DAY UPTIME" panel (title + live percentage over a bar strip, same
+ * idea as a big-tech status page) fed by {@code GET /api/installations/{id}/uptime}. The uptime %
+ * and bars load asynchronously on top of the synchronously-available {@link InstallationSummary},
+ * so the card never blocks on the network to render.
  */
 @Slf4j
 public class InstallationCard extends VBox {
@@ -53,11 +54,12 @@ public class InstallationCard extends VBox {
     private static final int RANGE_DAYS = 90;
     private static final int RING_SIZE = 56;
     private static final double BAR_HEIGHT = 28;
+    // Matches the subtle rounding every other card/panel in the app uses (see .installation-status-card).
+    private static final int CORNER_RADIUS = 3;
 
     private MenuButton optionsBtn;
     private HBox header;
     private Label uptimePercentLabel;
-    private Label uptimeSubLabel;
     private HBox barStrip;
     private final List<Region> dayBars = new ArrayList<>();
     private Label lastSeenValue;
@@ -87,13 +89,10 @@ public class InstallationCard extends VBox {
 
     private void initialize() {
         header = buildHeader();
-        HBox statsFooter = buildStatsFooter();
-        barStrip = buildBarSkeleton();
-        HBox rangeLabels = buildRangeLabels();
+        GridPane statsGrid = buildStatsGrid();
+        VBox uptimePanel = buildUptimePanel();
 
-        VBox barBlock = new VBox(6, barStrip, rangeLabels);
-
-        getChildren().addAll(header, statsFooter, barBlock);
+        getChildren().addAll(header, statsGrid, uptimePanel);
         setupInteractions();
 
         if (installation.getStatus() == InstallationSummary.InstallationStatus.OFFLINE) {
@@ -102,36 +101,27 @@ public class InstallationCard extends VBox {
         }
     }
 
-    // ── Header: status ring + identity + uptime KPI + options ─────────────────
+    // ── Header: status ring + identity + status badge + options ────────────────
 
     private HBox buildHeader() {
         StackPane ring = buildStatusRing();
 
-        VBox identity = new VBox(6);
+        VBox identity = new VBox(4);
         identity.setAlignment(Pos.CENTER_LEFT);
-        identity.setMinWidth(140);
         HBox.setHgrow(identity, Priority.ALWAYS);
 
         Label nameLabel = new Label(installation.getInstallationName());
         nameLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: -color-fg-default;");
         nameLabel.setMaxWidth(Double.MAX_VALUE);
 
-        HBox metaRow = new HBox(8, buildStatusBadge(), buildChip(ipText(), "-color-accent-subtle", "-color-accent-fg"));
-        metaRow.setAlignment(Pos.CENTER_LEFT);
+        Label ipLabel = new Label(ipText());
+        ipLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: -color-fg-subtle;");
 
-        identity.getChildren().addAll(nameLabel, metaRow);
-
-        VBox kpi = new VBox(2);
-        kpi.setAlignment(Pos.CENTER_RIGHT);
-        uptimePercentLabel = new Label("—");
-        uptimePercentLabel.setStyle("-fx-font-size: 15px; -fx-font-weight: bold; -fx-text-fill: -color-fg-default;");
-        uptimeSubLabel = new Label("loading…");
-        uptimeSubLabel.setStyle("-fx-font-size: 10px; -fx-font-weight: bold; -fx-text-fill: -color-fg-subtle;");
-        kpi.getChildren().addAll(uptimePercentLabel, uptimeSubLabel);
+        identity.getChildren().addAll(nameLabel, ipLabel);
 
         optionsBtn = createOptionsMenu();
 
-        HBox row = new HBox(14, ring, identity, kpi, optionsBtn);
+        HBox row = new HBox(14, ring, identity, buildStatusBadge(), optionsBtn);
         row.setAlignment(Pos.CENTER_LEFT);
         return row;
     }
@@ -172,17 +162,6 @@ public class InstallationCard extends VBox {
         HBox badge = new HBox(5, dot, lbl);
         badge.setAlignment(Pos.CENTER_LEFT);
         return badge;
-    }
-
-    private HBox buildChip(String text, String bg, String fg) {
-        Label lbl = new Label(text);
-        lbl.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: " + fg + ";");
-        HBox chip = new HBox(lbl);
-        chip.setAlignment(Pos.CENTER_LEFT);
-        chip.setPadding(new Insets(2, 8, 2, 8));
-        chip.setMaxWidth(Region.USE_PREF_SIZE);
-        chip.setStyle("-fx-background-color: " + bg + "; -fx-background-radius: 3px;");
-        return chip;
     }
 
     private String ipText() {
@@ -240,6 +219,33 @@ public class InstallationCard extends VBox {
         return bar;
     }
 
+    // ── Uptime panel: boxed "90-DAY UPTIME" title + live percentage + bars ─────
+
+    private VBox buildUptimePanel() {
+        Label title = new Label(RANGE_DAYS + "-DAY UPTIME");
+        title.setStyle("-fx-font-size: 10px; -fx-font-weight: bold; -fx-letter-spacing: 0.08em; -fx-text-fill: -color-fg-subtle;");
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        uptimePercentLabel = new Label("—");
+        uptimePercentLabel.setStyle("-fx-font-size: 15px; -fx-font-weight: bold; -fx-text-fill: -color-fg-default;");
+
+        HBox titleRow = new HBox(8, title, spacer, uptimePercentLabel);
+        titleRow.setAlignment(Pos.CENTER_LEFT);
+
+        VBox panel = new VBox(10, titleRow, barStrip = buildBarSkeleton(), buildRangeLabels());
+        panel.setPadding(new Insets(12, 14, 12, 14));
+        panel.setStyle(
+                "-fx-background-color: -color-bg-subtle;" +
+                        "-fx-border-color: -color-border-default;" +
+                        "-fx-border-width: 1px;" +
+                        "-fx-border-radius: " + CORNER_RADIUS + "px;" +
+                        "-fx-background-radius: " + CORNER_RADIUS + "px;"
+        );
+        return panel;
+    }
+
     private HBox buildRangeLabels() {
         Label from = new Label(RANGE_DAYS + " days ago");
         from.setStyle("-fx-font-size: 9.5px; -fx-text-fill: -color-fg-subtle;");
@@ -255,8 +261,6 @@ public class InstallationCard extends VBox {
     private void applyUptime(InstallationUptimeSummary summary) {
         double pct = summary.getUptimePercentage();
         uptimePercentLabel.setText(formatPercent(pct));
-        uptimePercentLabel.setStyle("-fx-font-size: 15px; -fx-font-weight: bold; -fx-text-fill: -color-fg-default;");
-        uptimeSubLabel.setText("uptime · " + summary.getRangeDays() + "d");
 
         List<InstallationUptimeDayPoint> days = summary.getDays() != null ? summary.getDays() : List.of();
         int padCount = Math.max(0, RANGE_DAYS - days.size());
@@ -317,33 +321,58 @@ public class InstallationCard extends VBox {
         return tooltip;
     }
 
-    // ── Footer stats (servers / last seen) ──────────────────────────────────────
+    // ── Stats tile grid (servers / last seen / OS / server version) ────────────
 
-    private HBox buildStatsFooter() {
-        VBox serversCell = buildStatCell("SERVERS", String.valueOf(installation.getHostedServersCount()));
-        VBox lastSeenCell = buildStatCell("LAST SEEN", "—");
-        lastSeenValue = (Label) lastSeenCell.getChildren().get(0);
+    private GridPane buildStatsGrid() {
+        GridPane grid = new GridPane();
+        grid.setStyle(
+                "-fx-border-color: -color-border-default;" +
+                        "-fx-border-width: 1px;" +
+                        "-fx-border-radius: " + CORNER_RADIUS + "px;"
+        );
+        for (int i = 0; i < 4; i++) {
+            ColumnConstraints cc = new ColumnConstraints();
+            cc.setPercentWidth(25);
+            cc.setHgrow(Priority.ALWAYS);
+            grid.getColumnConstraints().add(cc);
+        }
 
-        HBox row = new HBox(16, serversCell, vDivider(), lastSeenCell);
-        row.setAlignment(Pos.CENTER_LEFT);
-        return row;
+        VBox lastSeenTile = buildTile("LAST SEEN", "—", true);
+        lastSeenValue = (Label) lastSeenTile.getChildren().get(1);
+
+        grid.add(buildTile("SERVERS", String.valueOf(installation.getHostedServersCount()), true), 0, 0);
+        grid.add(lastSeenTile, 1, 0);
+        grid.add(buildTile("OS", osText(), true), 2, 0);
+        grid.add(buildTile("VERSION", versionText(), false), 3, 0);
+
+        return grid;
     }
 
-    private VBox buildStatCell(String labelText, String valueText) {
-        Label value = new Label(valueText);
-        value.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: -color-fg-default;");
+    private VBox buildTile(String labelText, String valueText, boolean rightBorder) {
         Label label = new Label(labelText);
         label.setStyle("-fx-font-size: 8.5px; -fx-font-weight: bold; -fx-text-fill: -color-fg-subtle;");
-        VBox cell = new VBox(2, value, label);
-        cell.setAlignment(Pos.CENTER_LEFT);
-        return cell;
+        Label value = new Label(valueText);
+        value.setStyle("-fx-font-size: 13px; -fx-font-weight: bold; -fx-text-fill: -color-fg-default;");
+        value.setMaxWidth(Double.MAX_VALUE);
+
+        VBox tile = new VBox(3, label, value);
+        tile.setPadding(new Insets(9, 10, 9, 10));
+        tile.setMaxWidth(Double.MAX_VALUE);
+        if (rightBorder) {
+            tile.setStyle("-fx-border-color: -color-border-default; -fx-border-width: 0 1 0 0;");
+        }
+        GridPane.setHgrow(tile, Priority.ALWAYS);
+        return tile;
     }
 
-    private Separator vDivider() {
-        Separator s = new Separator(Orientation.VERTICAL);
-        s.setMaxHeight(24);
-        s.setOpacity(0.6);
-        return s;
+    private String osText() {
+        return installation.getOsInfo() != null && !installation.getOsInfo().isBlank()
+                ? installation.getOsInfo() : "Unknown";
+    }
+
+    private String versionText() {
+        return installation.getServerVersion() != null && !installation.getServerVersion().isBlank()
+                ? "v" + installation.getServerVersion() : "Unknown";
     }
 
     // ── Formatting helpers ─────────────────────────────────────────────────────
@@ -393,8 +422,7 @@ public class InstallationCard extends VBox {
         svc.setOnFailed(e -> {
             log.warn("Failed to load uptime for installation {}: {}",
                     installation.getInstallationId(), svc.getException().getMessage());
-            uptimePercentLabel.setText("—");
-            uptimeSubLabel.setText("no data");
+            uptimePercentLabel.setText("No data");
             if (onUptimeResolved != null) onUptimeResolved.accept(null);
         });
         svc.start();
