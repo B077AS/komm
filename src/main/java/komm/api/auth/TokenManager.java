@@ -1,9 +1,12 @@
 package komm.api.auth;
 
+import java.util.function.Consumer;
+
 import komm.api.HttpClientWrapper;
 import komm.api.HttpStatusException;
 import komm.model.dto.response.AuthResponse;
 import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -15,6 +18,8 @@ public class TokenManager {
     private volatile boolean isRefreshing = false;
 
     private final HttpClientWrapper httpClient;
+    @Setter
+    private volatile Consumer<String> onRefreshTokenChanged;
 
     public TokenManager(HttpClientWrapper httpClient) {
         this.httpClient = httpClient;
@@ -30,6 +35,7 @@ public class TokenManager {
             this.accessToken = authResponse.getAccessToken();
             this.refreshToken = authResponse.getRefreshToken();
             log.debug("Tokens refreshed successfully");
+            if (onRefreshTokenChanged != null) onRefreshTokenChanged.accept(this.refreshToken);
         } catch (HttpStatusException e) {
             // Server explicitly rejected the refresh token — it's actually invalid, so drop it.
             if (e.getStatusCode() == 401 || e.getStatusCode() == 403) {

@@ -78,7 +78,7 @@ public class ConfirmationModal extends VBox {
             App.closeModal();
         });
 
-        buttonsBox.getChildren().addAll(confirmButton, cancelButton);
+        buttonsBox.getChildren().addAll(cancelButton, confirmButton);
 
         VBox.setVgrow(buttonsBox, Priority.ALWAYS);
         this.getChildren().addAll(headerBox, upperBox, buttonsBox);
