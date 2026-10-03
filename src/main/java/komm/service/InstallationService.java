@@ -9,6 +9,7 @@ import komm.model.dto.request.JoinInstallationRequest;
 import komm.model.dto.summary.InstallationAccessTokenSummary;
 import komm.model.dto.summary.InstallationDetailSummary;
 import komm.model.dto.summary.InstallationSummary;
+import komm.model.dto.summary.InstallationUptimeSummary;
 import komm.model.dto.summary.ServerSummary;
 
 import java.lang.reflect.Type;
@@ -49,6 +50,13 @@ public class InstallationService {
         return tokenManager.executeWithRetry(() ->
                 httpClient.get("/api/installations/" + installationId,
                         tokenManager.getAccessToken(), InstallationDetailSummary.class)
+        );
+    }
+
+    public InstallationUptimeSummary getInstallationUptime(UUID installationId, int days) throws Exception {
+        return tokenManager.executeWithRetry(() ->
+                httpClient.get("/api/installations/" + installationId + "/uptime?days=" + days,
+                        tokenManager.getAccessToken(), InstallationUptimeSummary.class)
         );
     }
 

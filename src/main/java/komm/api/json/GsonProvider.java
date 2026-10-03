@@ -8,6 +8,7 @@ import komm.model.dto.summary.ChannelUserSummary;
 import komm.model.dto.summary.MainUserSummary;
 import komm.model.dto.summary.ServerSummary;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
@@ -21,6 +22,12 @@ public final class GsonProvider {
             .registerTypeAdapter(LocalDateTime.class,
                     (JsonDeserializer<LocalDateTime>) (json, typeOfT, context) ->
                             LocalDateTime.parse(json.getAsString(), DateTimeFormatter.ISO_LOCAL_DATE_TIME))
+            .registerTypeAdapter(LocalDate.class,
+                    (JsonSerializer<LocalDate>) (src, typeOfSrc, context) ->
+                            context.serialize(src.format(DateTimeFormatter.ISO_LOCAL_DATE)))
+            .registerTypeAdapter(LocalDate.class,
+                    (JsonDeserializer<LocalDate>) (json, typeOfT, context) ->
+                            LocalDate.parse(json.getAsString(), DateTimeFormatter.ISO_LOCAL_DATE))
             .registerTypeAdapter(ServerSummary.class, new ServerSummaryDeserializer())
             .registerTypeAdapter(MainUserSummary.class, new UserDeserializer())
             .registerTypeAdapter(ChannelUserDeserializer.class, new ChannelUserDeserializer())
