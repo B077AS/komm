@@ -137,31 +137,31 @@
         <dependency>
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-classic</artifactId>
-            <version>1.5.34</version>
+            <version>1.6.4</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/dev.onvoid.webrtc/webrtc-java -->
         <dependency>
             <groupId>dev.onvoid.webrtc</groupId>
             <artifactId>webrtc-java</artifactId>
-            <version>0.17.0</version>
+            <version>0.19.0</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/org.bouncycastle/bcpkix-jdk18on -->
         <dependency>
             <groupId>org.bouncycastle</groupId>
             <artifactId>bcpkix-jdk18on</artifactId>
-            <version>1.84</version>
+            <version>1.86</version>
         </dependency>
         <!--https://mvnrepository.com/artifact/org.springframework/spring-websocket -->
         <dependency>
             <groupId>org.springframework</groupId>
             <artifactId>spring-websocket</artifactId>
-            <version>7.0.7</version>
+            <version>7.0.9</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/org.springframework/spring-messaging -->
         <dependency>
             <groupId>org.springframework</groupId>
             <artifactId>spring-messaging</artifactId>
-            <version>7.0.7</version>
+            <version>7.0.9</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/io.github.b077as.emojifx/emoji -->
         <dependency>
@@ -175,9 +175,7 @@
             <artifactId>richtextfx</artifactId>
             <version>0.11.7</version>
         </dependency>
-        <!-- https://mvnrepository.com/artifact/org.fxmisc.flowless/flowless
-             Used directly by komm.ui.chat.virtual for the virtualized DM message list
-             (also a transitive dep of richtextfx; pinned here because we depend on it). -->
+        <!-- https://mvnrepository.com/artifact/org.fxmisc.flowless/flowless -->
         <dependency>
             <groupId>org.fxmisc.flowless</groupId>
             <artifactId>flowless</artifactId>
@@ -305,22 +303,16 @@
                     <version>${javafx.version}</version>
                     <classifier>linux</classifier>
                 </dependency>
-                <!-- Stock upstream natives as of webrtc-java 0.17.0 — the Windows WGC
-                     ABI mismatch, the libyuv crop bug and the Wayland/PipeWire portal
-                     picker are all fixed upstream now, so the custom B077AS/webrtc-java
-                     fork build (fix/windows-desktop-capture, x11-pipewire-0.14.0) is no
-                     longer needed. Pinned to 0.17.0 — 0.18.0 broke on Linux; do not bump
-                     without confirming a Linux run first. -->
                 <dependency>
                     <groupId>dev.onvoid.webrtc</groupId>
                     <artifactId>webrtc-java</artifactId>
-                    <version>0.17.0</version>
+                    <version>0.19.0</version>
                     <classifier>windows-x86_64</classifier>
                 </dependency>
                 <dependency>
                     <groupId>dev.onvoid.webrtc</groupId>
                     <artifactId>webrtc-java</artifactId>
-                    <version>0.17.0</version>
+                    <version>0.19.0</version>
                     <classifier>linux-x86_64</classifier>
                 </dependency>
             </dependencies>
