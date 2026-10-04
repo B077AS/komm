@@ -78,9 +78,9 @@ public class VerificationCodeModal extends VBox {
         codeCard.setPadding(new Insets(12, 10, 12, 14));
         codeCard.setStyle(
                 "-fx-background-color: -color-bg-subtle;" +
-                "-fx-background-radius: 8;" +
+                "-fx-background-radius: 3;" +
                 "-fx-border-color: -color-border-default;" +
-                "-fx-border-radius: 8;" +
+                "-fx-border-radius: 3;" +
                 "-fx-border-width: 1;");
 
         FontIcon infoIcon = new FontIcon(MaterialDesignI.INFORMATION_OUTLINE);

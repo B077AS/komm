@@ -52,18 +52,19 @@ public class SoundboardPopup extends Popup {
     // Fully qualified to avoid clashing with the javafx.application.Platform import.
     private static final boolean IS_LINUX = com.sun.jna.Platform.isLinux();
 
-    private static final int SLOT_COUNT = 16;
+    private static final int SLOT_COUNT = 20;
     private static final int COLS = 4;
-    private static final double SLOT_W = 116, SLOT_H = 56;
+    private static final double SLOT_W = 132, SLOT_H = 56;
 
-    private static final double WIN_W = 680;
-    private static final double WIN_H = 400;
+    private static final double WIN_W = 736;
+    private static final double WIN_H = 410;
 
     private enum Tab { SERVER, MINE, ADVANCED }
 
     private final UUID channelId;
     private final StackPane content = new StackPane();
     private final VBox navBox = new VBox(2);
+    private final Label subtitle = new Label();
     private Tab currentTab;
     private boolean showingGrid;
 
@@ -97,7 +98,7 @@ public class SoundboardPopup extends Popup {
         VBox side = new VBox(0);
         side.setMinWidth(150);
         side.setMaxWidth(150);
-        side.setStyle("-fx-background-color: rgba(255,255,255,0.03); -fx-background-radius: 12px 0 0 12px;");
+        side.setStyle("-fx-background-color: rgba(255,255,255,0.03); -fx-background-radius: 4px 0 0 4px;");
 
         Label title = new Label("SOUNDBOARD");
         title.setStyle("-fx-font-size: 10px; -fx-font-weight: bold; -fx-text-fill: -color-fg-subtle; -fx-padding: 14 0 6 14;");
@@ -133,9 +134,8 @@ public class SoundboardPopup extends Popup {
         VBox col = new VBox(0);
         HBox.setHgrow(col, Priority.ALWAYS);
 
-        HBox header = new HBox();
-        header.setAlignment(Pos.CENTER_LEFT);
-        header.setPadding(new Insets(14, 12, 10, 20));
+        HBox titleRow = new HBox();
+        titleRow.setAlignment(Pos.CENTER_LEFT);
         Label title = new Label("Soundboard");
         title.setStyle("-fx-font-size: 15px; -fx-font-weight: bold;");
         Region spacer = new Region();
@@ -144,11 +144,19 @@ public class SoundboardPopup extends Popup {
         close.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE);
         close.setFocusTraversable(false);
         close.setOnAction(e -> hide());
-        header.getChildren().addAll(title, spacer, close);
+        titleRow.getChildren().addAll(title, spacer, close);
+
+        subtitle.setStyle("-fx-text-fill: -color-fg-subtle; -fx-font-size: 11px;");
+        subtitle.setWrapText(true);
+        subtitle.setManaged(false);
+        subtitle.setVisible(false);
+
+        VBox header = new VBox(4, titleRow, subtitle);
+        header.setPadding(new Insets(14, 12, 4, 20));
 
         StackPane.setAlignment(content, Pos.TOP_LEFT);
         VBox.setVgrow(content, Priority.ALWAYS);
-        content.setPadding(new Insets(4, 16, 16, 16));
+        content.setPadding(new Insets(12, 16, 16, 16));
 
         col.getChildren().addAll(header, content);
         return col;
@@ -220,8 +228,8 @@ public class SoundboardPopup extends Popup {
             }
         }
         setContent(grid, manage
-                ? "Server sounds — click to play, right-click to edit or remove, + to add (max 20 MB)"
-                : "Server sounds — click to play");
+                ? "Click to play - right-click to edit/remove - + to add (max 20 MB)"
+                : "Click to play");
         showingGrid = true;
     }
 
@@ -282,7 +290,7 @@ public class SoundboardPopup extends Popup {
             }
         }
 
-        setContent(grid, "Your private sounds — stored locally on this device, available on every server. Right-click to edit or remove.");
+        setContent(grid, "Stored on this device, available everywhere - right-click to edit/remove");
         showingGrid = true;
     }
 
@@ -413,9 +421,18 @@ public class SoundboardPopup extends Popup {
     // ── Advanced tab ───────────────────────────────────────────────────────────
 
     private void showAdvancedTab() {
-        VBox box = new VBox(18);
-        box.setPadding(new Insets(8, 4, 4, 4));
+        subtitle.setManaged(false);
+        subtitle.setVisible(false);
 
+        HBox volumeCard = buildVolumeCard();
+        HBox stopCard = buildStopCard();
+        HBox backupCard = buildBackupCard();
+
+        VBox pane = new VBox(10, volumeCard, stopCard, backupCard);
+        content.getChildren().setAll(pane);
+    }
+
+    private HBox buildVolumeCard() {
         double initialPct = Math.min(100.0, UserSettings.getInstance().getSoundboardVolume() * 100);
         Slider slider = new Slider(0, 100, initialPct);
         slider.setShowTickLabels(true);
@@ -423,54 +440,84 @@ public class SoundboardPopup extends Popup {
         slider.setMajorTickUnit(25);
         slider.setBlockIncrement(5);
         slider.setFocusTraversable(false);
+        HBox.setHgrow(slider, Priority.ALWAYS);
 
         Label valLabel = new Label(Math.round(slider.getValue()) + "%");
-        valLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: -color-fg-muted;");
-        valLabel.setMinWidth(36);
-        valLabel.setPrefWidth(36);
+        valLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: -color-fg-muted; -fx-font-weight: bold;");
+        valLabel.setMinWidth(38);
+        valLabel.setAlignment(Pos.CENTER_RIGHT);
 
         slider.valueProperty().addListener((o, a, b) -> {
             valLabel.setText(Math.round(b.doubleValue()) + "%");
             App.getWebrtcRoomClient().setSoundboardVolume((float) (b.doubleValue() / 100.0));
         });
 
-        Label volHint = new Label("Your own setting — applies to every soundboard you hear, including your own. Other members can pick their own level.");
-        volHint.setStyle("-fx-text-fill: -color-fg-subtle; -fx-font-size: 11px;");
-        volHint.setWrapText(true);
-
         HBox sliderRow = new HBox(10, slider, valLabel);
         sliderRow.setAlignment(Pos.CENTER_LEFT);
-        HBox.setHgrow(slider, Priority.ALWAYS);
 
-        Button stop = new Button("Stop my sounds", new FontIcon(MaterialDesignS.STOP));
-        stop.getStyleClass().addAll(Styles.DANGER, Styles.SMALL);
+        return advCard("Playback Volume",
+                "Your own setting - applies to every soundboard you hear, including your own.",
+                sliderRow, null);
+    }
+
+    private HBox buildStopCard() {
+        Button stop = new Button("Stop", new FontIcon(MaterialDesignS.STOP));
+        stop.getStyleClass().addAll(Styles.ACCENT, Styles.SMALL);
         stop.setFocusTraversable(false);
         stop.setOnAction(e -> {
             App.getServices().installation().getWsClient().send(WsMessageType.SOUNDBOARD_STOP, Map.of());
             if (App.getUser() != null) App.getWebrtcRoomClient().stopSoundboardsBy(App.getUser().getUserId());
         });
 
-        Button exportBtn = new Button("Export ZIP", new FontIcon(MaterialDesignF.FILE_EXPORT));
+        return advCard("Stop Playback",
+                "Silences every soundboard sound you've triggered, for everyone in the channel, right now.",
+                null, stop);
+    }
+
+    private HBox buildBackupCard() {
+        Button exportBtn = new Button("Export", new FontIcon(MaterialDesignF.FILE_EXPORT));
         exportBtn.getStyleClass().add(Styles.SMALL);
         exportBtn.setFocusTraversable(false);
         exportBtn.setOnAction(e -> exportSoundboards());
 
-        Button importBtn = new Button("Import ZIP", new FontIcon(MaterialDesignF.FILE_IMPORT));
+        Button importBtn = new Button("Import", new FontIcon(MaterialDesignF.FILE_IMPORT));
         importBtn.getStyleClass().add(Styles.SMALL);
         importBtn.setFocusTraversable(false);
         importBtn.setOnAction(e -> importSoundboards());
 
-        Label transferHint = new Label("Back up or share your personal sounds. Export packs all slots into a ZIP; import merges a ZIP into your current slots (imported slot overrides local).");
-        transferHint.setStyle("-fx-text-fill: -color-fg-subtle; -fx-font-size: 11px;");
-        transferHint.setWrapText(true);
-
         HBox transferRow = new HBox(8, importBtn, exportBtn);
 
-        box.getChildren().addAll(
-                new VBox(6, smallLabel("Soundboard volume"), sliderRow, volHint),
-                new VBox(6, smallLabel("Playback"), stop),
-                new VBox(6, smallLabel("Personal sounds"), transferRow, transferHint));
-        content.getChildren().setAll(box);
+        return advCard("Backup & Restore",
+                "Export packs your personal slots into a ZIP; import merges one back in (imported slots override local).",
+                transferRow, null);
+    }
+
+    /**
+     * One settings row: a title + description that grow to fill the row, and
+     * optionally an inline control ({@code inlineControl}, stacked under the
+     * description - e.g. a slider or a button pair) or a standalone action
+     * ({@code trailingControl}, pinned to the row's trailing edge and vertically
+     * centered - e.g. the Stop button) but never both.
+     */
+    private HBox advCard(String title, String description, Node inlineControl, Node trailingControl) {
+        Label titleLabel = new Label(title);
+        titleLabel.getStyleClass().add("soundboard-adv-title");
+
+        Label descLabel = new Label(description);
+        descLabel.setStyle("-fx-text-fill: -color-fg-subtle; -fx-font-size: 11px;");
+        descLabel.setWrapText(true);
+
+        VBox textCol = new VBox(4, titleLabel, descLabel);
+        if (inlineControl != null) textCol.getChildren().add(inlineControl);
+        HBox.setHgrow(textCol, Priority.ALWAYS);
+
+        HBox card = trailingControl != null
+                ? new HBox(14, textCol, trailingControl)
+                : new HBox(14, textCol);
+        card.getStyleClass().add("soundboard-adv-card");
+        card.setAlignment(Pos.CENTER_LEFT);
+        card.setPadding(new Insets(14));
+        return card;
     }
 
     // ── Slot widgets ───────────────────────────────────────────────────────────
@@ -483,11 +530,10 @@ public class SoundboardPopup extends Popup {
     }
 
     private void setContent(GridPane grid, String hintText) {
-        Label hint = new Label(hintText);
-        hint.setStyle("-fx-text-fill: -color-fg-subtle; -fx-font-size: 11px; -fx-padding: 0 0 8 0;");
-        hint.setWrapText(true);
-        VBox box = new VBox(2, hint, grid);
-        content.getChildren().setAll(box);
+        subtitle.setText(hintText);
+        subtitle.setManaged(true);
+        subtitle.setVisible(true);
+        content.getChildren().setAll(grid);
     }
 
     private StackPane filledSlot(String name, String emoji, boolean playable,
@@ -526,6 +572,7 @@ public class SoundboardPopup extends Popup {
         slot.setMaxSize(SLOT_W, SLOT_H);
         slot.getStyleClass().add("soundboard-slot");
         slot.setFocusTraversable(false);
+        NotchShape.apply(slot);
 
         if (!playable) {
             slot.setOpacity(0.45);
@@ -572,12 +619,6 @@ public class SoundboardPopup extends Popup {
             b.setDisable(true);
         }
         return new StackPane(b);
-    }
-
-    private Label smallLabel(String t) {
-        Label l = new Label(t);
-        l.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: -color-fg-subtle;");
-        return l;
     }
 
     // ── Misc helpers ───────────────────────────────────────────────────────────

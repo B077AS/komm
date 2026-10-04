@@ -39,7 +39,7 @@ public final class InstallationSettingsUi {
         badge.setAlignment(Pos.CENTER);
         badge.setPadding(new Insets(2, 6, 2, 6));
         badge.setMaxWidth(Region.USE_PREF_SIZE);
-        badge.setStyle("-fx-background-color: " + bgColor + "; -fx-background-radius: 4px;");
+        badge.setStyle("-fx-background-color: " + bgColor + "; -fx-background-radius: 2px;");
         return badge;
     }
 
@@ -60,7 +60,7 @@ public final class InstallationSettingsUi {
         badge.setAlignment(Pos.CENTER);
         badge.setPadding(new Insets(2, 9, 2, 9));
         badge.setMaxWidth(Region.USE_PREF_SIZE);
-        badge.setStyle("-fx-background-color: " + bgColor + "; -fx-background-radius: 4px;");
+        badge.setStyle("-fx-background-color: " + bgColor + "; -fx-background-radius: 2px;");
         return badge;
     }
 }

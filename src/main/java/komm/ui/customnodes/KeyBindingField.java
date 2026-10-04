@@ -26,20 +26,20 @@ public class KeyBindingField extends HBox {
     private static final String CHIP =
             "-fx-background-color: -color-bg-default;" +
             " -fx-border-color: -color-border-default;" +
-            " -fx-border-radius: 5; -fx-background-radius: 5;" +
+            " -fx-border-radius: 2; -fx-background-radius: 2;" +
             " -fx-padding: 5 12 5 12; -fx-font-size: 13px;";
 
     private static final String CHIP_EMPTY =
             "-fx-border-color: -color-border-default;" +
             " -fx-border-style: segments(4, 3);" +
-            " -fx-border-radius: 5; -fx-background-radius: 5;" +
+            " -fx-border-radius: 2; -fx-background-radius: 2;" +
             " -fx-padding: 5 12 5 12; -fx-font-size: 13px;" +
             " -fx-text-fill: -color-fg-subtle;";
 
     private static final String CHIP_RECORDING =
             "-fx-background-color: -color-accent-subtle;" +
             " -fx-border-color: -color-accent-emphasis;" +
-            " -fx-border-radius: 5; -fx-background-radius: 5;" +
+            " -fx-border-radius: 2; -fx-background-radius: 2;" +
             " -fx-padding: 5 14 5 14; -fx-font-size: 13px;" +
             " -fx-text-fill: -color-accent-fg;";
 

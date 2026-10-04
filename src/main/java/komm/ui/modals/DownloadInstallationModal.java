@@ -25,7 +25,7 @@ public class DownloadInstallationModal extends VBox {
 	public DownloadInstallationModal(UUID installationId) {
 		this.installationId = installationId;
 		this.setAlignment(Pos.TOP_CENTER);
-		this.setStyle("-fx-background-color: -color-bg-overlay; -fx-border-radius: 10px; -fx-background-radius: 10px; -fx-border-color: -color-accent-7; -fx-border-width: 1px;");
+		this.setStyle("-fx-background-color: -color-bg-overlay; -fx-border-radius: 4px; -fx-background-radius: 4px; -fx-border-color: -color-accent-7; -fx-border-width: 1px;");
 		this.setMaxSize(600, 260);
 		this.setMinSize(600, 260);
 		this.setPrefSize(600, 260);

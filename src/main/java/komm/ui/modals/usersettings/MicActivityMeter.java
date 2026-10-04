@@ -41,7 +41,7 @@ public class MicActivityMeter extends VBox {
     private static final double DB_DECAY_PER_TICK = 2.5;
 
     private final Canvas levelCanvas  = new Canvas(100, BAR_HEIGHT);
-    private final Label  dbValueLabel = new Label("—");
+    private final Label  dbValueLabel = new Label("-");
     private final Circle statusDot    = new Circle(4, DOT_OFF);
     private final Label  statusLabel  = new Label("Not testing");
 
@@ -52,7 +52,7 @@ public class MicActivityMeter extends VBox {
     public MicActivityMeter() {
         setSpacing(6);
         setPadding(new Insets(10, 12, 10, 12));
-        setStyle("-fx-background-color: -color-bg-subtle; -fx-background-radius: 8px;");
+        setStyle("-fx-background-color: -color-bg-subtle; -fx-background-radius: 3px;");
 
         Label caption = new Label("MIC LEVEL");
         caption.setStyle("-fx-font-size: 10px; -fx-text-fill: -color-fg-subtle; -fx-font-weight: bold;");
@@ -84,9 +84,9 @@ public class MicActivityMeter extends VBox {
         this.testing = testing;
         this.transmitting = false;
         this.heldDb = MIN_DB;
-        statusLabel.setText(testing ? "Listening — nothing is sent" : "Not testing");
+        statusLabel.setText(testing ? "Listening - nothing is sent" : "Not testing");
         statusDot.setFill(DOT_OFF);
-        if (!testing) dbValueLabel.setText("—");
+        if (!testing) dbValueLabel.setText("-");
         redraw();
     }
 
@@ -103,7 +103,7 @@ public class MicActivityMeter extends VBox {
 
         dbValueLabel.setText(db <= MIN_DB ? "-∞ dB" : String.format("%.1f dB", db));
         statusDot.setFill(transmitting ? GREEN : DOT_OFF);
-        statusLabel.setText(transmitting ? "Transmitting — others hear this" : "Listening — nothing is sent");
+        statusLabel.setText(transmitting ? "Transmitting - others hear this" : "Listening - nothing is sent");
         redraw();
     }
 

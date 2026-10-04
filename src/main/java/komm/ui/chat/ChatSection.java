@@ -783,10 +783,10 @@ public class ChatSection extends VBox {
             card.setMaxSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
             card.setStyle("""
                     -fx-background-color: -color-bg-default;
-                    -fx-background-radius: 16;
+                    -fx-background-radius: 4;
                     -fx-border-color: -color-accent-emphasis;
                     -fx-border-width: 2;
-                    -fx-border-radius: 16;
+                    -fx-border-radius: 4;
                     -fx-border-style: dashed;
                     """);
 
@@ -1009,7 +1009,7 @@ public class ChatSection extends VBox {
         bar.setMaxHeight(REPLY_BAR_HEIGHT);
         bar.setPadding(new Insets(8, 12, 8, 12));
         bar.setStyle("-fx-background-color: -color-bg-subtle;" +
-                "-fx-background-radius: 8px 8px 0 0;" +
+                "-fx-background-radius: 3px 3px 0 0;" +
                 "-fx-border-color: transparent transparent -color-border-muted transparent;" +
                 "-fx-border-width: 0 0 1px 0;");
 

@@ -437,9 +437,9 @@ public class PermissionsChannelTab implements ChannelSettingsTab {
         Button allowBtn = buildSegmentBtn("Allow", OverrideState.ALLOW, currentState);
         Button denyBtn = buildSegmentBtn("Deny", OverrideState.DENY, currentState);
 
-        inheritBtn.setStyle(inheritBtn.getStyle() + "-fx-background-radius: 4 0 0 4; -fx-border-radius: 4 0 0 4;");
+        inheritBtn.setStyle(inheritBtn.getStyle() + "-fx-background-radius: 2 0 0 2; -fx-border-radius: 2 0 0 2;");
         allowBtn.setStyle(allowBtn.getStyle() + "-fx-background-radius: 0; -fx-border-radius: 0; -fx-border-left-width: 0;");
-        denyBtn.setStyle(denyBtn.getStyle() + "-fx-background-radius: 0 4 4 0; -fx-border-radius: 0 4 4 0; -fx-border-left-width: 0;");
+        denyBtn.setStyle(denyBtn.getStyle() + "-fx-background-radius: 0 2 2 0; -fx-border-radius: 0 2 2 0; -fx-border-left-width: 0;");
 
         inheritBtn.setOnAction(e -> applyOverride(perm, OverrideState.INHERIT, roleOverrides));
         allowBtn.setOnAction(e -> applyOverride(perm, OverrideState.ALLOW, roleOverrides));

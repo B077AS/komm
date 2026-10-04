@@ -105,7 +105,7 @@ public class RedeemBadgeModal extends VBox {
         cancelButton.getStyleClass().add(Styles.SMALL);
         cancelButton.setOnAction(e -> App.closeModal());
 
-        HBox buttonsBox = new HBox(10, redeemButton, cancelButton);
+        HBox buttonsBox = new HBox(10, cancelButton, redeemButton);
         buttonsBox.setAlignment(Pos.BOTTOM_RIGHT);
         buttonsBox.setPadding(new Insets(0, 10, 10, 0));
         VBox.setVgrow(buttonsBox, Priority.ALWAYS);

@@ -475,8 +475,8 @@ public class DirectMessageSidebarSection extends VBox {
 
     private void applyRowStyle(VBox row, boolean highlighted) {
         row.setStyle(highlighted
-                ? "-fx-background-color: -color-accent-subtle; -fx-background-radius: 8px; -fx-cursor: hand;"
-                : "-fx-background-color: transparent; -fx-background-radius: 8px; -fx-cursor: hand;");
+                ? "-fx-background-color: -color-accent-subtle; -fx-background-radius: 3px; -fx-cursor: hand;"
+                : "-fx-background-color: transparent; -fx-background-radius: 3px; -fx-cursor: hand;");
     }
 
     private void refreshSelection() {

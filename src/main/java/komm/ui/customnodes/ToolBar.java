@@ -125,6 +125,7 @@ public class ToolBar extends HBox {
     private HBox createCenterSection() {
         HBox center = new HBox(0);
         center.setAlignment(Pos.CENTER);
+        center.setMaxHeight(Region.USE_PREF_SIZE);
         center.getStyleClass().addAll("toolbar-center", "toolbar-center-island");
 
         HBox channelPod = createChannelFeaturesPod();

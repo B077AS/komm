@@ -107,7 +107,7 @@ public class CreateServerModal extends HBox {
         pane.setPrefWidth(290);
         pane.setMinWidth(290);
         pane.setMaxWidth(290);
-        pane.setStyle("-fx-background-color: rgba(255,255,255,0.03); -fx-background-radius: 12px 0 0 12px;" );
+        pane.setStyle("-fx-background-color: rgba(255,255,255,0.03); -fx-background-radius: 4px 0 0 4px;" );
         pane.getChildren().add(avatarWidget);
         return pane;
     }
@@ -128,7 +128,7 @@ public class CreateServerModal extends HBox {
 
         Label title = new Label("Create New Server" );
         title.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;" );
-        Label subtitle = new Label("Configure your server below — avatar is optional." );
+        Label subtitle = new Label("Configure your server below - avatar is optional." );
         subtitle.setStyle("-fx-font-size: 11px; -fx-text-fill: -color-fg-muted;" );
 
         VBox titleGroup = new VBox(2, title, subtitle);

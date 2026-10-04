@@ -525,10 +525,10 @@ public class ServerMembersSection extends VBox {
 
     private Label buildGroupHeader(UserStatus group, int count) {
         String text = switch (group) {
-            case ONLINE -> "ONLINE — " + count;
-            case AWAY -> "AWAY — " + count;
-            case DO_NOT_DISTURB -> "DO NOT DISTURB — " + count;
-            default -> "OFFLINE — " + count;
+            case ONLINE -> "ONLINE - " + count;
+            case AWAY -> "AWAY - " + count;
+            case DO_NOT_DISTURB -> "DO NOT DISTURB - " + count;
+            default -> "OFFLINE - " + count;
         };
         Label lbl = new Label(text);
         lbl.setPadding(new Insets(10, 8, 4, 8));

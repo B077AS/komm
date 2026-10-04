@@ -167,7 +167,7 @@ public class CreateInstallationModal extends VBox {
         badge.setAlignment(Pos.CENTER);
         badge.setPadding(new Insets(2, 6, 2, 6));
         badge.setMaxWidth(Region.USE_PREF_SIZE);
-        badge.setStyle("-fx-background-color: " + bgColor + "; -fx-background-radius: 4px;");
+        badge.setStyle("-fx-background-color: " + bgColor + "; -fx-background-radius: 2px;");
         return badge;
     }
 

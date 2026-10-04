@@ -472,10 +472,10 @@ public class UserExceptionsChannelTab implements ChannelSettingsTab {
             HBox row = new HBox(8, avatarBg, lbl, trashBtn);
             row.setAlignment(Pos.CENTER_LEFT);
             row.setPadding(new Insets(6, 8, 6, 10));
-            row.setStyle("-fx-background-radius: 6; -fx-cursor: hand;");
+            row.setStyle("-fx-background-radius: 3; -fx-cursor: hand;");
             row.setOnMouseEntered(e -> row.setStyle(
-                    "-fx-background-color: -color-bg-subtle; -fx-background-radius: 6; -fx-cursor: hand;"));
-            row.setOnMouseExited(e -> row.setStyle("-fx-background-radius: 6; -fx-cursor: hand;"));
+                    "-fx-background-color: -color-bg-subtle; -fx-background-radius: 3; -fx-cursor: hand;"));
+            row.setOnMouseExited(e -> row.setStyle("-fx-background-radius: 3; -fx-cursor: hand;"));
             row.setOnMouseClicked(e -> showExcDetailView(uid, name));
 
             excListBox.getChildren().add(row);
@@ -565,10 +565,10 @@ public class UserExceptionsChannelTab implements ChannelSettingsTab {
             HBox row = new HBox(8, avatarBg, lbl);
             row.setAlignment(Pos.CENTER_LEFT);
             row.setPadding(new Insets(6, 8, 6, 10));
-            row.setStyle("-fx-background-radius: 6; -fx-cursor: hand;");
+            row.setStyle("-fx-background-radius: 3; -fx-cursor: hand;");
             row.setOnMouseEntered(e -> row.setStyle(
-                    "-fx-background-color: -color-bg-subtle; -fx-background-radius: 6; -fx-cursor: hand;"));
-            row.setOnMouseExited(e -> row.setStyle("-fx-background-radius: 6; -fx-cursor: hand;"));
+                    "-fx-background-color: -color-bg-subtle; -fx-background-radius: 3; -fx-cursor: hand;"));
+            row.setOnMouseExited(e -> row.setStyle("-fx-background-radius: 3; -fx-cursor: hand;"));
             row.setOnMouseClicked(e -> showExcDetailView(uid, name));
             availableMembersBox.getChildren().add(row);
             any = true;
@@ -670,9 +670,9 @@ public class UserExceptionsChannelTab implements ChannelSettingsTab {
         Button allowBtn   = buildSegmentBtn("Allow",   OverrideState.ALLOW,   currentState);
         Button denyBtn    = buildSegmentBtn("Deny",    OverrideState.DENY,    currentState);
 
-        inheritBtn.setStyle(inheritBtn.getStyle() + "-fx-background-radius: 4 0 0 4; -fx-border-radius: 4 0 0 4;");
+        inheritBtn.setStyle(inheritBtn.getStyle() + "-fx-background-radius: 2 0 0 2; -fx-border-radius: 2 0 0 2;");
         allowBtn.setStyle(allowBtn.getStyle()     + "-fx-background-radius: 0; -fx-border-radius: 0; -fx-border-left-width: 0;");
-        denyBtn.setStyle(denyBtn.getStyle()       + "-fx-background-radius: 0 4 4 0; -fx-border-radius: 0 4 4 0; -fx-border-left-width: 0;");
+        denyBtn.setStyle(denyBtn.getStyle()       + "-fx-background-radius: 0 2 2 0; -fx-border-radius: 0 2 2 0; -fx-border-left-width: 0;");
 
         inheritBtn.setOnAction(e -> applyUserExcOverride(uid, perm, OverrideState.INHERIT));
         allowBtn.setOnAction(e   -> applyUserExcOverride(uid, perm, OverrideState.ALLOW));

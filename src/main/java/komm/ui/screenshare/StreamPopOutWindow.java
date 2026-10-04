@@ -56,7 +56,7 @@ public class StreamPopOutWindow {
         Scene scene = new Scene(root, 960, 580);
 
         stage = new Stage(StageStyle.DECORATED);
-        stage.setTitle(username + "'s Screen — Live");
+        stage.setTitle(username + "'s Screen - Live");
         stage.setMinWidth(480);
         stage.setMinHeight(320);
         stage.setScene(scene);

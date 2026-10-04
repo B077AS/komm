@@ -32,21 +32,12 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 public class AppState {
 
-    private AppState() {
-    }
+    private static final BooleanProperty micEnabledProp = new SimpleBooleanProperty(true);
+    private static final BooleanProperty speakerEnabledProp = new SimpleBooleanProperty(true);
+    private static final BooleanProperty serverMicEnabledProp = new SimpleBooleanProperty(true);
+    private static final BooleanProperty serverSpeakerEnabledProp = new SimpleBooleanProperty(true);
+    private static final ObjectProperty<UserStatus> userStatusProp = new SimpleObjectProperty<>(UserStatus.ONLINE);
 
-    // ── Observable properties ─────────────────────────────────────────────────
-
-    private static final BooleanProperty micEnabledProp =
-            new SimpleBooleanProperty(true);
-    private static final BooleanProperty speakerEnabledProp =
-            new SimpleBooleanProperty(true);
-    private static final BooleanProperty serverMicEnabledProp =
-            new SimpleBooleanProperty(true);
-    private static final BooleanProperty serverSpeakerEnabledProp =
-            new SimpleBooleanProperty(true);
-    private static final ObjectProperty<UserStatus> userStatusProp =
-            new SimpleObjectProperty<>(UserStatus.ONLINE);
     /**
      * Bumped whenever the logged-in user's own avatar changes. Live components that
      * render the self avatar (toolbar, own connected-user card) listen to this and

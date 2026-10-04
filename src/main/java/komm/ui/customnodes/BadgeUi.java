@@ -36,7 +36,7 @@ public final class BadgeUi {
         HBox pill = new HBox(6, icon, lbl);
         pill.setAlignment(Pos.CENTER_LEFT);
         pill.setPadding(new Insets(4, 10, 4, 8));
-        pill.setStyle("-fx-background-color: rgba(255,255,255,0.07); -fx-background-radius: 6;");
+        pill.setStyle("-fx-background-color: rgba(255,255,255,0.07); -fx-background-radius: 3;");
 
         StringBuilder tip = new StringBuilder();
         if (badge.getDescription() != null && !badge.getDescription().isBlank()) {

@@ -187,9 +187,9 @@ public class FriendsSection extends VBox {
         card.setPadding(new Insets(14));
         card.setStyle(
                 "-fx-background-color: -color-bg-subtle;" +
-                        "-fx-background-radius: 10px;" +
+                        "-fx-background-radius: 4px;" +
                         "-fx-border-color: -color-border-default;" +
-                        "-fx-border-radius: 10px;"
+                        "-fx-border-radius: 4px;"
         );
 
         Label title = new Label("Add Friend");
@@ -253,9 +253,9 @@ public class FriendsSection extends VBox {
         bar.setFillHeight(true);
         bar.setStyle(
                 "-fx-background-color: -color-bg-subtle;" +
-                        "-fx-background-radius: 8px;" +
+                        "-fx-background-radius: 3px;" +
                         "-fx-border-color: -color-border-default;" +
-                        "-fx-border-radius: 8px;" +
+                        "-fx-border-radius: 3px;" +
                         "-fx-padding: 4px 0;"
         );
 
@@ -338,17 +338,17 @@ public class FriendsSection extends VBox {
     }
 
     private String tabStyleActive() {
-        return "-fx-background-color: -color-bg-default; -fx-background-radius: 20px;" +
+        return "-fx-background-color: -color-bg-default; -fx-background-radius: 4px;" +
                 "-fx-border-color: transparent; -fx-padding: 3px 15px; -fx-cursor: hand;";
     }
 
     private String tabStyleInactive() {
-        return "-fx-background-color: transparent; -fx-background-radius: 20px;" +
+        return "-fx-background-color: transparent; -fx-background-radius: 4px;" +
                 "-fx-border-color: transparent; -fx-padding: 3px 15px; -fx-cursor: hand;";
     }
 
     private String tabStyleHover() {
-        return "-fx-background-color: -color-bg-default; -fx-background-radius: 20px;" +
+        return "-fx-background-color: -color-bg-default; -fx-background-radius: 4px;" +
                 "-fx-border-color: transparent; -fx-padding: 3px 15px; -fx-cursor: hand;";
     }
 
@@ -627,7 +627,7 @@ public class FriendsSection extends VBox {
         Button btn = new Button(null, new FontIcon(icon));
         btn.setFocusTraversable(false);
         btn.getStyleClass().add(Styles.SMALL);
-        btn.setStyle("-fx-background-radius: 20px; -fx-padding: 4px 12px; -fx-font-size: 11px;");
+        btn.setStyle("-fx-background-radius: 4px; -fx-padding: 4px 12px; -fx-font-size: 11px;");
         return btn;
     }
 

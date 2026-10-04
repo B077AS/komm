@@ -286,7 +286,7 @@ public class UserProfilePopup extends Popup {
         banner.setMinHeight(BANNER_H);
         banner.setMaxHeight(BANNER_H);
         banner.setPrefHeight(BANNER_H);
-        banner.setStyle("-fx-background-color: -color-accent-8; -fx-background-radius: 10px 10px 0 0;");
+        banner.setStyle("-fx-background-color: -color-accent-8; -fx-background-radius: 4px 4px 0 0;");
 
         // ── Avatar ring (disc at bottom-left, overlapping banner) ───────
         avatarRing.getChildren().setAll(avatarInner, avatarStatusDot);
@@ -575,7 +575,7 @@ public class UserProfilePopup extends Popup {
         HBox badge = new HBox(5, dot, lbl);
         badge.setAlignment(Pos.CENTER_LEFT);
         badge.setPadding(new Insets(2, 8, 2, 6));
-        badge.setStyle("-fx-background-color: rgba(255,255,255,0.07); -fx-background-radius: 8;");
+        badge.setStyle("-fx-background-color: rgba(255,255,255,0.07); -fx-background-radius: 3;");
         return badge;
     }
 

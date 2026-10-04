@@ -57,7 +57,7 @@ public class AttachmentBarSlot extends VBox {
 
     private static final String STYLE_ROUNDED =
             "-fx-background-color: -color-bg-subtle;" +
-                    "-fx-background-radius: 8px 8px 0 0;" +
+                    "-fx-background-radius: 3px 3px 0 0;" +
                     "-fx-border-color: transparent transparent -color-border-muted transparent;" +
                     "-fx-border-width: 0 0 1px 0;";
 
@@ -186,9 +186,9 @@ public class AttachmentBarSlot extends VBox {
         chip.setPadding(new Insets(4, 12, 4, 12));
         chip.setStyle(
                 "-fx-background-color: -color-bg-default;" +
-                        "-fx-background-radius: 6px;" +
+                        "-fx-background-radius: 3px;" +
                         "-fx-border-color: -color-border-muted;" +
-                        "-fx-border-radius: 6px;" +
+                        "-fx-border-radius: 3px;" +
                         "-fx-border-width: 1px;"
         );
         chip.setMaxHeight(Double.MAX_VALUE);

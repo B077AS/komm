@@ -326,14 +326,18 @@ public class HttpClientWrapper {
     public byte[] downloadBinary(String endpoint, String token, Consumer<Double> progressCallback) throws Exception {
         HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
                 .uri(URI.create(baseUrl + endpoint))
+                // connectTimeout on the HttpClient only covers establishing the connection —
+                // without this, a server that accepts the connection but never responds (or
+                // stalls mid-response) blocks send() forever with no exception, ever.
+                .timeout(Duration.ofSeconds(30))
                 .GET();
-        
+
         if (token != null) {
             requestBuilder.header("Authorization", "Bearer " + token);
         }
 
         HttpResponse<InputStream> response = httpClient.send(
-            requestBuilder.build(), 
+            requestBuilder.build(),
             HttpResponse.BodyHandlers.ofInputStream()
         );
 

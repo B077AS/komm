@@ -88,9 +88,9 @@ public class CodeBlockView extends VBox {
         setMaxWidth(MAX_WIDTH);
         setFillWidth(true);
         setStyle("-fx-background-color: -color-bg-inset;"
-                + "-fx-background-radius: 8px;"
+                + "-fx-background-radius: 3px;"
                 + "-fx-border-color: -color-border-default;"
-                + "-fx-border-radius: 8px;"
+                + "-fx-border-radius: 3px;"
                 + "-fx-border-width: 1px;");
 
         codeArea = new CodeArea(this.code);
@@ -195,7 +195,7 @@ public class CodeBlockView extends VBox {
         header.setAlignment(Pos.CENTER_LEFT);
         header.setPadding(new Insets(4, 6, 4, 10));
         header.setStyle("-fx-background-color: -color-bg-subtle;"
-                + "-fx-background-radius: 8px 8px 0 0;"
+                + "-fx-background-radius: 3px 3px 0 0;"
                 + "-fx-border-color: transparent transparent -color-border-muted transparent;"
                 + "-fx-border-width: 0 0 1px 0;");
 

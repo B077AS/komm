@@ -131,7 +131,7 @@ public class KeybindingsUserTab implements UserSettingsTab {
         row.setPadding(new Insets(14, 16, 14, 16));
         row.setStyle(
                 "-fx-background-color: -color-bg-subtle;" +
-                " -fx-background-radius: 8px;");
+                " -fx-background-radius: 3px;");
         return row;
     }
 }

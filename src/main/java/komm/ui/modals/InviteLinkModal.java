@@ -82,9 +82,9 @@ public class InviteLinkModal extends VBox {
         linkCard.setPadding(new Insets(12, 10, 12, 14));
         linkCard.setStyle(
                 "-fx-background-color: -color-bg-subtle;" +
-                "-fx-background-radius: 8;" +
+                "-fx-background-radius: 3;" +
                 "-fx-border-color: -color-border-default;" +
-                "-fx-border-radius: 8;" +
+                "-fx-border-radius: 3;" +
                 "-fx-border-width: 1;");
 
         FontIcon clockIcon = new FontIcon(MaterialDesignC.CLOCK_OUTLINE);

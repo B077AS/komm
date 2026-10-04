@@ -83,7 +83,7 @@ public class CodeMessageModal extends VBox {
         StackPane iconWrap = new StackPane(icon);
         iconWrap.setMinSize(40, 40);
         iconWrap.setMaxSize(40, 40);
-        iconWrap.setStyle("-fx-background-color: -color-accent-subtle; -fx-background-radius: 10;");
+        iconWrap.setStyle("-fx-background-color: -color-accent-subtle; -fx-background-radius: 4;");
 
         Label title = new Label(editMode ? "Edit code" : "Code message");
         title.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
@@ -183,9 +183,9 @@ public class CodeMessageModal extends VBox {
         scroll.setPrefHeight(EDITOR_HEIGHT);
         StackPane editorWrap = new StackPane(scroll);
         editorWrap.setStyle("-fx-background-color: -color-bg-inset;"
-                + "-fx-background-radius: 8px;"
+                + "-fx-background-radius: 3px;"
                 + "-fx-border-color: -color-border-default;"
-                + "-fx-border-radius: 8px;"
+                + "-fx-border-radius: 3px;"
                 + "-fx-border-width: 1px;");
         editorWrap.setPadding(new Insets(4));
         VBox.setVgrow(editorWrap, Priority.ALWAYS);

@@ -189,9 +189,9 @@ public class ProfileSection extends VBox {
         card.setPadding(new Insets(22, 16, 18, 16));
         card.setStyle(
                 "-fx-background-color: -color-bg-subtle; " +
-                        "-fx-background-radius: 10px; " +
+                        "-fx-background-radius: 4px; " +
                         "-fx-border-color: -color-border-default; " +
-                        "-fx-border-radius: 10px;"
+                        "-fx-border-radius: 4px;"
         );
 
         StackPane avatar = buildAvatar(user);
@@ -345,9 +345,9 @@ public class ProfileSection extends VBox {
         String border = hovered ? "-color-accent-7" : "-color-border-default";
         return
                 "-fx-background-color: " + bg + "; " +
-                        "-fx-background-radius: 8px; " +
+                        "-fx-background-radius: 3px; " +
                         "-fx-border-color: " + border + "; " +
-                        "-fx-border-radius: 8px; " +
+                        "-fx-border-radius: 3px; " +
                         "-fx-border-width: 1.5px; " +
                         "-fx-font-size: 12px; " +
                         "-fx-cursor: hand;";
@@ -361,9 +361,9 @@ public class ProfileSection extends VBox {
         box.setPadding(new Insets(15));
         box.setStyle(
                 "-fx-background-color: -color-bg-subtle; " +
-                        "-fx-background-radius: 10px; " +
+                        "-fx-background-radius: 4px; " +
                         "-fx-border-color: -color-border-default; " +
-                        "-fx-border-radius: 10px;"
+                        "-fx-border-radius: 4px;"
         );
 
         Label audioHeader = new Label("Audio Settings");
@@ -432,7 +432,7 @@ public class ProfileSection extends VBox {
     private void updateToggleButtonState(Button button, boolean enabled, Ikon onIcon, Ikon offIcon) {
         if (button == null) return;
         FontIcon icon = IconColorUtil.colored(enabled ? onIcon : offIcon,
-                enabled ? "-color-fg-default" : "-color-accent-emphasis", 20);
+                enabled ? "-color-fg-default" : "rgb(225, 90, 90)", 20);
         button.setGraphic(icon);
         button.getStyleClass().remove("toolbar-button-base");
         if (enabled) {

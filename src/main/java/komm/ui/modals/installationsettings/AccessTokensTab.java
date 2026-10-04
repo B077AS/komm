@@ -101,9 +101,9 @@ public class AccessTokensTab implements InstallationSettingsTab {
         iconBox.setMaxSize(48, 48);
         iconBox.setStyle(
                 "-fx-background-color: -color-accent-subtle;" +
-                "-fx-background-radius: 12px;" +
+                "-fx-background-radius: 4px;" +
                 "-fx-border-color: -color-accent-muted;" +
-                "-fx-border-radius: 12px;" +
+                "-fx-border-radius: 4px;" +
                 "-fx-border-width: 1.5px;"
         );
 
@@ -243,7 +243,7 @@ public class AccessTokensTab implements InstallationSettingsTab {
         row.setStyle(
                 "-fx-background-color: -color-bg-subtle;" +
                 "-fx-border-color: -color-border-default;" +
-                "-fx-border-radius: 8; -fx-background-radius: 8;"
+                "-fx-border-radius: 3; -fx-background-radius: 3;"
         );
 
         deleteBtn.setOnAction(e -> handleDelete(token.getTokenId(), row));

@@ -27,6 +27,8 @@ import javafx.application.Platform;
 import javafx.concurrent.Worker;
 import komm.ui.chat.ChatSection;
 import komm.ui.pages.DirectMessagePage;
+import komm.ui.utils.ContextMenuIconFix;
+import komm.ui.utils.ContextMenuScaleFix;
 import lombok.Setter;
 import org.kordamp.ikonli.feather.Feather;
 import org.kordamp.ikonli.javafx.FontIcon;
@@ -176,6 +178,9 @@ public class App extends Application {
 
     @Override
     public void start(Stage primaryStage) throws Exception {
+        ContextMenuScaleFix.install();
+        ContextMenuIconFix.install();
+
         EmojiInitializer.initialize(EmojiVendor.TWITTER, Launcher.getEmojiDirectory())
                 .thenAccept(ok -> {
                     if (!ok) log.warn("Emoji assets failed to load");
@@ -196,6 +201,10 @@ public class App extends Application {
 
         mainStackPane = new StackPane();
         mainStackPane.getChildren().addAll(stackPane, modalPane);
+
+        services.hub().getTokenManager().setOnRefreshTokenChanged(token -> {
+            if (rememberMe && token != null) KommUtils.saveRefreshToken(token);
+        });
 
         if (tryAutoLogin()) {
             Platform.runLater(() -> {
@@ -269,19 +278,28 @@ public class App extends Application {
             log.debug("No refresh token found, skipping auto-login");
             return false;
         }
+        // A saved token only exists on disk because a prior login opted into
+        // "Keep me signed in" — carry that choice forward for this session.
+        // Set before refreshAccessToken() below so the onRefreshTokenChanged
+        // listener persists the rotated token even from this very first refresh.
+        rememberMe = true;
         try {
             services.hub().getTokenManager().setTokens(null, refreshToken);
             services.hub().getTokenManager().refreshAccessToken();
             setUser(services.hub().getUserService().getCurrentUser());
             log.info("Auto-login successful for user: {}", user.getUsername());
-            // A saved token only exists on disk because a prior login opted into
-            // "Keep me signed in" — carry that choice forward for this session.
-            rememberMe = true;
             startWebSocket();
             return true;
         } catch (Exception e) {
             log.warn("Auto-login failed: {}", e.getMessage());
+            // TokenManager only nulls the refresh token itself when the server actually
+            // rejected it (401/403); a network-level failure leaves it intact so a retry
+            // next launch can still succeed. Only drop the on-disk copy in the former
+            // case — otherwise a hub outage at startup would permanently sign the user out.
+            boolean rejected = services.hub().getTokenManager().getRefreshToken() == null;
+            rememberMe = false;
             services.hub().getTokenManager().clearTokens();
+            if (rejected) KommUtils.clearSavedToken();
             return false;
         }
     }

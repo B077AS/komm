@@ -100,8 +100,8 @@ public class LoginPage extends BorderPane {
         // plus a plain dark drop shadow (not accent-tinted) for real elevation.
         mainContainer.setStyle(
                 "-fx-background-color: -color-bg-overlay; " +
-                "-fx-background-radius: 14px; " +
-                "-fx-border-radius: 14px; " +
+                "-fx-background-radius: 4px; " +
+                "-fx-border-radius: 4px; " +
                 "-fx-border-color: -color-accent-8; " +
                 "-fx-border-width: 1px; " +
                 "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.5), 26, 0, 0, 10);");

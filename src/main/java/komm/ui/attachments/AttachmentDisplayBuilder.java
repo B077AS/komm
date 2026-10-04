@@ -2,8 +2,6 @@ package komm.ui.attachments;
 
 import atlantafx.base.controls.RingProgressIndicator;
 import javafx.application.Platform;
-import javafx.concurrent.Service;
-import javafx.concurrent.Task;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -109,9 +107,9 @@ public class AttachmentDisplayBuilder {
         chip.setMaxWidth(320);
         chip.setStyle(
                 "-fx-background-color: -color-bg-subtle;" +
-                        "-fx-background-radius: 8px;" +
+                        "-fx-background-radius: 3px;" +
                         "-fx-border-color: -color-border-muted;" +
-                        "-fx-border-radius: 8px;" +
+                        "-fx-border-radius: 3px;" +
                         "-fx-border-width: 1px;"
         );
         VBox.setMargin(chip, new Insets(4, 0, 0, 0));
@@ -146,6 +144,11 @@ public class AttachmentDisplayBuilder {
     }
 
     private static void handleDownload(MessageReceivedPayload msg, Button dlBtn, HBox chip) {
+        // Captured now, while chip is guaranteed to be attached (it was just clicked) —
+        // the virtualized message list tears chip's cell down if it scrolls out of view
+        // before the download finishes, at which point chip.getScene() would be null.
+        javafx.stage.Window owner = chip.getScene() != null ? chip.getScene().getWindow() : App.getPrimaryStage();
+
         RingProgressIndicator ring = new RingProgressIndicator(0, false);
         ring.setMinSize(30, 30);
         ring.setMaxSize(30, 30);
@@ -164,45 +167,44 @@ public class AttachmentDisplayBuilder {
         int dlBtnIndex = chip.getChildren().indexOf(dlBtn);
         chip.getChildren().set(dlBtnIndex, ring);
 
-        Service<byte[]> svc = new Service<>() {
-            @Override
-            protected Task<byte[]> createTask() {
-                return new Task<>() {
-                    @Override
-                    protected byte[] call() throws Exception {
-                        return msg.getServerId() == null
-                                ? App.getServices().hub().getDirectMessageService()
-                                        .downloadAttachment(msg.getMessageId(),
-                                                progress -> Platform.runLater(() -> ring.setProgress(progress)))
-                                : App.getServices().installation().getMessageService()
-                                        .downloadAttachmentWithProgress(msg.getMessageId(),
-                                                progress -> Platform.runLater(() -> ring.setProgress(progress)));
-                    }
-                };
+        // Plain virtual thread + Platform.runLater instead of javafx.concurrent.Service/Task:
+        // Service's completion dispatch back to the FX thread was observed to silently drop
+        // the SUCCEEDED transition intermittently (Task.call() would log a normal return, but
+        // setOnSucceeded simply never fired) — this bypasses that machinery entirely.
+        Thread.ofVirtual().start(() -> {
+            byte[] bytes;
+            try {
+                bytes = msg.getServerId() == null
+                        ? App.getServices().hub().getDirectMessageService()
+                                .downloadAttachment(msg.getMessageId(),
+                                        progress -> Platform.runLater(() -> ring.setProgress(progress)))
+                        : App.getServices().installation().getMessageService()
+                                .downloadAttachmentWithProgress(msg.getMessageId(),
+                                        progress -> Platform.runLater(() -> ring.setProgress(progress)));
+            } catch (Exception ex) {
+                log.error("Failed to download attachment", ex);
+                Platform.runLater(() -> chip.getChildren().set(dlBtnIndex, dlBtn));
+                return;
             }
-        };
-        svc.setOnSucceeded(e -> {
-            byte[] bytes = svc.getValue();
-            chip.getChildren().set(dlBtnIndex, dlBtn);
 
-            javafx.stage.FileChooser chooser = new javafx.stage.FileChooser();
-            chooser.setInitialFileName(msg.getFileName());
-            java.io.File dest = komm.ui.utils.FileChooserUtil.showSaveDialog(chooser, chip.getScene().getWindow());
-            if (dest != null) {
-                Thread.ofVirtual().start(() -> {
-                    try {
-                        java.nio.file.Files.write(dest.toPath(), bytes);
-                    } catch (Exception ex) {
-                        log.error("Failed to save attachment", ex);
-                    }
-                });
-            }
+            byte[] finalBytes = bytes;
+            Platform.runLater(() -> {
+                chip.getChildren().set(dlBtnIndex, dlBtn);
+
+                javafx.stage.FileChooser chooser = new javafx.stage.FileChooser();
+                chooser.setInitialFileName(msg.getFileName());
+                java.io.File dest = komm.ui.utils.FileChooserUtil.showSaveDialog(chooser, owner);
+                if (dest != null) {
+                    Thread.ofVirtual().start(() -> {
+                        try {
+                            java.nio.file.Files.write(dest.toPath(), finalBytes);
+                        } catch (Exception ex) {
+                            log.error("Failed to save attachment", ex);
+                        }
+                    });
+                }
+            });
         });
-        svc.setOnFailed(e -> {
-            log.error("Failed to download attachment", svc.getException());
-            chip.getChildren().set(dlBtnIndex, dlBtn);
-        });
-        svc.start();
     }
 
     static String shortMime(String mime) {

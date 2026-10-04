@@ -269,7 +269,7 @@ public class MessageInputBox extends VBox {
         HBox row = new HBox(8);
         row.setAlignment(Pos.BOTTOM_LEFT);
         row.setPadding(new Insets(8, 8, 8, 16));
-        row.setStyle("-fx-background-color: -color-bg-subtle; -fx-background-radius: 8px;");
+        row.setStyle("-fx-background-color: -color-bg-subtle; -fx-background-radius: 3px;");
         row.getChildren().addAll(emojiArea, gifButton, attachButton, codeButton, sendButton);
         return row;
     }

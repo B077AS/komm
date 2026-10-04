@@ -579,7 +579,7 @@ public class HomePage extends StackPane {
         tf.setPromptText(prompt);
         tf.getStyleClass().add(Styles.SMALL);
         tf.setMaxWidth(Double.MAX_VALUE);
-        tf.setStyle("-fx-background-radius: 20px; -fx-padding: 5px 12px; -fx-font-size: 12px;");
+        tf.setStyle("-fx-background-radius: 4px; -fx-padding: 5px 12px; -fx-font-size: 12px;");
         tf.textProperty().addListener((obs, old, val) -> onSearch.accept(val == null ? "" : val.trim()));
         return tf;
     }
@@ -590,7 +590,7 @@ public class HomePage extends StackPane {
         Button createBtn = new Button("Create new", createIcon);
         createBtn.setFocusTraversable(false);
         createBtn.getStyleClass().addAll(Styles.ACCENT, Styles.BUTTON_OUTLINED, Styles.SMALL);
-        createBtn.setStyle("-fx-background-radius: 20px; -fx-padding: 6px 16px 6px 12px; -fx-font-size: 12px;");
+        createBtn.setStyle("-fx-background-radius: 4px; -fx-padding: 6px 16px 6px 12px; -fx-font-size: 12px;");
         createBtn.setOnAction(e -> {
             if (currentViewMode == ViewMode.SERVERS) App.showModal(new CreateServerModal());
             else App.showModal(new CreateInstallationModal());
@@ -601,7 +601,7 @@ public class HomePage extends StackPane {
         joinBtn = new Button("Join existing", joinIcon);
         joinBtn.setFocusTraversable(false);
         joinBtn.getStyleClass().addAll(Styles.BUTTON_OUTLINED, Styles.SMALL);
-        joinBtn.setStyle("-fx-background-radius: 20px; -fx-padding: 6px 16px 6px 12px; -fx-font-size: 12px;");
+        joinBtn.setStyle("-fx-background-radius: 4px; -fx-padding: 6px 16px 6px 12px; -fx-font-size: 12px;");
         joinBtn.setOnAction(e -> {
             if (currentViewMode == ViewMode.INSTALLATIONS) App.showModal(new komm.ui.modals.JoinInstallationModal());
             else App.showModal(new JoinViaInviteModal());
@@ -661,7 +661,7 @@ public class HomePage extends StackPane {
         btn.setUserData(value);
         btn.setFocusTraversable(false);
         btn.getStyleClass().add(Styles.SMALL);
-        btn.setStyle("-fx-background-radius: 20px; -fx-padding: 4px 12px; -fx-font-size: 11px; -fx-cursor: hand;");
+        btn.setStyle("-fx-background-radius: 4px; -fx-padding: 4px 12px; -fx-font-size: 11px; -fx-cursor: hand;");
         btn.selectedProperty().addListener((obs, wasSelected, isSelected) -> {
             if (isSelected) {
                 if (!btn.getStyleClass().contains(Styles.ACCENT)) btn.getStyleClass().add(Styles.ACCENT);

@@ -158,9 +158,9 @@ public class JoinViaInviteModal extends VBox {
         previewBox.setStyle(
                 "-fx-border-color: -color-border-default;" +
                 "-fx-border-width: 1;" +
-                "-fx-border-radius: 8;" +
+                "-fx-border-radius: 3;" +
                 "-fx-background-color: -color-bg-subtle;" +
-                "-fx-background-radius: 8;");
+                "-fx-background-radius: 3;");
         showPlaceholder();
 
         VBox body = new VBox(12, codeField, previewBox);
@@ -275,9 +275,9 @@ public class JoinViaInviteModal extends VBox {
         card.setPadding(new Insets(12, 14, 12, 14));
         card.setStyle(
                 "-fx-background-color: -color-bg-subtle;" +
-                "-fx-background-radius: 8;" +
+                "-fx-background-radius: 3;" +
                 "-fx-border-color: -color-border-default;" +
-                "-fx-border-radius: 8;" +
+                "-fx-border-radius: 3;" +
                 "-fx-border-width: 1;");
 
         previewBox.setAlignment(Pos.TOP_LEFT);
@@ -301,7 +301,7 @@ public class JoinViaInviteModal extends VBox {
         lbl.setAlignment(Pos.CENTER);
         lbl.setStyle(
                 "-fx-background-color: -color-accent-muted;" +
-                "-fx-background-radius: 8;" +
+                "-fx-background-radius: 3;" +
                 "-fx-font-weight: bold;" +
                 "-fx-font-size: 18px;");
         return lbl;

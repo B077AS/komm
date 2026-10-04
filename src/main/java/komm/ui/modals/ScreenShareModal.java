@@ -131,7 +131,7 @@ public class ScreenShareModal extends HBox {
         pane.setPrefWidth(190);
         pane.setMinWidth(190);
         pane.setMaxWidth(190);
-        pane.setStyle("-fx-background-color: rgba(255,255,255,0.03); -fx-background-radius: 12px 0 0 12px;");
+        pane.setStyle("-fx-background-color: rgba(255,255,255,0.03); -fx-background-radius: 4px 0 0 4px;");
 
         VBox nav = new VBox(2);
         nav.setPadding(new Insets(16, 8, 12, 8));
@@ -617,7 +617,7 @@ public class ScreenShareModal extends HBox {
 
         Label text = new Label(
                 "Wayland doesn't let apps list screens and windows. When you press " +
-                "Start Sharing, the system dialog will open — pick the screen or " +
+                "Start Sharing, the system dialog will open - pick the screen or " +
                 "application to share there.");
         text.setWrapText(true);
         text.setMaxWidth(420);

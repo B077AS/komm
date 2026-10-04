@@ -25,7 +25,7 @@ public class UserPingGraphPopup extends PingGraphPopupBase {
     private final String targetUserIdKey;
 
     public UserPingGraphPopup(UUID targetUserId, String targetUsername) {
-        super(targetUsername.toUpperCase() + " — LATENCY");
+        super(targetUsername.toUpperCase() + " - LATENCY");
         this.targetUserId = targetUserId;
         this.targetUserIdKey = targetUserId.toString();
     }
