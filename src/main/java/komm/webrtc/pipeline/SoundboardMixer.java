@@ -42,9 +42,6 @@ public class SoundboardMixer implements AutoCloseable {
     // Used by WebrtcRoomClient to push soundboard audio into the publisher PC track.
     private volatile java.util.function.Consumer<byte[]> publishCallback;
 
-    // Echo-reference tap for the local monitor (what this mixer plays to the speakers).
-    private volatile FarEndMixer.Source farEnd;
-
     private volatile String  outputDeviceName;
     private volatile boolean lineFailed = false;
     private volatile boolean running    = true;
@@ -87,11 +84,6 @@ public class SoundboardMixer implements AutoCloseable {
 
     public void setPublishCallback(java.util.function.Consumer<byte[]> cb) {
         this.publishCallback = cb;
-    }
-
-    /** Attaches the echo-reference tap for the local monitor; it is closed with this mixer. */
-    public void setFarEndSource(FarEndMixer.Source source) {
-        this.farEnd = source;
     }
 
     /** Driven by the deafen state: deafened users don't hear/play soundboards. */
@@ -152,8 +144,6 @@ public class SoundboardMixer implements AutoCloseable {
                     rawBytes[i * 2]    = (byte) (rawFrame[i]  & 0xFF);
                     rawBytes[i * 2 + 1]= (byte) ((rawFrame[i] >> 8) & 0xFF);
                 }
-                FarEndMixer.Source ref = farEnd;
-                if (ref != null) ref.write(frame, FRAME);
                 l.write(bytes, 0, bytes.length); // blocking write provides pacing — plays at sender's volume
                 java.util.function.Consumer<byte[]> cb = publishCallback;
                 if (cb != null) cb.accept(rawBytes); // transmit at full amplitude; each receiver scales independently
@@ -232,9 +222,6 @@ public class SoundboardMixer implements AutoCloseable {
         running = false;
         playThread.interrupt();
         stopAll();
-        FarEndMixer.Source ref = farEnd;
-        farEnd = null;
-        if (ref != null) ref.close();
         SourceDataLine l = line;
         if (l != null) { try { l.close(); } catch (Exception ignored) {} }
         line = null;

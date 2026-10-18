@@ -62,8 +62,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * to the sinks (its own output is discarded). Both capture and speaker output are owned
  * by Komm — capture by UserAudioPipeline / MicCapture, output by the receivers — giving
  * full DSP and per-user volume control without any OS-level audio driver coupling.
- * Everything the receivers play is mirrored into the pipeline's FarEndMixer as AEC's
- * echo reference.
  */
 @Slf4j
 public class WebrtcRoomClient {
@@ -964,7 +962,6 @@ public class WebrtcRoomClient {
                     UserSettings.getInstance().getSoundboardVolume(),
                     UserSettings.getInstance().getOutputDevice());
             if (speakerMuted) receiver.setActive(false);
-            tapFarEnd(receiver);
             remoteTrack.addSink(receiver);
             newSlot = new AudioSlot(remoteTrack, receiver, AudioSlotKind.SOUNDBOARD, participantId);
             log.info("[Subscriber] Remote soundboard track connected: mid={} sid={}", mid, trackSid);
@@ -980,7 +977,6 @@ public class WebrtcRoomClient {
             UserVoiceReceiver receiver = new UserVoiceReceiver(
                     savedStreamVol, UserSettings.getInstance().getOutputDevice());
             receiver.setActive(watching && !streamMuted);
-            tapFarEnd(receiver);
             remoteTrack.addSink(receiver);
             if (participantId != null) {
                 UserVoiceReceiver old = userIdToScreenAudioReceiver.put(participantId, receiver);
@@ -995,7 +991,6 @@ public class WebrtcRoomClient {
             UserVoiceReceiver receiver = new UserVoiceReceiver(
                     savedVol, UserSettings.getInstance().getOutputDevice());
             if (speakerMuted) receiver.setActive(false);
-            tapFarEnd(receiver);
             remoteTrack.addSink(receiver);
             UserVoiceReceiver old = userIdToMicReceiver.put(participantId, receiver);
             closeReplacedUserReceiver(old, receiver);
@@ -1015,7 +1010,6 @@ public class WebrtcRoomClient {
             UserVoiceReceiver receiver = new UserVoiceReceiver(
                     1.0f, UserSettings.getInstance().getOutputDevice());
             if (speakerMuted) receiver.setActive(false);
-            tapFarEnd(receiver);
             remoteTrack.addSink(receiver);
             newSlot = new AudioSlot(remoteTrack, receiver, AudioSlotKind.MIC, null);
             log.warn("[Subscriber] Audio m-line {} has no participant mapping, playing anonymously: sid={}", mid, trackSid);
@@ -1031,20 +1025,6 @@ public class WebrtcRoomClient {
                 userIdToScreenAudioReceiver.values().remove(uvr);
             }
         }
-    }
-
-    /**
-     * Mirrors what a receiver plays into AEC's echo reference. Everything that reaches the
-     * speakers must go through here (the mic-test loopback deliberately does not).
-     */
-    private void tapFarEnd(UserVoiceReceiver receiver) {
-        UserAudioPipeline p = audioPipeline;
-        if (p != null) receiver.setFarEndSource(p.createFarEndSource());
-    }
-
-    private void tapFarEnd(SoundboardReceiver receiver) {
-        UserAudioPipeline p = audioPipeline;
-        if (p != null) receiver.setFarEndSource(p.createFarEndSource());
     }
 
     /** Detaches and closes the sink of an audio slot. Safe on any thread; idempotent. */

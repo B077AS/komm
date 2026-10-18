@@ -20,8 +20,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * Remote audio is delivered to AudioTrackSinks (UserVoiceReceiver / SoundboardReceiver),
  * driven by a headless AudioDeviceModule that opens no real device. Capture is handled
- * entirely by this pipeline, giving full control over the DSP chain; what the receivers play
- * is mirrored into a {@link FarEndMixer} as AEC3's echo reference.
+ * entirely by this pipeline, giving full control over the DSP chain.
  *
  * All DSP stages are independently toggleable at runtime (hot-swap) via their
  * respective setEnabled() methods — no reconnection or restart needed.
@@ -48,19 +47,12 @@ public class UserAudioPipeline implements AutoCloseable {
     // arrived during the onset-detection window (~64 ms) are never lost.
     // 4 frames = 80 ms — slightly longer than the detection window for safety.
     private static final int PRE_ROLL_FRAMES = 4;
-    // How often (in 20 ms frames) AEC3's quality counters are logged at debug level (~5 s).
-    private static final int AEC_STATS_EVERY_FRAMES = 250;
 
     // ── DSP modules ───────────────────────────────────────────────────────────
     private final AecProcessor    aec;
     private final NoiseSuppressor ns;
     private final AgcProcessor    agc;
     private final VadProcessor    vad;
-
-    // Echo reference: everything Komm plays out of the speakers (see FarEndMixer).
-    private final FarEndMixer farEnd = new FarEndMixer();
-    private final short[] farEndFrame = new short[FRAME_SAMPLES];
-    private int aecStatsCountdown = AEC_STATS_EVERY_FRAMES;
 
     // ── Transport ─────────────────────────────────────────────────────────────
     private final CustomAudioSource customAudioSource;
@@ -110,9 +102,6 @@ public class UserAudioPipeline implements AutoCloseable {
         vad.setOnsetMinRms((float) dbToRms(vadNoiseGateDb));
 
         soundboardMixer.setVolume(komm.utils.UserSettings.getInstance().getSoundboardVolume());
-        // The local soundboard monitor plays through the speakers too — it must be part of
-        // the echo reference or the mic would pick it up uncancelled.
-        soundboardMixer.setFarEndSource(farEnd.createSource());
 
         log.info("[AudioPipeline] DSP modules created — AEC={} NS={} AGC={} VAD={}",
                 aecEnabled, nsEnabled, agcEnabled, vadEnabled);
@@ -200,16 +189,7 @@ public class UserAudioPipeline implements AutoCloseable {
 
                 preProcessRms = AudioConverter.rms(captured);
 
-                // 1. AEC — echo cancellation. The reference (what the speakers are playing)
-                //    goes in first, then the mic frame is cleaned against it.
-                if (aec.isEnabled()) {
-                    farEnd.mixFrame(farEndFrame);
-                    aec.processRenderFrame(farEndFrame);
-                    if (--aecStatsCountdown <= 0) {
-                        aecStatsCountdown = AEC_STATS_EVERY_FRAMES;
-                        aec.logStats();
-                    }
-                }
+                // 1. AEC — echo cancellation (capture-side; render reference not available here)
                 aec.processCapture(captured, aecOut);
 
                 // 2. NS — RNNoise (primary) or WebRTC NS (fallback), async inference thread
@@ -368,13 +348,6 @@ public class UserAudioPipeline implements AutoCloseable {
 
     /** The soundboard local player (play/stop/volume/monitor controls). */
     public SoundboardMixer getSoundboardMixer() { return soundboardMixer; }
-
-    /**
-     * Creates the echo-reference tap for one playback path. Hand it to a receiver that plays
-     * to the speakers; it feeds AEC3 with what that receiver outputs. Do NOT use it for the
-     * mic-test loopback — cancelling the very sound the user is trying to hear defeats the test.
-     */
-    public FarEndMixer.Source createFarEndSource() { return farEnd.createSource(); }
 
     /**
      * Hot-swap the input capture device. Safe to call while capturing.

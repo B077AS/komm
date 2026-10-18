@@ -29,8 +29,6 @@ public class UserVoiceReceiver implements AudioTrackSink, AutoCloseable {
     private volatile boolean active = true;
     private volatile String  outputDeviceName;
     private volatile boolean lineFailed = false;
-    /** Echo-reference tap: mirrors exactly what is played. Null for paths AEC must ignore (mic test). */
-    private volatile FarEndMixer.Source farEnd;
 
     private volatile SourceDataLine line;
     private int     prefillBytes;   // guarded by `this`
@@ -52,9 +50,6 @@ public class UserVoiceReceiver implements AudioTrackSink, AutoCloseable {
 
         float vol = volume;
         byte[] out = (vol == 1.0f) ? data : scaleInPlace(data, vol);
-
-        FarEndMixer.Source ref = farEnd;
-        if (ref != null) ref.write(out, data.length, bitsPerSample, sampleRate, channels);
 
         synchronized (this) {
             SourceDataLine l = ensureLine(sampleRate, bitsPerSample, channels);
@@ -87,9 +82,6 @@ public class UserVoiceReceiver implements AudioTrackSink, AutoCloseable {
     }
 
     public float getVolume() { return volume; }
-
-    /** Attaches the echo-reference tap; it is closed together with this receiver. */
-    public void setFarEndSource(FarEndMixer.Source source) { this.farEnd = source; }
 
     public void setActive(boolean active) {
         this.active = active;
@@ -206,9 +198,6 @@ public class UserVoiceReceiver implements AudioTrackSink, AutoCloseable {
     @Override
     public void close() {
         active = false;
-        FarEndMixer.Source ref = farEnd;
-        farEnd = null;
-        if (ref != null) ref.close();
         closeLineQuietly();
     }
 }
