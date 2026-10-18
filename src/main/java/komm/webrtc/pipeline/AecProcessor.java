@@ -2,17 +2,18 @@ package komm.webrtc.pipeline;
 
 import dev.onvoid.webrtc.media.audio.AudioProcessing;
 import dev.onvoid.webrtc.media.audio.AudioProcessingConfig;
+import dev.onvoid.webrtc.media.audio.AudioProcessingStats;
 import dev.onvoid.webrtc.media.audio.AudioProcessingStreamConfig;
 import lombok.extern.slf4j.Slf4j;
 
 /**
  * Wraps WebRTC AEC3 via webrtc-java AudioProcessing.
  *
- * Note: for full AEC effectiveness the render (speaker playback) signal should be fed via
- * processRenderFrame() before each mic processCapture(). In Komm's current architecture the
- * speaker output is rendered by the hardware ADM, so we cannot easily intercept that signal.
- * AEC3 still provides some suppression through its internal model even without explicit render
- * frames — users with speakers will see reduced echo, users with headphones are unaffected.
+ * AEC3 needs the render (speaker playback) signal as its echo reference: the pipeline calls
+ * processRenderFrame() with the {@link FarEndMixer} mix right before every processCapture().
+ * Every Komm playback path (UserVoiceReceiver, SoundboardReceiver, SoundboardMixer) feeds that
+ * mixer, so the reference is exactly what goes to the speakers. Without it AEC3 has nothing to
+ * cancel against and does effectively nothing.
  *
  * Processes in two 10 ms sub-frames as required by the WebRTC APM (each call to
  * processStream/processReverseStream must be exactly 10 ms of audio).
@@ -31,6 +32,15 @@ public class AecProcessor implements AutoCloseable {
     private final AudioProcessingStreamConfig streamCfg =
             new AudioProcessingStreamConfig(SAMPLE_RATE, NUM_CHANNELS);
 
+    /**
+     * Initial hint for the delay between a far-end frame entering processRenderFrame() and its
+     * echo reaching processCapture(): the speaker line's jitter cushion (~60 ms) + device
+     * latency + the capture-side buffering. AEC3 refines it with its own estimator (whose
+     * search range is roughly 160 ms), so it only needs to be in the right ballpark — check the
+     * "[AEC] stats" debug line (delayMs) when tuning.
+     */
+    private static final int STREAM_DELAY_MS = 100;
+
     private volatile boolean enabled = true;
 
     public AecProcessor() {
@@ -47,7 +57,8 @@ public class AecProcessor implements AutoCloseable {
             cfg.gainController.enabled = false;
             apm = new AudioProcessing();
             apm.applyConfig(cfg);
-            log.info("[AEC] WebRTC AEC3 initialized");
+            apm.setStreamDelayMs(STREAM_DELAY_MS);
+            log.info("[AEC] WebRTC AEC3 initialized (stream delay hint {} ms)", STREAM_DELAY_MS);
         } catch (Exception e) {
             log.error("[AEC] Failed to initialize AEC3: {}", e.getMessage(), e);
             apm = null;
@@ -113,8 +124,22 @@ public class AecProcessor implements AutoCloseable {
             cfg.echoCanceller.enabled = enabled;
             cfg.gainController.enabled = false;
             apm.applyConfig(cfg);
+            if (enabled) apm.setStreamDelayMs(STREAM_DELAY_MS);
         } catch (Exception e) {
             log.warn("[AEC] Failed to apply config: {}", e.getMessage());
+        }
+    }
+
+    /** Logs AEC3's own quality counters (debug level) — used to tune {@link #STREAM_DELAY_MS}. */
+    public void logStats() {
+        if (!enabled || apm == null || !log.isDebugEnabled()) return;
+        try {
+            AudioProcessingStats st = apm.getStatistics();
+            log.debug("[AEC] stats: ERLE={} dB, ERL={} dB, delay={} ms (median {} ms), residualEcho={}",
+                    st.echoReturnLossEnhancement, st.echoReturnLoss, st.delayMs,
+                    st.delayMedianMs, st.residualEchoLikelihood);
+        } catch (Exception e) {
+            log.debug("[AEC] stats unavailable: {}", e.getMessage());
         }
     }
 

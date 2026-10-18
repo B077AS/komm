@@ -9,8 +9,8 @@ import javax.sound.sampled.*;
  * Receives decoded PCM frames from a remote participant's soundboard WebRTC track,
  * applies the listener's personal volume, and plays them through a SourceDataLine.
  *
- * The matching AudioTrack is kept disabled in the hardware ADM (setEnabled(false))
- * so this sink is the sole audio output for that track — no double-playback.
+ * The peer connection's audio device is headless (it renders to nowhere), so this sink is
+ * the sole audio output for the track — no double-playback.
  * One SoundboardReceiver is created per remote soundboard track, giving each
  * listener fully independent volume control over incoming soundboard audio.
  */
@@ -27,6 +27,8 @@ public class SoundboardReceiver implements AudioTrackSink, AutoCloseable {
     private volatile boolean active = true;
     private volatile String  outputDeviceName;
     private volatile boolean lineFailed = false;
+    /** Echo-reference tap: mirrors exactly what is played. */
+    private volatile FarEndMixer.Source farEnd;
 
     private volatile SourceDataLine line;
     private volatile int     prefillBytes;
@@ -52,6 +54,9 @@ public class SoundboardReceiver implements AudioTrackSink, AutoCloseable {
         float vol = volume;
         byte[] out = (vol >= 1.0f) ? data : scaleInPlace(data, vol);
 
+        FarEndMixer.Source ref = farEnd;
+        if (ref != null) ref.write(out, data.length, bitsPerSample, sampleRate, channels);
+
         // Non-blocking: skip the frame if the buffer is full rather than stalling
         // the WebRTC audio thread.
         if (l.available() >= out.length) {
@@ -69,6 +74,9 @@ public class SoundboardReceiver implements AudioTrackSink, AutoCloseable {
     public void setVolume(float v) {
         this.volume = Math.max(0f, Math.min(1f, v));
     }
+
+    /** Attaches the echo-reference tap; it is closed together with this receiver. */
+    public void setFarEndSource(FarEndMixer.Source source) { this.farEnd = source; }
 
     public void setActive(boolean active) {
         this.active = active;
@@ -180,6 +188,9 @@ public class SoundboardReceiver implements AudioTrackSink, AutoCloseable {
     @Override
     public void close() {
         active = false;
+        FarEndMixer.Source ref = farEnd;
+        farEnd = null;
+        if (ref != null) ref.close();
         closeLineQuietly();
     }
 }
