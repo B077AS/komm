@@ -49,6 +49,8 @@ public class DirectMessageSidebarSection extends VBox {
 
     private final VBox conversationList = new VBox(2);
     private final List<ConversationSummary> conversations = new ArrayList<>();
+    private TextField searchField;
+    private String searchQuery = "";
     private final Set<UUID> unreadPartners = new HashSet<>();
     /**
      * Partners we've locally marked read (mark-read PATCH in flight or done) whose
@@ -122,8 +124,14 @@ public class DirectMessageSidebarSection extends VBox {
                 "-fx-border-width: 0 1px 0 0;");
 
         // ── Header ────────────────────────────────────────────────────────────
-        Label header = new Label("Chats");
-        header.setStyle("-fx-font-size: 13px; -fx-font-weight: bold; -fx-text-fill: -color-fg-default;");
+        searchField = new TextField();
+        searchField.setPromptText("Search chats…");
+        searchField.getStyleClass().add(Styles.SMALL);
+        HBox.setHgrow(searchField, Priority.ALWAYS);
+        searchField.textProperty().addListener((obs, was, is) -> {
+            searchQuery = is == null ? "" : is.trim().toLowerCase();
+            renderConversations();
+        });
 
         FontIcon newChatIcon = new FontIcon(Feather.PLUS);
         newChatIcon.setIconSize(10);
@@ -134,16 +142,17 @@ public class DirectMessageSidebarSection extends VBox {
         newChatBtn.setTooltip(new javafx.scene.control.Tooltip("New message"));
         newChatBtn.setOnAction(e -> App.showModal(new StartConversationModal(onConversationSelected)));
 
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-
-        HBox headerRow = new HBox(8, header, spacer, newChatBtn);
+        HBox headerRow = new HBox(8, searchField, newChatBtn);
         headerRow.setAlignment(Pos.CENTER_LEFT);
-        headerRow.setPadding(new Insets(10, 8, 8, 16));
+        headerRow.setMinHeight(48);
+        headerRow.setMaxHeight(48);
+        headerRow.setStyle("-fx-background-color: -color-bg-subtle;"
+                + "-fx-border-color: transparent transparent -color-border-default transparent; -fx-border-width: 0 0 1px 0;");
+        headerRow.setPadding(new Insets(0, 8, 0, 10));
 
         // ── Conversation list ─────────────────────────────────────────────────
         conversationList.setFillWidth(true);
-        conversationList.setPadding(new Insets(0, 6, 8, 6));
+        conversationList.setPadding(new Insets(6, 6, 8, 6));
 
         ScrollPane scroll = new ScrollPane(conversationList);
         scroll.setFitToWidth(true);
@@ -379,7 +388,19 @@ public class DirectMessageSidebarSection extends VBox {
                 conversationList.getChildren().add(empty);
                 return;
             }
-            for (ConversationSummary c : conversations) conversationList.getChildren().add(buildRow(c));
+            int shown = 0;
+            for (ConversationSummary c : conversations) {
+                String name = c.getPartnerUsername() == null ? "" : c.getPartnerUsername().toLowerCase();
+                if (!searchQuery.isEmpty() && !name.contains(searchQuery)) continue;
+                conversationList.getChildren().add(buildRow(c));
+                shown++;
+            }
+            if (shown == 0) {
+                Label none = new Label("No matching chats");
+                none.setStyle("-fx-font-size: 11px; -fx-text-fill: -color-fg-muted;");
+                none.setPadding(new Insets(16, 12, 16, 12));
+                conversationList.getChildren().add(none);
+            }
         });
     }
 
@@ -432,7 +453,7 @@ public class DirectMessageSidebarSection extends VBox {
         row.setFillWidth(true);
         applyRowStyle(row, selected);
 
-        row.setOnMouseEntered(e -> { if (!c.getPartnerId().equals(selectedPartnerId)) applyRowStyle(row, true); });
+        row.setOnMouseEntered(e -> { if (!c.getPartnerId().equals(selectedPartnerId)) applyHoverStyle(row); });
         row.setOnMouseExited(e -> { if (!c.getPartnerId().equals(selectedPartnerId)) applyRowStyle(row, false); });
         row.setOnMouseClicked(e -> {
             if (e.getButton() == javafx.scene.input.MouseButton.PRIMARY && onConversationSelected != null)
@@ -473,10 +494,17 @@ public class DirectMessageSidebarSection extends VBox {
         return row;
     }
 
-    private void applyRowStyle(VBox row, boolean highlighted) {
-        row.setStyle(highlighted
-                ? "-fx-background-color: -color-accent-subtle; -fx-background-radius: 3px; -fx-cursor: hand;"
-                : "-fx-background-color: transparent; -fx-background-radius: 3px; -fx-cursor: hand;");
+    // Rows share the hover look of the Home spaces column (grey fill + 3px accent bar on the left).
+    private static final String ROW_BASE = "-fx-background-radius: 0; -fx-border-radius: 0; -fx-border-width: 0 0 0 3px; -fx-cursor: hand;";
+
+    private void applyRowStyle(VBox row, boolean selected) {
+        row.setStyle(selected
+                ? "-fx-background-color: -color-accent-subtle; -fx-border-color: transparent transparent transparent -color-accent-emphasis;" + ROW_BASE
+                : "-fx-background-color: transparent; -fx-border-color: transparent;" + ROW_BASE);
+    }
+
+    private void applyHoverStyle(VBox row) {
+        row.setStyle("-fx-background-color: -color-bg-middle; -fx-border-color: transparent transparent transparent -color-accent-emphasis;" + ROW_BASE);
     }
 
     private void refreshSelection() {

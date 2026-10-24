@@ -9,6 +9,7 @@ import javafx.scene.layout.*;
 import komm.App;
 import komm.model.dto.summary.InstallationSummary;
 import komm.ui.modals.installationsettings.*;
+import komm.ui.utils.IconColorUtil;
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignS;
@@ -22,6 +23,7 @@ public class InstallationSettingsModal extends HBox {
 
     private final GeneralInstallationTab generalTab;
     private final HostedServersTab hostedServersTab;
+    private final UptimeTab uptimeTab;
     private final AccessTokensTab accessTokensTab;
 
     private VBox tabNav;
@@ -40,6 +42,7 @@ public class InstallationSettingsModal extends HBox {
 
         this.generalTab       = new GeneralInstallationTab(ctx);
         this.hostedServersTab  = new HostedServersTab(ctx);
+        this.uptimeTab         = new UptimeTab(ctx);
         this.accessTokensTab   = installation.isOwner() ? new AccessTokensTab(ctx) : null;
 
         setAlignment(Pos.TOP_LEFT);
@@ -76,7 +79,7 @@ public class InstallationSettingsModal extends HBox {
         VBox iconSection = new VBox(0);
         iconSection.setPadding(new Insets(24, 20, 18, 20));
         iconSection.setAlignment(Pos.CENTER);
-        iconSection.getChildren().add(buildIconAvatar());
+        iconSection.getChildren().add(buildIdentity());
 
         tabNav = createTabNav();
         VBox.setVgrow(tabNav, Priority.ALWAYS);
@@ -85,22 +88,28 @@ public class InstallationSettingsModal extends HBox {
         return pane;
     }
 
-    private StackPane buildIconAvatar() {
-        StackPane pane = new StackPane();
-        pane.setMinSize(80, 80);
-        pane.setMaxSize(80, 80);
-        pane.setPrefSize(80, 80);
-        pane.setStyle(
+    private VBox buildIdentity() {
+        StackPane tile = new StackPane(IconColorUtil.colored(MaterialDesignS.SERVER, "-color-accent-emphasis", 28));
+        tile.setMinSize(64, 64);
+        tile.setMaxSize(64, 64);
+        tile.setStyle(
                 "-fx-background-color: -color-accent-subtle;" +
                 "-fx-background-radius: 4px;" +
                 "-fx-border-color: -color-accent-muted;" +
                 "-fx-border-radius: 4px;" +
-                "-fx-border-width: 1.5px;"
+                "-fx-border-width: 1px;"
         );
-        FontIcon icon = new FontIcon(MaterialDesignS.SERVER);
-        icon.setIconSize(34);
-        pane.getChildren().add(icon);
-        return pane;
+
+        Label name = new Label(ctx.installation().getInstallationName());
+        name.setWrapText(true);
+        name.setMaxWidth(190);
+        name.setAlignment(Pos.CENTER);
+        name.setTextAlignment(javafx.scene.text.TextAlignment.CENTER);
+        name.setStyle("-fx-font-size: 15px; -fx-font-weight: bold; -fx-text-fill: -color-fg-default;");
+
+        VBox box = new VBox(10, tile, name, InstallationSettingsUi.buildStatusBadge(ctx.installation().getStatus()));
+        box.setAlignment(Pos.CENTER);
+        return box;
     }
 
     private VBox createTabNav() {
@@ -116,6 +125,7 @@ public class InstallationSettingsModal extends HBox {
 
         addNavItem(generalTab);
         addNavItem(hostedServersTab);
+        addNavItem(uptimeTab);
         if (accessTokensTab != null) addNavItem(accessTokensTab);
         return nav;
     }

@@ -28,6 +28,7 @@ public class UserSettings {
     private static final String STREAM_VOLUME_KEY_PREFIX = "audio.stream.volume.";       // 0.0–2.0, default 1.0
     private static final String SERVER_SPLIT_KEY_PREFIX = "ui.server.split.";           // pixel width of channel panel
     private static final String DM_SPLIT_KEY            = "ui.dm.split";                // pixel width of DM sidebar, default 300px
+    private static final String SPACES_WIDTH_KEY        = "ui.home.spaces.width";       // pixel width of the Home servers/installations column, default 300px
     private static final String NOTIFICATIONS_DM_KEY    = "notifications.dm.enabled";   // default true
     private static final String THEME_KEY               = "ui.theme";
     private static final String SCREENSHARE_RESOLUTION_KEY = "screenshare.quality.resolution";
@@ -266,6 +267,18 @@ public class UserSettings {
         String v = String.valueOf(pixelWidth);
         if (!v.equals(properties.getProperty(key))) {
             properties.setProperty(key, v);
+            save();
+        }
+    }
+
+    public double getSpacesWidth() {
+        return Double.parseDouble(properties.getProperty(SPACES_WIDTH_KEY, "300.0"));
+    }
+
+    public void setSpacesWidth(double pixelWidth) {
+        String v = String.valueOf(pixelWidth);
+        if (!v.equals(properties.getProperty(SPACES_WIDTH_KEY))) {
+            properties.setProperty(SPACES_WIDTH_KEY, v);
             save();
         }
     }
