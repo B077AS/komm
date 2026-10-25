@@ -111,16 +111,32 @@ public class UserProfilePopup extends Popup {
     private UserSummary pendingBadgeUser;
     private VBox pendingBadgeContainer;
 
-    private final Service<ServerMemberSummary> roleBadgesService = new Service<>() {
+    /** A member's role assignment together with the custom roles needed to display it. */
+    private record RoleBadgeData(ServerMemberSummary member, List<CustomRoleSummary> customRoles) {}
+
+    private final Service<RoleBadgeData> roleBadgesService = new Service<>() {
         @Override
-        protected Task<ServerMemberSummary> createTask() {
+        protected Task<RoleBadgeData> createTask() {
             final UUID userId = pendingBadgeUser.getUserId();
             return new Task<>() {
                 @Override
-                protected ServerMemberSummary call() throws Exception {
+                protected RoleBadgeData call() throws Exception {
                     try { App.getServices().installation(); } catch (IllegalStateException e) { return null; }
-                    return App.getServices().installation()
-                            .getInstallationPermissionService().getMember(userId);
+                    var permissions = App.getServices().installation().getInstallationPermissionService();
+                    ServerMemberSummary member = permissions.getMember(userId);
+                    if (member == null) return null;
+
+                    // The shared PermissionManager is cleared when leaving the server page and refilled
+                    // asynchronously (or left empty if that fetch failed), so it can't be trusted to
+                    // resolve role ids. Ask the server directly when it can't.
+                    List<CustomRoleSummary> roles = App.getPermissionManager().getCustomRoles();
+                    List<UUID> ids = member.getCustomRoleIds();
+                    if (ids != null && !ids.isEmpty()
+                            && !roles.stream().map(CustomRoleSummary::getRoleId).toList().containsAll(ids)) {
+                        var summary = permissions.getServerPermissions();
+                        if (summary != null && summary.getCustomRoles() != null) roles = summary.getCustomRoles();
+                    }
+                    return new RoleBadgeData(member, roles);
                 }
             };
         }
@@ -164,7 +180,7 @@ public class UserProfilePopup extends Popup {
 
         roleBadgesService.setOnSucceeded(e -> applyRoleBadges(roleBadgesService.getValue()));
         roleBadgesService.setOnFailed(e ->
-                log.debug("Could not load member roles for badge display: {}", roleBadgesService.getException().getMessage()));
+                log.warn("Could not load member roles for badge display: {}", roleBadgesService.getException().getMessage()));
 
         actionService.setOnSucceeded(e -> {
             if (pendingActionUserId.equals(currentUserId)) {
@@ -522,10 +538,11 @@ public class UserProfilePopup extends Popup {
         roleBadgesService.restart();
     }
 
-    private void applyRoleBadges(ServerMemberSummary member) {
-        if (member == null) return;
+    private void applyRoleBadges(RoleBadgeData data) {
+        if (data == null) return;
+        ServerMemberSummary member = data.member();
 
-        List<CustomRoleSummary> allRoles = App.getPermissionManager().getCustomRoles();
+        List<CustomRoleSummary> allRoles = data.customRoles();
         String baseRole = member.getBaseRole();
         List<UUID> customIds = member.getCustomRoleIds();
 

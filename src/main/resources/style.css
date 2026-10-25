@@ -5444,7 +5444,7 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 }
 
 .code-area .selection {
-	-fx-fill: -color-highlight;
+	-fx-highlight-fill: -color-highlight;
 }
 
 /* line-number gutter — custom factory leaves styling to CSS (no white square) */
