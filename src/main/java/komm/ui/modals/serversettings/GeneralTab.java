@@ -14,15 +14,12 @@ import komm.api.HttpStatusException;
 import komm.model.dto.request.ServerUpdateRequest;
 import komm.model.dto.summary.InstallationSummary;
 import komm.model.dto.summary.ServerSummary;
-import javafx.geometry.Bounds;
 import komm.ui.customnodes.CustomNotification;
 import komm.ui.emojis.EmojiFilterTextField;
-import komm.ui.emojis.EmojiPickerPopup;
 import komm.ui.emojis.EmojiTextArea;
 import komm.utils.UserSettings;
 import lombok.extern.slf4j.Slf4j;
 import org.kordamp.ikonli.javafx.FontIcon;
-import org.kordamp.ikonli.materialdesign2.MaterialDesignE;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignL;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignS;
 
@@ -43,7 +40,6 @@ public class GeneralTab implements ServerSettingsTab {
     private static final int MAX_DESC_LENGTH = 500;
 
     private final EmojiTextArea descField = new EmojiTextArea(false);
-    private final EmojiPickerPopup descPicker = new EmojiPickerPopup();
     private final Label descCounter = new Label("0/" + MAX_DESC_LENGTH);
     private final EmojiFilterTextField serverNameField = EmojiFilterTextField.maxLength(100);
     private final ComboBox<InstallationSummary> installationComboBox = new ComboBox<>();
@@ -198,8 +194,6 @@ public class GeneralTab implements ServerSettingsTab {
             descField.setEditable(false);
             descField.setOpacity(0.75);
         }
-
-        descPicker.setOnEmojiSelected(descField::insertEmoji);
     }
 
     private ScrollPane buildPane() {
@@ -216,32 +210,7 @@ public class GeneralTab implements ServerSettingsTab {
         HBox descHeaderRow = new HBox(descLabel, descFiller, descCounter);
         descHeaderRow.setAlignment(Pos.CENTER_LEFT);
 
-        VBox descSection;
-        if (allowEdit) {
-            Button emojiBtn = new Button(null, new FontIcon(MaterialDesignE.EMOTICON_OUTLINE));
-            emojiBtn.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE);
-            emojiBtn.setFocusTraversable(false);
-            emojiBtn.setTooltip(new Tooltip("Insert emoji"));
-            emojiBtn.setOnAction(e -> {
-                if (descPicker.isShowing()) {
-                    descPicker.hide();
-                    return;
-                }
-                Bounds b = emojiBtn.localToScreen(emojiBtn.getBoundsInLocal());
-                if (b != null) {
-                    double x = b.getMinX();
-                    double y = b.getMinY() - 460 - 4;
-                    if (y < 0) y = b.getMaxY() + 4;
-                    descPicker.show(emojiBtn.getScene().getWindow(), x, y);
-                }
-            });
-            Region footerFiller = new Region();
-            HBox.setHgrow(footerFiller, Priority.ALWAYS);
-            HBox descFooterRow = new HBox(footerFiller, emojiBtn);
-            descSection = new VBox(4, descHeaderRow, descField, descFooterRow);
-        } else {
-            descSection = new VBox(6, descHeaderRow, descField);
-        }
+        VBox descSection = new VBox(6, descHeaderRow, descField);
 
         pane.getChildren().addAll(
                 new VBox(6, nameLabel, serverNameField),
@@ -251,42 +220,27 @@ public class GeneralTab implements ServerSettingsTab {
         if (allowEdit && App.getServices().hasInstallation()) {
             Integer currentDefault = serverDetails.getDefaultChannelPanelWidth();
 
-            Separator widthDivider = new Separator();
-
             Label widthLabel = sectionLabel("Default Channel Panel Width");
 
-            // Read-only display field mirrors the Installation section's field.
-            TextField widthValueField = new TextField(currentDefault != null ? currentDefault + " px" : "Not set");
-            widthValueField.setEditable(false);
-            widthValueField.setFocusTraversable(false);
-            widthValueField.setMaxWidth(Double.MAX_VALUE);
-            widthValueField.getStyleClass().add(Styles.SMALL);
-            widthValueField.setStyle("-fx-opacity: 0.75;");
-            HBox.setHgrow(widthValueField, Priority.ALWAYS);
-
-            Button setBtn = new Button("Use my current width");
-            setBtn.getStyleClass().addAll(Styles.ACCENT, Styles.SMALL);
-            setBtn.setFocusTraversable(false);
-            setBtn.setOnAction(e -> {
-                int px = (int) Math.round(UserSettings.getInstance()
-                        .getServerSplitPosition(serverDetails.getServerId(), serverDetails.getDefaultChannelPanelWidth()));
-                pendingDefaultChannelPanelWidth = px;
-                widthValueField.setText(px + " px");
-                ctx.refreshSaveButton();
-            });
-
-            HBox widthRow = new HBox(8, widthValueField, setBtn);
-            widthRow.setAlignment(Pos.CENTER_LEFT);
+            // Read-only: the value can only be changed by copying the admin's own panel width.
+            PanelWidthCard widthCard = new PanelWidthCard(
+                    currentDefault,
+                    () -> (int) Math.round(UserSettings.getInstance()
+                            .getServerSplitPosition(serverDetails.getServerId(), serverDetails.getDefaultChannelPanelWidth())),
+                    px -> {
+                        pendingDefaultChannelPanelWidth = px;
+                        ctx.refreshSaveButton();
+                    });
 
             Label widthHint = new Label(
                     "The width new members see the channel list at, before they resize it themselves.");
             widthHint.setWrapText(true);
             widthHint.setStyle("-fx-font-size: 11px; -fx-text-fill: -color-fg-subtle;");
 
-            VBox widthSection = new VBox(6, widthLabel, widthRow, widthHint);
+            VBox widthSection = new VBox(6, widthLabel, widthCard, widthHint);
             widthSection.setMaxWidth(Double.MAX_VALUE);
 
-            pane.getChildren().addAll(widthDivider, widthSection);
+            pane.getChildren().add(widthSection);
         }
 
         return wrapScroll(pane);

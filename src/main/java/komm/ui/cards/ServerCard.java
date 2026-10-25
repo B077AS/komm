@@ -3,6 +3,8 @@ package komm.ui.cards;
 import atlantafx.base.theme.Styles;
 import javafx.animation.FadeTransition;
 import javafx.animation.ScaleTransition;
+import javafx.beans.value.ChangeListener;
+import javafx.beans.value.WeakChangeListener;
 import javafx.concurrent.Service;
 import javafx.concurrent.Task;
 import javafx.geometry.Insets;
@@ -59,6 +61,8 @@ public class ServerCard extends HBox {
     private HBox statsArea;
     private MenuItem connectMenuItem;
     private Runnable connectAction;
+    /** Held strongly here; the App property only keeps a weak reference, so discarded cards don't leak. */
+    private final ChangeListener<UUID> connectedListener = (obs, was, now) -> updateActiveHighlight();
 
     public ServerCard(ServerSummary serverSummary) {
         this(serverSummary, false);
@@ -81,6 +85,22 @@ public class ServerCard extends HBox {
         getStyleClass().add("server-row");
         if (compact) getStyleClass().add("compact");
         initialize();
+        App.connectedServerIdProperty().addListener(new WeakChangeListener<>(connectedListener));
+        updateActiveHighlight();
+    }
+
+    /**
+     * Keeps the hover look on while this server is being connected to or is the connected one, so the row
+     * reads as "you are in this one" even without the pointer on it. Cleared again if the connection fails
+     * or the user disconnects.
+     */
+    private void updateActiveHighlight() {
+        boolean active = connectingSpinner != null
+                || serverSummary.getServerId().equals(App.connectedServerIdProperty().get());
+        if (active == getStyleClass().contains("active-server")) return;
+        if (active) getStyleClass().add("active-server");
+        else getStyleClass().remove("active-server");
+        if (!compact) animateCard(active || isHover() ? 1.03 : 1.0, 1.0);
     }
 
     private void initialize() {
@@ -372,16 +392,21 @@ public class ServerCard extends HBox {
         setOnMouseEntered(e -> { if (isOnline) animateCard(compact ? 1.0 : 1.03, 1.0); });
         setOnMouseExited(e -> {
             if (optionsBtn.isShowing()) return;
-            animateCard(1.0, 1.0);
+            animateCard(restScale(), 1.0);
         });
         optionsBtn.showingProperty().addListener((obs, wasShowing, isShowing) -> {
             if (isShowing) {
                 getStyleClass().add("menu-open");
             } else {
                 getStyleClass().remove("menu-open");
-                if (!isHover()) animateCard(1.0, 1.0);
+                if (!isHover()) animateCard(restScale(), 1.0);
             }
         });
+    }
+
+    /** Scale the card settles at when the pointer is away: still enlarged while it is the active server. */
+    private double restScale() {
+        return !compact && getStyleClass().contains("active-server") ? 1.03 : 1.0;
     }
 
     private void animateCard(double scale, double opacity) {
@@ -409,12 +434,14 @@ public class ServerCard extends HBox {
         HBox.setMargin(connectingSpinner, new Insets(0, compact ? 4 : 12, 0, compact ? 4 : 12));
         int idx = getChildren().indexOf(compact ? optionsBtn : statsArea);
         if (idx >= 0) getChildren().add(idx, connectingSpinner);
+        updateActiveHighlight();
     }
 
     public void clearConnecting() {
         if (connectingSpinner == null) return;
         getChildren().remove(connectingSpinner);
         connectingSpinner = null;
+        updateActiveHighlight();
     }
 
     public void updateActiveUsers(int count) {

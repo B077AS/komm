@@ -5807,7 +5807,8 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 }
 
 .server-row:hover,
-.server-row.menu-open {
+.server-row.menu-open,
+.server-row.active-server {
 	-fx-border-color: -color-accent-emphasis;
 	-fx-border-width: 1px;
 	-fx-border-radius: 3px;
@@ -6712,7 +6713,8 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 }
 
 .server-row.compact:hover,
-.server-row.compact.menu-open {
+.server-row.compact.menu-open,
+.server-row.compact.active-server {
 	-fx-background-color: -color-bg-middle;
 	-fx-border-color: transparent transparent transparent -color-accent-emphasis;
 	-fx-border-width: 0 0 0 3px;
