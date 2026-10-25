@@ -195,11 +195,11 @@ public class InfoUserTab implements UserSettingsTab {
     }
 
     private VBox linkTile(Ikon icon, String label, String url) {
-        FontIcon fi = IconColorUtil.colored(icon, "-color-accent-fg", 18);
+        FontIcon fi = IconColorUtil.colored(icon, "-color-bg-default", 18);
         StackPane badge = new StackPane(fi);
         badge.setMinSize(38, 38);
         badge.setMaxSize(38, 38);
-        badge.setStyle("-fx-background-color: -color-accent-muted; -fx-background-radius: 3px;");
+        badge.setStyle("-fx-background-color: -color-accent-emphasis; -fx-background-radius: 3px;");
 
         Label lbl = new Label(label);
         lbl.setStyle("-fx-font-size: 11.5px; -fx-font-weight: bold;");

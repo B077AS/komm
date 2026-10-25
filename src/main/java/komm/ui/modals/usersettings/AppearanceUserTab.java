@@ -6,13 +6,13 @@ import javafx.scene.Node;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.layout.FlowPane;
-import javafx.scene.layout.StackPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
-import javafx.scene.shape.Circle;
 import komm.ui.theme.AppTheme;
 import komm.ui.theme.ThemeManager;
 import org.kordamp.ikonli.javafx.FontIcon;
-import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignP;
 
 import static komm.ui.modals.usersettings.UserSettingsUi.*;
@@ -21,6 +21,8 @@ import static komm.ui.modals.usersettings.UserSettingsUi.*;
 public class AppearanceUserTab implements UserSettingsTab {
 
     private final ScrollPane pane;
+    private static final double TILE_WIDTH = 150;
+
     private FlowPane swatchGrid;
 
     public AppearanceUserTab() {
@@ -33,7 +35,7 @@ public class AppearanceUserTab implements UserSettingsTab {
 
         root.getChildren().add(sectionLabel("Accent Colour"));
 
-        swatchGrid = new FlowPane(12, 20);
+        swatchGrid = new FlowPane(10, 10);
         swatchGrid.setPadding(new Insets(4, 0, 0, 0));
         populateSwatches();
 
@@ -50,58 +52,60 @@ public class AppearanceUserTab implements UserSettingsTab {
 
     private VBox buildSwatch(AppTheme theme) {
         boolean active = ThemeManager.get().getCurrentTheme() == theme;
+        String hex = theme.getSwatchColor();
 
-        Circle colorCircle = new Circle(20);
-        colorCircle.setStyle("-fx-fill: " + theme.getSwatchColor() + ";");
-
-        StackPane circlePane = new StackPane(colorCircle);
-        if (active) {
-            FontIcon check = new FontIcon(MaterialDesignC.CHECK);
-            circlePane.getChildren().add(check);
-        }
+        // Mini preview: a message, a reply and a button in this theme's accent.
+        VBox preview = new VBox(5,
+                bar(70, 8, "-fx-background-color: " + hex + "66;"),
+                bar(45, 8, "-fx-background-color: rgba(255,255,255,0.10);"),
+                bar(44, 14, "-fx-background-color: " + hex + ";"));
+        preview.setPadding(new Insets(8));
+        preview.setStyle("-fx-background-color: -color-bg-inset; -fx-background-radius: 3px;");
 
         Label name = new Label(theme.getDisplayName());
-        name.setStyle("-fx-font-size: 11px; -fx-text-fill: -color-fg-muted;");
+        name.setStyle("-fx-font-size: 12px;");
+        Label code = new Label(hex);
+        code.setStyle("-fx-font-size: 10.5px; -fx-text-fill: -color-fg-subtle;");
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        HBox footer = new HBox(name, spacer, code);
+        footer.setAlignment(Pos.CENTER_LEFT);
 
-        VBox box = new VBox(8, circlePane, name);
-        box.setAlignment(Pos.CENTER);
-        box.setPrefWidth(84);
-        box.setPadding(new Insets(10));
+        VBox tile = new VBox(8, preview, footer);
+        tile.setPrefWidth(TILE_WIDTH);
+        tile.setMinWidth(TILE_WIDTH);
+        tile.setPadding(new Insets(10));
+        tile.setStyle(tileStyle(hex, active, false));
 
-        if (active) {
-            box.setStyle(
-                "-fx-background-color: rgba(255,255,255,0.06);" +
-                "-fx-background-radius: 3px;" +
-                "-fx-border-color: " + theme.getSwatchColor() + ";" +
-                "-fx-border-radius: 3px;" +
-                "-fx-border-width: 2px;");
-        } else {
-            applyIdleStyle(box);
-            box.setOnMouseEntered(e -> box.setStyle(
-                "-fx-background-color: rgba(255,255,255,0.04);" +
-                "-fx-background-radius: 3px;" +
-                "-fx-border-color: transparent;" +
-                "-fx-border-radius: 3px;" +
-                "-fx-border-width: 2px;" +
-                "-fx-cursor: hand;"));
-            box.setOnMouseExited(e -> applyIdleStyle(box));
+        if (!active) {
+            tile.setOnMouseEntered(e -> tile.setStyle(tileStyle(hex, false, true)));
+            tile.setOnMouseExited(e -> tile.setStyle(tileStyle(hex, false, false)));
         }
-
-        box.setOnMouseClicked(e -> {
+        tile.setOnMouseClicked(e -> {
             ThemeManager.get().apply(theme);
             populateSwatches();
         });
-
-        return box;
+        return tile;
     }
 
-    private static void applyIdleStyle(VBox box) {
-        box.setStyle(
-            "-fx-background-radius: 3px;" +
-            "-fx-border-color: transparent;" +
-            "-fx-border-radius: 3px;" +
-            "-fx-border-width: 2px;" +
-            "-fx-cursor: hand;");
+    private static Region bar(double width, double height, String style) {
+        Region r = new Region();
+        r.setPrefSize(width, height);
+        r.setMinSize(width, height);
+        r.setMaxSize(width, height);
+        r.setStyle(style + "-fx-background-radius: 2px;");
+        return r;
+    }
+
+    private static String tileStyle(String hex, boolean active, boolean hover) {
+        // Constant 2px border so selecting a tile never changes its size and shifts the grid.
+        String border = active ? hex : (hover ? "-color-fg-subtle" : "-color-border-default");
+        return "-fx-background-color: -color-bg-subtle;" +
+               "-fx-background-radius: 4px;" +
+               "-fx-border-color: " + border + ";" +
+               "-fx-border-radius: 4px;" +
+               "-fx-border-width: 2px;" +
+               "-fx-cursor: hand;";
     }
 
     @Override

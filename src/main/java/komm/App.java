@@ -11,6 +11,9 @@ import java.util.Set;
 import java.util.UUID;
 
 import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.ObjectProperty;
+import javafx.beans.property.ReadOnlyObjectProperty;
+import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.property.SimpleBooleanProperty;
 
 import atlantafx.base.controls.ModalPane;
@@ -77,8 +80,9 @@ public class App extends Application {
     @Getter
     public static WebrtcRoomClient webrtcRoomClient;
     @Getter
-    @Setter
     private static ServerPage cachedServerPage;
+    /** Id of the server whose page is currently cached (connected or connecting), {@code null} when none. */
+    private static final ObjectProperty<UUID> connectedServerId = new SimpleObjectProperty<>();
     @Getter
     private static HomePage cachedHomePage;
     @Getter
@@ -329,7 +333,7 @@ public class App extends Application {
         komm.ui.screenshare.StreamPopOutWindow.closeAll();
         user = null;
         cachedHomePage = null;
-        cachedServerPage = null;
+        setCachedServerPage(null);
         cachedDirectMessagePage = null;
         permissionManager.clear();
         disconnectFromVoice();
@@ -630,6 +634,19 @@ public class App extends Application {
         }
     }
 
+    /** Sets (or clears, with {@code null}) the cached server page and publishes which server that is. */
+    public static void setCachedServerPage(ServerPage page) {
+        cachedServerPage = page;
+        UUID id = page != null ? page.getServer().getServerId() : null;
+        if (Platform.isFxApplicationThread()) connectedServerId.set(id);
+        else Platform.runLater(() -> connectedServerId.set(id));
+    }
+
+    /** Observable id of the connected server, for UI that highlights it (e.g. the Home page's server rows). */
+    public static ReadOnlyObjectProperty<UUID> connectedServerIdProperty() {
+        return connectedServerId;
+    }
+
     public static ServerPage getOrCreateServerPage(ServerSummary server) {
         if (cachedServerPage == null ||
                 !cachedServerPage.getServer().getServerId().equals(server.getServerId())) {
@@ -639,7 +656,7 @@ public class App extends Application {
                 // orphaned and never receive the STREAM_ENDED teardown.
                 cachedServerPage.getChatSection().hideScreenShare();
             }
-            cachedServerPage = new ServerPage(server);
+            setCachedServerPage(new ServerPage(server));
         }
         return cachedServerPage;
     }

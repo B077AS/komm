@@ -628,8 +628,22 @@ public class EmojiTextField extends HBox {
     }
 
     public void setMaxLength(int maxLength) {
-        sink.setTextFormatter(new TextFormatter<>(c ->
-                c.getControlNewText().length() <= maxLength ? c : null));
+        sink.setTextFormatter(new TextFormatter<>(c -> {
+            String t = c.getControlNewText();
+            if (t.length() > maxLength) return null;
+            // A low surrogate is only valid straight after its high surrogate; if the first half of a split
+            // emoji was rejected, its partner must not slip in alone.
+            String in = c.getText();
+            if (in != null && !in.isEmpty() && Character.isLowSurrogate(in.charAt(0))) {
+                int p = c.getRangeStart();
+                String before = c.getControlText();
+                if (p == 0 || p > before.length() || !Character.isHighSurrogate(before.charAt(p - 1))) return null;
+            }
+            // An emoji can arrive as two separate key events; never accept just its first half into the
+            // last slot, which would leave a lone high surrogate that renders as an empty square.
+            if (t.length() == maxLength && !t.isEmpty() && Character.isHighSurrogate(t.charAt(t.length() - 1))) return null;
+            return c;
+        }));
     }
 
     public void insertEmoji(Emoji emoji) {

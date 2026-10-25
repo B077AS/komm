@@ -7,7 +7,6 @@ import javafx.concurrent.Task;
 import javafx.concurrent.Worker;
 import javafx.geometry.Bounds;
 import javafx.geometry.Insets;
-import javafx.geometry.Orientation;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.*;
@@ -21,18 +20,16 @@ import komm.ui.cards.InstallationCard;
 import komm.ui.cards.ServerCard;
 import komm.ui.modals.ConfirmationModal;
 import komm.ui.modals.CreateInstallationModal;
-import komm.ui.modals.CreateInviteModal;
 import komm.ui.utils.IconColorUtil;
 import komm.ui.modals.CreateServerModal;
 import komm.ui.modals.DownloadInstallationModal;
-import komm.ui.modals.EditServerModal;
 import komm.ui.modals.JoinViaInviteModal;
 import komm.ui.customnodes.CustomNotification;
 import komm.ui.chat.DmChatSection;
-import komm.ui.pages.DirectMessagePage;
 import komm.ui.sections.FriendsSection;
 import komm.ui.sections.ProfileSection;
 import komm.ui.utils.SidePanel;
+import komm.utils.UserSettings;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.kordamp.ikonli.feather.Feather;
@@ -44,13 +41,20 @@ import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
+/**
+ * Home: one page with the direct messages as the main area and the user's servers /
+ * installations in a slim "spaces" column on the left (a switch flips the column between
+ * the two). Profile and friends slide in from the right.
+ */
 @Slf4j
 public class HomePage extends StackPane {
 
     // ── Constants ─────────────────────────────────────────────────────────────
     private static final double PROFILE_WIDTH = 380.0;
-    private static final double SIDEBAR_WIDTH = 200.0;
-    private static final double HEADER_HEIGHT = 96.0;
+    private static final double SPACES_MIN_WIDTH = 230.0;
+    private static final double SPACES_MAX_WIDTH = 480.0;
+    private static final double TAB_STRIP_HEIGHT = 48.0;
+    private static final double HEADER_HEIGHT = 48.0;
 
     // ── Data ──────────────────────────────────────────────────────────────────
     private Map<UUID, ServerSummary> serverMap;
@@ -63,29 +67,22 @@ public class HomePage extends StackPane {
     private List<InstallationCard> filteredInstallationCards = new ArrayList<>();
 
     // ── Layout nodes ──────────────────────────────────────────────────────────
-    private StackPane centerContainer = new StackPane();
+    private final VBox spacesList = new VBox(2);
     private VBox loadingNode;
     private VBox errorNode;
+    private Node emptyServersNode;
+    private Node noResultsServersNode;
     private Node emptyInstallsNode;
     private Node noResultsInstallsNode;
 
-    // ── Sidebar nav items ─────────────────────────────────────────────────────
-    private VBox navServers;
-    private VBox navInstallations;
-    private VBox navMessages;
-    private Label pageTitleLabel;
-
-    // ── Action strip ──────────────────────────────────────────────────────────
-    private HBox actionStrip;
+    // ── Spaces column controls ────────────────────────────────────────────────
+    private ToggleButton serversToggle;
+    private ToggleButton installsToggle;
+    private Button createBtn;
     private Button joinBtn;
-    private ToggleGroup serverFilterGroup = new ToggleGroup();
-    private ToggleGroup installFilterGroup = new ToggleGroup();
-    private HBox serverFilterChips;
-    private HBox installFilterChips;
-    private StackPane filterChipSlot;
     private Label countLabel;
+    private TextField searchField;
     private Circle friendsBadgeDot;
-    private Circle dmNavDot;
 
     // ── Side panels ───────────────────────────────────────────────────────────
     @Getter
@@ -97,6 +94,9 @@ public class HomePage extends StackPane {
     private Button toggleProfileButton;
     private Button toggleFriendsButton;
 
+    // ── Direct messages ───────────────────────────────────────────────────────
+    private final DirectMessagePage dmPage;
+
     // ── Drag ──────────────────────────────────────────────────────────────────
     private int draggedIndex;
 
@@ -106,18 +106,9 @@ public class HomePage extends StackPane {
     private final Set<UUID> connectingServers = new HashSet<>();
     private ServerSummary pendingConnectServer;
     private Runnable pendingClearSpinner;
+    private String searchQuery = "";
 
-    // ── Active filter labels ──────────────────────────────────────────────────
-    private String activeServerFilter = "ALL";
-    private String activeInstallFilter = "ALL";
-
-    // ── Search queries ────────────────────────────────────────────────────────
-    private String serverSearchQuery = "";
-    private String installSearchQuery = "";
-    private TextField serverSearchField;
-    private TextField installSearchField;
-
-    private enum ViewMode {SERVERS, INSTALLATIONS, MESSAGES}
+    private enum ViewMode {SERVERS, INSTALLATIONS}
 
     // ── record to carry both fetch results together ───────────────────────────
     private record LoadResult(Map<UUID, ServerSummary> servers, List<InstallationSummary> installations) {
@@ -170,20 +161,12 @@ public class HomePage extends StackPane {
     // ─────────────────────────────────────────────────────────────────────────
     public HomePage() {
 
+        dmPage = new DirectMessagePage();
+        App.setCachedDirectMessagePage(dmPage);
+
         BorderPane root = new BorderPane();
-        root.setLeft(buildSidebar());
-
-        BorderPane main = new BorderPane();
-        main.setTop(buildHeader());
-
-        actionStrip = buildActionStrip();
-
-        BorderPane innerMain = new BorderPane();
-        innerMain.setTop(actionStrip);
-        innerMain.setCenter(centerContainer);
-
-        main.setCenter(innerMain);
-        root.setCenter(main);
+        root.setTop(buildHeader());
+        root.setCenter(buildSplit(buildSpacesColumn()));
 
         // ── Side panels ───────────────────────────────────────────────────────
         profilePanel = new SidePanel(PROFILE_WIDTH, HEADER_HEIGHT, buildScrollPane(profileSection));
@@ -192,11 +175,11 @@ public class HomePage extends StackPane {
         // ── Outside-click dismissal ───────────────────────────────────────────
         addEventFilter(MouseEvent.MOUSE_PRESSED, e -> {
             Node focused = getScene() != null ? getScene().getFocusOwner() : null;
-            if (focused == serverSearchField || focused == installSearchField) {
+            if (focused == searchField) {
                 Node current = (Node) e.getTarget();
                 boolean onSearchField = false;
                 while (current != null) {
-                    if (current == serverSearchField || current == installSearchField) {
+                    if (current == searchField) {
                         onSearchField = true;
                         break;
                     }
@@ -222,11 +205,24 @@ public class HomePage extends StackPane {
 
         getChildren().addAll(root, friendsPanel.getRoot(), profilePanel.getRoot());
 
+        // The DMs live on this page, so every time Home is put back on screen (e.g. after
+        // leaving a server) refresh the conversation list and restore the chat's scroll anchor.
+        sceneProperty().addListener((obs, oldScene, newScene) -> {
+            if (newScene == null) return;
+            Platform.runLater(() -> {
+                dmPage.reload();
+                dmPage.getChatSection().notifyPageResumed();
+                dmPage.onBecameVisible();
+            });
+        });
+
         // ── Loading / error / empty nodes ─────────────────────────────────────
         loadingNode = buildLoadingNode();
         errorNode = buildErrorNode();
-        emptyInstallsNode = buildEmptyState(MaterialDesignS.SERVER, "No installations yet", "Set up an installation to host your own servers.");
-        noResultsInstallsNode = buildEmptyState(MaterialDesignS.SERVER, "No installations found", "Try a different search term or filter.");
+        emptyServersNode = buildEmptyState(MaterialDesignC.CONTROLLER, "No servers yet", "Create one or join with an invite.");
+        noResultsServersNode = buildEmptyState(MaterialDesignC.CONTROLLER, "No servers found", "Try a different search.");
+        emptyInstallsNode = buildEmptyState(MaterialDesignS.SERVER, "No installations yet", "Set up one to host your own servers.");
+        noResultsInstallsNode = buildEmptyState(MaterialDesignS.SERVER, "No installations found", "Try a different search.");
 
         // ── Wire loadDataService ──────────────────────────────────────────────
         loadDataService.setOnSucceeded(e -> {
@@ -235,7 +231,7 @@ public class HomePage extends StackPane {
             installationsList = result.installations();
             refreshServerCards();
             refreshInstallationCards();
-            showListView();
+            renderSpaces();
             if (postLoadAction != null) {
                 postLoadAction.run();
                 postLoadAction = null;
@@ -291,7 +287,9 @@ public class HomePage extends StackPane {
     }
 
     public void startLoading() {
+        spacesList.getChildren().setAll(loadingNode);
         loadDataService.start();
+        dmPage.reload();
         checkDmUnreadOnStartup();
         checkFriendRequestPendingOnStartup();
     }
@@ -326,6 +324,7 @@ public class HomePage extends StackPane {
         if (serverMap == null || !serverMap.containsKey(serverId)) return;
         serverMap.get(serverId).setEffectivePermissions(effectivePermissions);
         refreshServerCards();
+        renderSpaces();
     }
 
     public void syncServerRole(UUID serverId, ServerSummary.Role newRole) {
@@ -337,6 +336,7 @@ public class HomePage extends StackPane {
     public void removeServer(UUID serverId) {
         if (serverMap == null || serverMap.remove(serverId) == null) return;
         refreshServerCards();
+        renderSpaces();
     }
 
     /** Remove an installation and all its servers from the list. Call on the FX thread. */
@@ -349,6 +349,7 @@ public class HomePage extends StackPane {
             boolean removed = installationsList.removeIf(i -> installationId.equals(i.getInstallationId()));
             if (removed) refreshInstallationCards();
         }
+        renderSpaces();
     }
 
     // ─── ScrollPane wrapper ───────────────────────────────────────────────────
@@ -364,111 +365,11 @@ public class HomePage extends StackPane {
         return sp;
     }
 
-    // ─── Sidebar ──────────────────────────────────────────────────────────────
-
-    private VBox buildSidebar() {
-        VBox sidebar = new VBox(4);
-        sidebar.setPrefWidth(SIDEBAR_WIDTH);
-        sidebar.setMinWidth(SIDEBAR_WIDTH);
-        sidebar.setMaxWidth(SIDEBAR_WIDTH);
-        sidebar.setPadding(new Insets(0, 8, 16, 8));
-        sidebar.setStyle(
-                "-fx-background-color: -color-bg-subtle;" +
-                        "-fx-border-color: transparent -color-border-default transparent transparent;" +
-                        "-fx-border-width: 0 1px 0 0;"
-        );
-
-        HBox brandRow = new HBox();
-        brandRow.setAlignment(Pos.CENTER_LEFT);
-        brandRow.setPadding(new Insets(16, 8, 20, 10));
-        Label brand = new Label("komm.");
-        brand.setStyle("-fx-font-size: 20px; -fx-font-weight: bold; -fx-text-fill: -color-fg-default;");
-        brandRow.getChildren().add(brand);
-
-        Label sectionLbl = new Label("VIEWS");
-        sectionLbl.setStyle("-fx-font-size: 10px; -fx-font-weight: bold; -fx-text-fill: -color-fg-subtle; -fx-padding: 0 0 4px 10px;");
-
-        navServers = buildNavItem(new FontIcon(MaterialDesignC.CONTROLLER), "Servers", ViewMode.SERVERS);
-        navInstallations = buildNavItem(new FontIcon(MaterialDesignS.SERVER), "Installations", ViewMode.INSTALLATIONS);
-        setNavActive(navServers);
-        setNavInactive(navInstallations);
-
-        Separator msgDivider = new Separator();
-        msgDivider.setPadding(new Insets(4, 8, 4, 8));
-
-        navMessages = buildNavItem(new FontIcon(Feather.MESSAGE_CIRCLE), "Messages", ViewMode.MESSAGES);
-        setNavInactive(navMessages);
-
-        dmNavDot = new Circle(5);
-        dmNavDot.setStyle("-fx-fill: -color-accent-emphasis;");
-        dmNavDot.setVisible(false);
-        dmNavDot.setMouseTransparent(true);
-        StackPane navMsgWrap = new StackPane(navMessages, dmNavDot);
-        StackPane.setAlignment(dmNavDot, Pos.CENTER_RIGHT);
-        StackPane.setMargin(dmNavDot, new Insets(0, 12, 0, 0));
-
-        App.dmUnreadProperty().addListener((obs, old, newVal) -> {
-            if (dmNavDot != null) dmNavDot.setVisible(newVal && currentViewMode != ViewMode.MESSAGES);
-        });
-
-        Region spacer = new Region();
-        VBox.setVgrow(spacer, Priority.ALWAYS);
-
-        String versionStr = komm.utils.AppConfig.getInstance().getProperty("client.version");
-        Label version = new Label("v" + (versionStr != null && !versionStr.isBlank() ? versionStr : "dev"));
-        version.setStyle("-fx-font-size: 10px; -fx-text-fill: -color-fg-subtle; -fx-padding: 0 0 0 10px;");
-
-        sidebar.getChildren().addAll(brandRow, sectionLbl, navServers, navInstallations,
-                msgDivider, navMsgWrap, spacer, version);
-        return sidebar;
-    }
-
-    private VBox buildNavItem(FontIcon icon, String text, ViewMode mode) {
-        Label lbl = new Label(text);
-        lbl.getStyleClass().add("nav-label");
-        HBox row = new HBox(10, icon, lbl);
-        row.setAlignment(Pos.CENTER_LEFT);
-        VBox item = new VBox(row);
-        item.setAlignment(Pos.CENTER_LEFT);
-        item.setPadding(new Insets(9, 12, 9, 12));
-        item.getStyleClass().add("nav-item");
-        item.setOnMouseClicked(e -> {
-            if (currentViewMode != mode) {
-                if (currentViewMode == ViewMode.MESSAGES && App.getCachedDirectMessagePage() != null)
-                    App.getCachedDirectMessagePage().getChatSection().saveScrollPosition();
-                currentViewMode = mode;
-                setNavActive(item);
-                if (mode == ViewMode.SERVERS) {
-                    setNavInactive(navInstallations);
-                    setNavInactive(navMessages);
-                } else if (mode == ViewMode.INSTALLATIONS) {
-                    setNavInactive(navServers);
-                    setNavInactive(navMessages);
-                } else {
-                    setNavInactive(navServers);
-                    setNavInactive(navInstallations);
-                }
-                switchView();
-            }
-        });
-        return item;
-    }
-
-    private void setNavActive(VBox item) {
-        item.getStyleClass().remove("nav-inactive");
-        if (!item.getStyleClass().contains("nav-active")) item.getStyleClass().add("nav-active");
-    }
-
-    private void setNavInactive(VBox item) {
-        item.getStyleClass().remove("nav-active");
-        if (!item.getStyleClass().contains("nav-inactive")) item.getStyleClass().add("nav-inactive");
-    }
-
     // ─── Header ───────────────────────────────────────────────────────────────
 
     private HBox buildHeader() {
-        pageTitleLabel = new Label("Servers");
-        pageTitleLabel.setStyle("-fx-font-size: 15px; -fx-font-weight: bold; -fx-text-fill: -color-fg-default;");
+        Label brand = new Label("komm.");
+        brand.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: -color-fg-default;");
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
@@ -490,79 +391,186 @@ public class HomePage extends StackPane {
         StackPane.setAlignment(friendsBadgeDot, Pos.TOP_RIGHT);
         StackPane.setMargin(friendsBadgeDot, new Insets(2, 2, 0, 0));
 
-        toggleProfileButton = iconBtn(Feather.SETTINGS, "Settings");
+        toggleProfileButton = iconBtn(MaterialDesignC.COG_OUTLINE, "Profile & settings");
         toggleProfileButton.setOnAction(e -> profilePanel.toggle(toggleProfileButton, friendsPanel));
 
         HBox header = new HBox(10);
         header.setAlignment(Pos.CENTER_LEFT);
         header.setPadding(new Insets(10, 16, 10, 20));
-        header.setMinHeight(48);
-        header.setMaxHeight(48);
+        header.setMinHeight(HEADER_HEIGHT);
+        header.setMaxHeight(HEADER_HEIGHT);
         header.setStyle(
-                "-fx-background-color: -color-bg-subtle;" +
+                "-fx-background-color: -color-sidebar-header;" +
                         "-fx-border-color: transparent transparent -color-border-default transparent;" +
                         "-fx-border-width: 0 0 1px 0;"
         );
-        header.getChildren().addAll(pageTitleLabel, spacer, friendsBtnWrap, toggleProfileButton);
+        header.getChildren().addAll(brand, spacer, friendsBtnWrap, toggleProfileButton);
         return header;
     }
 
-    // ─── Action strip ─────────────────────────────────────────────────────────
+    // ─── Spaces column (servers / installations) ──────────────────────────────
 
-    private HBox buildActionStrip() {
-        HBox createBtnGroup = buildCreateButtonGroup();
-
-        Separator rule = new Separator(Orientation.VERTICAL);
-        rule.setMaxHeight(20);
-
-        countLabel = new Label("0 servers");
-        countLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: -color-fg-muted; -fx-padding: 0 12px 0 0;");
-
-        serverSearchField = buildSearchField("Search servers…", q -> {
-            serverSearchQuery = q;
-            applyServerFilter();
+    private VBox buildSpacesColumn() {
+        // Servers | Installations switch: two equal-width tabs, same tab-strip look as the DM sidebar header
+        ToggleGroup modeGroup = new ToggleGroup();
+        serversToggle = modeToggle("Servers", MaterialDesignA.ACCOUNT_GROUP_OUTLINE, modeGroup);
+        installsToggle = modeToggle("Installations", MaterialDesignS.SERVER, modeGroup);
+        serversToggle.setSelected(true);
+        modeGroup.selectedToggleProperty().addListener((obs, old, neo) -> {
+            if (neo == null) {
+                old.setSelected(true);
+                return;
+            }
+            setViewMode(neo == serversToggle ? ViewMode.SERVERS : ViewMode.INSTALLATIONS);
         });
-        installSearchField = buildSearchField("Search installations…", q -> {
-            installSearchQuery = q;
-            applyInstallFilter();
+        GridPane switcher = new GridPane();
+        for (int i = 0; i < 2; i++) {
+            ColumnConstraints cc = new ColumnConstraints();
+            cc.setPercentWidth(50);
+            cc.setHgrow(Priority.ALWAYS);
+            switcher.getColumnConstraints().add(cc);
+        }
+        switcher.add(serversToggle, 0, 0);
+        switcher.add(installsToggle, 1, 0);
+        switcher.setMinHeight(TAB_STRIP_HEIGHT);
+        switcher.setMaxHeight(TAB_STRIP_HEIGHT);
+        switcher.setStyle("-fx-background-color: -color-bg-subtle;"
+                + "-fx-border-color: transparent transparent -color-border-default transparent; -fx-border-width: 0 0 1px 0;");
+
+        searchField = buildSearchField("Search servers…", q -> {
+            searchQuery = q;
+            applyFilters();
         });
-        HBox.setHgrow(serverSearchField, Priority.ALWAYS);
-        HBox.setHgrow(installSearchField, Priority.ALWAYS);
 
-        StackPane searchSlot = new StackPane(serverSearchField);
-        searchSlot.setAlignment(Pos.CENTER_LEFT);
-        HBox.setHgrow(searchSlot, Priority.ALWAYS);
-
-        serverFilterChips = buildServerFilterChips();
-        installFilterChips = buildInstallFilterChips();
-
-        filterChipSlot = new StackPane(serverFilterChips);
-        filterChipSlot.setAlignment(Pos.CENTER_RIGHT);
-
-        Separator refreshDivider = new Separator(Orientation.VERTICAL);
-        refreshDivider.setMaxHeight(20);
-        //HBox.setMargin(refreshDivider, new Insets(0, 4, 0, 10));
+        countLabel = new Label("SERVERS");
+        countLabel.setStyle("-fx-font-size: 10px; -fx-font-weight: bold; -fx-text-fill: -color-fg-subtle; -fx-padding: 4px 0 0 4px;");
 
         Button refreshBtn = new Button(null, new FontIcon(MaterialDesignR.REFRESH));
         ((FontIcon) refreshBtn.getGraphic()).setIconSize(13);
         refreshBtn.setFocusTraversable(false);
         refreshBtn.getStyleClass().addAll(Styles.BUTTON_ICON, Styles.FLAT);
         refreshBtn.setTooltip(new Tooltip("Refresh"));
-        refreshBtn.setStyle("-fx-padding: 4px;");
+        refreshBtn.setStyle("-fx-padding: 2px;");
         refreshBtn.setOnAction(e -> refreshCurrentView());
 
-        HBox strip = new HBox(0, createBtnGroup, rule, countLabel, searchSlot, filterChipSlot, refreshDivider, refreshBtn);
-        strip.setAlignment(Pos.CENTER_LEFT);
-        strip.setPadding(new Insets(8, 16, 8, 14));
-        strip.setMinHeight(48);
-        strip.setMaxHeight(48);
-        strip.setStyle(
-                "-fx-background-color: -color-bg-subtle;" +
-                        "-fx-border-color: transparent transparent -color-border-default transparent;" +
-                        "-fx-border-width: 0 0 1px 0;"
-        );
-        strip.setUserData(new Object[]{countLabel, searchSlot});
-        return strip;
+        Region countSpacer = new Region();
+        HBox.setHgrow(countSpacer, Priority.ALWAYS);
+        HBox countRow = new HBox(countLabel, countSpacer, refreshBtn);
+        countRow.setAlignment(Pos.CENTER_LEFT);
+
+        spacesList.setFillWidth(true);
+        spacesList.setPadding(new Insets(0, 0, 8, 0));
+        ScrollPane scroll = new ScrollPane(spacesList);
+        scroll.setFitToWidth(true);
+        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scroll.setStyle("-fx-background: transparent; -fx-background-color: transparent;");
+        VBox.setVgrow(scroll, Priority.ALWAYS);
+
+        createBtn = new Button("Create", new FontIcon(Feather.PLUS));
+        createBtn.setFocusTraversable(false);
+        createBtn.getStyleClass().addAll(Styles.ACCENT, Styles.BUTTON_OUTLINED, Styles.SMALL, "sidebar-action-btn");
+        createBtn.setMaxWidth(Double.MAX_VALUE);
+        createBtn.setOnAction(e -> {
+            if (currentViewMode == ViewMode.SERVERS) App.showModal(new CreateServerModal());
+            else App.showModal(new CreateInstallationModal());
+        });
+
+        joinBtn = new Button("Join", new FontIcon(MaterialDesignA.ACCOUNT_MULTIPLE_PLUS));
+        joinBtn.setFocusTraversable(false);
+        joinBtn.getStyleClass().addAll(Styles.BUTTON_OUTLINED, Styles.SMALL, "sidebar-action-btn");
+        joinBtn.setMaxWidth(Double.MAX_VALUE);
+        joinBtn.setOnAction(e -> {
+            if (currentViewMode == ViewMode.INSTALLATIONS) App.showModal(new komm.ui.modals.JoinInstallationModal());
+            else App.showModal(new JoinViaInviteModal());
+        });
+        HBox.setHgrow(createBtn, Priority.ALWAYS);
+        HBox.setHgrow(joinBtn, Priority.ALWAYS);
+        HBox actions = new HBox(6, createBtn, joinBtn);
+
+        VBox body = new VBox(10, searchField, countRow, scroll, actions);
+        body.setPadding(new Insets(12));
+        VBox.setVgrow(body, Priority.ALWAYS);
+
+        VBox column = new VBox(switcher, body);
+        column.setMinWidth(SPACES_MIN_WIDTH);
+        column.setMaxWidth(SPACES_MAX_WIDTH);
+        column.setStyle("-fx-background-color: -color-bg-subtle;");
+        return column;
+    }
+
+    /** Resizable spaces column | DMs; the column's pixel width is remembered across launches. */
+    private SplitPane buildSplit(Region spaces) {
+        SplitPane split = new SplitPane(spaces, dmPage);
+        SplitPane.setResizableWithParent(spaces, false);
+        split.widthProperty().addListener((obs, oldW, newW) -> {
+            if (newW.doubleValue() == 0) return;
+            if (oldW.doubleValue() == 0) {
+                // Read lazily: this page is built during login, before the per-user settings file is loaded.
+                double savedPx = Math.max(SPACES_MIN_WIDTH, Math.min(SPACES_MAX_WIDTH, UserSettings.getInstance().getSpacesWidth()));
+                split.setDividerPosition(0, savedPx / newW.doubleValue());
+            } else {
+                double px = split.getDividerPositions()[0] * oldW.doubleValue();
+                Platform.runLater(() -> split.setDividerPosition(0, px / newW.doubleValue()));
+            }
+        });
+        // Save when a drag on THIS split's divider ends. Not split.lookup(".split-pane-divider"):
+        // the DM page below holds a second SplitPane, and a lookup from here can hit its divider.
+        split.addEventFilter(MouseEvent.MOUSE_RELEASED, e -> {
+            Node n = e.getTarget() instanceof Node t ? t : null;
+            boolean onDivider = false;
+            while (n != null && !(n instanceof SplitPane)) {
+                if (n.getStyleClass().contains("split-pane-divider")) onDivider = true;
+                n = n.getParent();
+            }
+            if (!onDivider || n != split) return;
+            double px = split.getDividerPositions()[0] * split.getWidth();
+            if (px > 0) UserSettings.getInstance().setSpacesWidth(px);
+        });
+        return split;
+    }
+
+    /** Tab with an accent underline when selected. */
+    private ToggleButton modeToggle(String text, org.kordamp.ikonli.Ikon iconCode, ToggleGroup group) {
+        ToggleButton btn = new ToggleButton(text);
+        btn.setGraphicTextGap(7);
+        btn.setToggleGroup(group);
+        btn.setMaxWidth(Double.MAX_VALUE);
+        btn.setMaxHeight(Double.MAX_VALUE);
+        btn.setFocusTraversable(false);
+        GridPane.setHgrow(btn, Priority.ALWAYS);
+        GridPane.setVgrow(btn, Priority.ALWAYS);
+        GridPane.setFillWidth(btn, true);
+        GridPane.setFillHeight(btn, true);
+        Runnable restyle = () -> {
+            btn.setGraphic(IconColorUtil.colored(iconCode, btn.isSelected() ? "-color-accent-emphasis" : "-color-fg-muted", 15));
+            btn.setStyle(
+                "-fx-background-color: " + (btn.isHover() ? "-color-bg-middle" : "transparent") + "; -fx-background-radius: 0; -fx-cursor: hand;" +
+                        "-fx-font-size: 12px; -fx-font-weight: bold; -fx-padding: 0;" +
+                        "-fx-border-radius: 0; -fx-border-width: 0 0 2px 0;" +
+                        (btn.isSelected()
+                                ? "-fx-text-fill: -color-fg-default; -fx-border-color: transparent transparent -color-accent-emphasis transparent;"
+                                : "-fx-text-fill: -color-fg-muted; -fx-border-color: transparent;"));
+        };
+        btn.selectedProperty().addListener((obs, was, is) -> restyle.run());
+        btn.hoverProperty().addListener((obs, was, is) -> restyle.run());
+        restyle.run();
+        return btn;
+    }
+
+    private void setViewMode(ViewMode mode) {
+        if (currentViewMode == mode) return;
+        currentViewMode = mode;
+        syncModeControls();
+        applyFilters();
+    }
+
+    /** Brings the switch, prompt text and Join label in line with {@link #currentViewMode}. */
+    private void syncModeControls() {
+        boolean servers = currentViewMode == ViewMode.SERVERS;
+        if (servers != serversToggle.isSelected()) (servers ? serversToggle : installsToggle).setSelected(true);
+        searchField.setPromptText(servers ? "Search servers…" : "Search installations…");
+        
     }
 
     private TextField buildSearchField(String prompt, Consumer<String> onSearch) {
@@ -579,139 +587,39 @@ public class HomePage extends StackPane {
         tf.setPromptText(prompt);
         tf.getStyleClass().add(Styles.SMALL);
         tf.setMaxWidth(Double.MAX_VALUE);
-        tf.setStyle("-fx-background-radius: 4px; -fx-padding: 5px 12px; -fx-font-size: 12px;");
         tf.textProperty().addListener((obs, old, val) -> onSearch.accept(val == null ? "" : val.trim()));
         return tf;
     }
 
-    private HBox buildCreateButtonGroup() {
-        FontIcon createIcon = new FontIcon(Feather.PLUS);
-        createIcon.setIconSize(14);
-        Button createBtn = new Button("Create new", createIcon);
-        createBtn.setFocusTraversable(false);
-        createBtn.getStyleClass().addAll(Styles.ACCENT, Styles.BUTTON_OUTLINED, Styles.SMALL);
-        createBtn.setStyle("-fx-background-radius: 4px; -fx-padding: 6px 16px 6px 12px; -fx-font-size: 12px;");
-        createBtn.setOnAction(e -> {
-            if (currentViewMode == ViewMode.SERVERS) App.showModal(new CreateServerModal());
-            else App.showModal(new CreateInstallationModal());
-        });
-
-        FontIcon joinIcon = new FontIcon(MaterialDesignA.ACCOUNT_MULTIPLE_PLUS);
-        joinIcon.setIconSize(14);
-        joinBtn = new Button("Join existing", joinIcon);
-        joinBtn.setFocusTraversable(false);
-        joinBtn.getStyleClass().addAll(Styles.BUTTON_OUTLINED, Styles.SMALL);
-        joinBtn.setStyle("-fx-background-radius: 4px; -fx-padding: 6px 16px 6px 12px; -fx-font-size: 12px;");
-        joinBtn.setOnAction(e -> {
-            if (currentViewMode == ViewMode.INSTALLATIONS) App.showModal(new komm.ui.modals.JoinInstallationModal());
-            else App.showModal(new JoinViaInviteModal());
-        });
-        joinBtn.setVisible(true);
-        joinBtn.setManaged(true);
-
-        HBox box = new HBox(8, createBtn, joinBtn);
-        box.setAlignment(Pos.CENTER_LEFT);
-        return box;
-    }
-
-    private HBox buildServerFilterChips() {
-        HBox row = new HBox(6);
-        row.setAlignment(Pos.CENTER_RIGHT);
-        row.setPadding(new Insets(0, 0, 0, 10));
-        ToggleButton all = filterChip("All", "ALL", serverFilterGroup);
-        ToggleButton owner = filterChip("Owner", "OWNER", serverFilterGroup);
-        ToggleButton member = filterChip("Member", "MEMBER", serverFilterGroup);
-        all.setSelected(true);
-        serverFilterGroup.selectedToggleProperty().addListener((obs, old, neo) -> {
-            if (neo == null) {
-                all.setSelected(true);
-                return;
-            }
-            activeServerFilter = (String) neo.getUserData();
-            applyServerFilter();
-        });
-        row.getChildren().addAll(all, owner, member);
-        return row;
-    }
-
-    private HBox buildInstallFilterChips() {
-        HBox row = new HBox(6);
-        row.setAlignment(Pos.CENTER_RIGHT);
-        row.setPadding(new Insets(0, 0, 0, 10));
-        ToggleButton all = filterChip("All", "ALL", installFilterGroup);
-        ToggleButton online = filterChip("Online", InstallationSummary.InstallationStatus.ONLINE.name(), installFilterGroup);
-        ToggleButton offline = filterChip("Offline", InstallationSummary.InstallationStatus.OFFLINE.name(), installFilterGroup);
-        ToggleButton unverified = filterChip("Unverified", InstallationSummary.InstallationStatus.NOT_VERIFIED.name(), installFilterGroup);
-        all.setSelected(true);
-        installFilterGroup.selectedToggleProperty().addListener((obs, old, neo) -> {
-            if (neo == null) {
-                all.setSelected(true);
-                return;
-            }
-            activeInstallFilter = (String) neo.getUserData();
-            applyInstallFilter();
-        });
-        row.getChildren().addAll(all, online, offline, unverified);
-        return row;
-    }
-
-    private ToggleButton filterChip(String text, String value, ToggleGroup group) {
-        ToggleButton btn = new ToggleButton(text);
-        btn.setToggleGroup(group);
-        btn.setUserData(value);
-        btn.setFocusTraversable(false);
-        btn.getStyleClass().add(Styles.SMALL);
-        btn.setStyle("-fx-background-radius: 4px; -fx-padding: 4px 12px; -fx-font-size: 11px; -fx-cursor: hand;");
-        btn.selectedProperty().addListener((obs, wasSelected, isSelected) -> {
-            if (isSelected) {
-                if (!btn.getStyleClass().contains(Styles.ACCENT)) btn.getStyleClass().add(Styles.ACCENT);
-            } else btn.getStyleClass().remove(Styles.ACCENT);
-        });
-        return btn;
-    }
-
     // ─── Filter / search ──────────────────────────────────────────────────────
 
-    private void applyServerFilter() {
+    private void applyFilters() {
+        String q = searchQuery.toLowerCase();
+
         filteredServerCards.clear();
-        String q = serverSearchQuery.toLowerCase();
         for (ServerCard c : allServerCards) {
             if (c.getServerSummary() == null) continue;
-            if (!"ALL".equals(activeServerFilter) &&
-                    !c.getServerSummary().getRole().toString().equalsIgnoreCase(activeServerFilter)) continue;
             if (!q.isEmpty() && !c.getServerSummary().getServerName().toLowerCase().contains(q)) continue;
             filteredServerCards.add(c);
         }
-        updateCountLabel();
-        if (!hasError && !centerContainer.getChildren().contains(loadingNode)) showListView();
-    }
 
-    private void applyInstallFilter() {
         filteredInstallationCards.clear();
-        String q = installSearchQuery.toLowerCase();
         for (InstallationCard c : allInstallationCards) {
             if (c.getInstallation() == null) continue;
-            if (!"ALL".equals(activeInstallFilter) &&
-                    !c.getInstallation().getStatus().toString().equalsIgnoreCase(activeInstallFilter)) continue;
             if (!q.isEmpty() && !c.getInstallation().getInstallationName().toLowerCase().contains(q)) continue;
             filteredInstallationCards.add(c);
         }
-        updateCountLabel();
-        if (!hasError && !centerContainer.getChildren().contains(loadingNode)) showListView();
+
+        renderSpaces();
     }
 
     private void updateCountLabel() {
         if (countLabel == null) return;
-        List<?> filtered = currentViewMode == ViewMode.SERVERS ? filteredServerCards : filteredInstallationCards;
-        List<?> all = currentViewMode == ViewMode.SERVERS ? allServerCards : allInstallationCards;
-        int fCount = (int) filtered.stream().filter(c -> c instanceof ServerCard sc
-                ? sc.getServerSummary() != null : ((InstallationCard) c).getInstallation() != null).count();
-        int aCount = (int) all.stream().filter(c -> c instanceof ServerCard sc
-                ? sc.getServerSummary() != null : ((InstallationCard) c).getInstallation() != null).count();
-        String noun = currentViewMode == ViewMode.SERVERS ? "servers" : "installations";
-        countLabel.setText(fCount == aCount
-                ? fCount + " " + noun
-                : fCount + " of " + aCount + " shown");
+        boolean servers = currentViewMode == ViewMode.SERVERS;
+        int shown = servers ? filteredServerCards.size() : filteredInstallationCards.size();
+        int all = servers ? allServerCards.size() : allInstallationCards.size();
+        String noun = servers ? "SERVERS" : "INSTALLATIONS";
+        countLabel.setText(shown == all ? noun + " · " + all : noun + " · " + shown + " OF " + all);
     }
 
     // ─── Server connect (async, non-blocking) ────────────────────────────────
@@ -769,137 +677,84 @@ public class HomePage extends StackPane {
         }
     }
 
-    // ─── List view ────────────────────────────────────────────────────────────
+    // ─── Spaces list ──────────────────────────────────────────────────────────
 
-    private void showListView() {
-        // The Messages tab owns centerContainer while active (see switchView()/
-        // navigateToDm()) — callers here can fire from background events (a cross-page
-        // sync on navigation, a modal's post-action refresh) regardless of which tab is
-        // showing, and must never steal centerContainer away from an open DM view.
-        if (currentViewMode == ViewMode.MESSAGES) return;
-        if (currentViewMode == ViewMode.SERVERS) {
-            centerContainer.getChildren().setAll(buildServerCardList());
-        } else {
-            centerContainer.getChildren().setAll(buildInstallListContent());
+    /** Rebuilds the list in the spaces column for the current mode. */
+    private void renderSpaces() {
+        updateCountLabel();
+        if (hasError) {
+            spacesList.getChildren().setAll(errorNode);
+            return;
         }
-    }
+        if (serverMap == null) return; // first load still running; the loading node stays
 
-    // ─── Server card list (original layout) ──────────────────────────────────
-
-    private Node buildServerCardList() {
-        VBox list = new VBox(8);
-        list.setFillWidth(true);
-        list.setMaxWidth(LIST_MAX_WIDTH);
-
-        if (filteredServerCards.isEmpty()) {
-            boolean isFiltered = !allServerCards.isEmpty();
-            Node emptyNode = isFiltered
-                    ? buildEmptyState(MaterialDesignC.CONTROLLER, "No servers found", "Try a different search term or filter.")
-                    : buildEmptyState(MaterialDesignC.CONTROLLER, "No servers yet", "Create your first server or join an existing one.");
-            StackPane wrapper = new StackPane(emptyNode);
-            wrapper.setAlignment(Pos.CENTER);
-            VBox.setVgrow(wrapper, Priority.ALWAYS);
-            list.getChildren().add(wrapper);
-        } else {
+        if (currentViewMode == ViewMode.SERVERS) {
+            if (filteredServerCards.isEmpty()) {
+                spacesList.getChildren().setAll(allServerCards.isEmpty() ? emptyServersNode : noResultsServersNode);
+                return;
+            }
             for (ServerCard card : filteredServerCards) {
                 setupDragAndDrop(card, allServerCards.indexOf(card));
                 card.setConnectAction(() -> connectToServer(
                         card.getServerSummary(), card::showConnecting, card::clearConnecting));
-                list.getChildren().add(card);
             }
-        }
-
-        StackPane centering = new StackPane(list);
-        centering.setAlignment(Pos.TOP_CENTER);
-        centering.setPadding(new Insets(filteredServerCards.isEmpty() ? 0 : 16, 16, 16, 16));
-
-        ScrollPane scroll = new ScrollPane(centering);
-        scroll.setFitToWidth(true);
-        scroll.setFitToHeight(filteredServerCards.isEmpty());
-        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-        scroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
-        scroll.setStyle("-fx-background: transparent; -fx-background-color: transparent;");
-        return scroll;
-    }
-    // ─── Installation list content (unchanged layout) ─────────────────────────
-
-    private static final double LIST_MAX_WIDTH = 880.0;
-
-    private Node buildInstallListContent() {
-        List<?> cards = filteredInstallationCards;
-
-        VBox list = new VBox(8);
-        list.setFillWidth(true);
-        list.setMaxWidth(LIST_MAX_WIDTH);
-
-        if (cards.isEmpty()) {
-            boolean isFiltered = !allInstallationCards.isEmpty();
-            Node emptyNode = isFiltered ? noResultsInstallsNode : emptyInstallsNode;
-            StackPane emptyWrapper = new StackPane(emptyNode);
-            emptyWrapper.setAlignment(Pos.CENTER);
-            VBox.setVgrow(emptyWrapper, Priority.ALWAYS);
-            list.getChildren().add(emptyWrapper);
+            spacesList.getChildren().setAll(filteredServerCards);
         } else {
-            for (Object card : cards) list.getChildren().add((Node) card);
+            if (filteredInstallationCards.isEmpty()) {
+                spacesList.getChildren().setAll(allInstallationCards.isEmpty() ? emptyInstallsNode : noResultsInstallsNode);
+                return;
+            }
+            spacesList.getChildren().setAll(filteredInstallationCards);
         }
-
-        StackPane centering = new StackPane(list);
-        centering.setAlignment(Pos.TOP_CENTER);
-        centering.setPadding(new Insets(cards.isEmpty() ? 0 : 16, 16, 16, 16));
-
-        ScrollPane scroll = new ScrollPane(centering);
-        scroll.setFitToWidth(true);
-        scroll.setFitToHeight(cards.isEmpty());
-        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-        scroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
-        scroll.setStyle("-fx-background: transparent; -fx-background-color: transparent;");
-        return scroll;
     }
 
     // ─── Empty state ──────────────────────────────────────────────────────────
 
     private Node buildEmptyState(org.kordamp.ikonli.Ikon iconCode, String title, String subtitle) {
-        FontIcon icon = IconColorUtil.colored(iconCode, "-color-accent-emphasis", 72);
-        icon.setOpacity(0.12);
+        FontIcon icon = IconColorUtil.colored(iconCode, "-color-accent-emphasis", 40);
+        icon.setOpacity(0.18);
 
         Label titleLbl = new Label(title);
-        titleLbl.setStyle("-fx-font-size: 20px; -fx-font-weight: bold; -fx-text-fill: -color-fg-default;");
+        titleLbl.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: -color-fg-default;");
 
         Label subtitleLbl = new Label(subtitle);
-        subtitleLbl.setStyle("-fx-font-size: 13px; -fx-text-fill: -color-fg-subtle;");
+        subtitleLbl.setStyle("-fx-font-size: 11.5px; -fx-text-fill: -color-fg-subtle;");
         subtitleLbl.setWrapText(true);
-        subtitleLbl.setMaxWidth(300);
+        subtitleLbl.setMaxWidth(200);
         subtitleLbl.setAlignment(Pos.CENTER);
+        subtitleLbl.setTextAlignment(javafx.scene.text.TextAlignment.CENTER);
 
-        VBox box = new VBox(14, icon, titleLbl, subtitleLbl);
+        VBox box = new VBox(8, icon, titleLbl, subtitleLbl);
         box.setAlignment(Pos.CENTER);
-        box.setPadding(new Insets(60));
+        box.setPadding(new Insets(28, 8, 8, 8));
         return box;
     }
-
 
     // ─── Loading / error nodes ────────────────────────────────────────────────
 
     private VBox buildLoadingNode() {
         ProgressIndicator spinner = new ProgressIndicator();
-        spinner.setPrefSize(48, 48);
-        spinner.getStyleClass().add(Styles.LARGE);
+        spinner.setPrefSize(32, 32);
+        spinner.setMaxSize(32, 32);
         Label lbl = new Label("Loading…");
-        lbl.setStyle("-fx-font-size: 13px; -fx-text-fill: -color-fg-muted;");
-        VBox box = new VBox(14, spinner, lbl);
+        lbl.setStyle("-fx-font-size: 12px; -fx-text-fill: -color-fg-muted;");
+        VBox box = new VBox(10, spinner, lbl);
         box.setAlignment(Pos.CENTER);
+        box.setPadding(new Insets(32, 0, 0, 0));
         return box;
     }
 
     private VBox buildErrorNode() {
-        FontIcon icon = IconColorUtil.colored(MaterialDesignL.LAN_DISCONNECT, "-color-accent-emphasis", 72);
-        icon.setOpacity(0.12);
+        FontIcon icon = IconColorUtil.colored(MaterialDesignL.LAN_DISCONNECT, "-color-accent-emphasis", 40);
+        icon.setOpacity(0.18);
         Label title = new Label("Failed to load data");
-        title.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: -color-fg-default;");
+        title.setStyle("-fx-font-size: 13px; -fx-font-weight: bold; -fx-text-fill: -color-fg-default;");
         Label subtitle = new Label("Check your connection and try again.");
-        subtitle.setStyle("-fx-font-size: 12px; -fx-text-fill: -color-fg-muted;");
-        VBox box = new VBox(12, icon, title, subtitle);
+        subtitle.setStyle("-fx-font-size: 11.5px; -fx-text-fill: -color-fg-muted;");
+        subtitle.setWrapText(true);
+        VBox box = new VBox(8, icon, title, subtitle);
         box.setAlignment(Pos.CENTER);
+        box.setPadding(new Insets(28, 8, 8, 8));
         return box;
     }
 
@@ -908,35 +763,25 @@ public class HomePage extends StackPane {
     public void refreshCurrentView() {
         if (loadDataService.isRunning()) return;
         hasError = false;
-        // Reachable from modals (join/create server) while the Messages tab is open —
-        // still refresh the underlying data, but don't show the loading spinner over
-        // the DM view; showListView() picks up currentViewMode once the fetch lands.
-        if (currentViewMode != ViewMode.MESSAGES) {
-            centerContainer.getChildren().setAll(loadingNode);
-        }
+        spacesList.getChildren().setAll(loadingNode);
         loadDataService.restart();
     }
 
     public void refreshInstallationsView() {
         if (loadDataService.isRunning()) return;
         currentViewMode = ViewMode.INSTALLATIONS;
-        setNavActive(navInstallations);
-        setNavInactive(navServers);
-        setNavInactive(navMessages);
-        pageTitleLabel.setText("Installations");
+        syncModeControls();
         hasError = false;
-        centerContainer.getChildren().setAll(loadingNode);
+        spacesList.getChildren().setAll(loadingNode);
         loadDataService.restart();
     }
 
     public void refreshAndShowDownload(UUID installationId) {
         if (loadDataService.isRunning()) return;
         currentViewMode = ViewMode.INSTALLATIONS;
-        setNavActive(navInstallations);
-        setNavInactive(navServers);
-        pageTitleLabel.setText("Installations");
+        syncModeControls();
         hasError = false;
-        centerContainer.getChildren().setAll(loadingNode);
+        spacesList.getChildren().setAll(loadingNode);
         postLoadAction = () -> {
             DownloadInstallationModal newModal = new DownloadInstallationModal(installationId);
             App.showModal(newModal);
@@ -958,14 +803,14 @@ public class HomePage extends StackPane {
                     if (o2 == null) return -1;
                     return o1.compareTo(o2);
                 })
-                .forEach(e -> allServerCards.add(new ServerCard(e.getValue())));
-        applyServerFilter();
+                .forEach(e -> allServerCards.add(new ServerCard(e.getValue(), true)));
+        applyFilters();
     }
 
     private void refreshInstallationCards() {
         allInstallationCards.clear();
-        installationsList.forEach(i -> allInstallationCards.add(new InstallationCard(i)));
-        applyInstallFilter();
+        installationsList.forEach(i -> allInstallationCards.add(new InstallationCard(i, true)));
+        applyFilters();
     }
 
     public List<ServerSummary> getServersForInstallation(UUID installationId) {
@@ -975,95 +820,28 @@ public class HomePage extends StackPane {
                 .toList();
     }
 
-    // ─── View switching ───────────────────────────────────────────────────────
-
-    private void switchView() {
-        if (profilePanel.isOpen()) profilePanel.close(toggleProfileButton);
-        if (friendsPanel.isOpen()) friendsPanel.close(toggleFriendsButton);
-
-        if (currentViewMode == ViewMode.MESSAGES) {
-            if (dmNavDot != null) dmNavDot.setVisible(false);
-            pageTitleLabel.setText("Messages");
-            actionStrip.setVisible(false);
-            actionStrip.setManaged(false);
-            DirectMessagePage dmPage = getOrCreateDirectMessagePage();
-            dmPage.reload();
-            centerContainer.getChildren().setAll(dmPage);
-            dmPage.getChatSection().notifyPageResumed();
-            dmPage.onBecameVisible();
-            return;
-        }
-
-        if (dmNavDot != null) dmNavDot.setVisible(App.isDmUnread());
-
-        actionStrip.setVisible(true);
-        actionStrip.setManaged(true);
-
-        pageTitleLabel.setText(currentViewMode == ViewMode.SERVERS ? "Servers" : "Installations");
-
-        boolean isServers = currentViewMode == ViewMode.SERVERS;
-        joinBtn.setVisible(true);
-        joinBtn.setManaged(true);
-        joinBtn.setText(isServers ? "Join existing" : "Join installation");
-        filterChipSlot.getChildren().setAll(isServers ? serverFilterChips : installFilterChips);
-
-        if (actionStrip.getUserData() instanceof Object[] ud && ud[1] instanceof StackPane searchSlot) {
-            searchSlot.getChildren().setAll(isServers ? serverSearchField : installSearchField);
-        }
-
-        updateCountLabel();
-
-        if (hasError) {
-            centerContainer.getChildren().setAll(errorNode);
-            return;
-        }
-
-        showListView();
-    }
+    // ─── Direct messages ──────────────────────────────────────────────────────
 
     /**
-     * The DM chat section currently on screen, or {@code null} if the messages
-     * view isn't active. {@code DirectMessagePage} is embedded inside this
-     * HomePage (not a top-level page), so callers like {@code App.showModal} reach
-     * the DM scroll through here.
+     * The DM chat section on this page. The DMs are always part of Home, so this is
+     * non-null whenever Home is the page on screen; {@code App.showModal} uses it to
+     * reach the DM scroll.
      */
     public DmChatSection getActiveDmChatSection() {
-        if (currentViewMode == ViewMode.MESSAGES && App.getCachedDirectMessagePage() != null)
-            return App.getCachedDirectMessagePage().getChatSection();
-        return null;
-    }
-
-    private DirectMessagePage getOrCreateDirectMessagePage() {
-        if (App.getCachedDirectMessagePage() == null) {
-            App.setCachedDirectMessagePage(new DirectMessagePage());
-        }
-        return App.getCachedDirectMessagePage();
+        return dmPage.getChatSection();
     }
 
     public void navigateToDm(UUID partnerId, String partnerUsername) {
-        if (currentViewMode != ViewMode.MESSAGES) {
-            currentViewMode = ViewMode.MESSAGES;
-            setNavActive(navMessages);
-            setNavInactive(navServers);
-            setNavInactive(navInstallations);
-            actionStrip.setVisible(false);
-            actionStrip.setManaged(false);
-            pageTitleLabel.setText("Messages");
-            if (dmNavDot != null) dmNavDot.setVisible(false);
-        }
-        DirectMessagePage dmPage = getOrCreateDirectMessagePage();
+        if (profilePanel.isOpen()) profilePanel.close(toggleProfileButton);
+        if (friendsPanel.isOpen()) friendsPanel.close(toggleFriendsButton);
         dmPage.reload();
-        centerContainer.getChildren().setAll(dmPage);
         dmPage.openConversation(partnerId, partnerUsername);
         dmPage.onBecameVisible();
     }
 
     private void showError() {
         hasError = true;
-        // Same rationale as showListView(): never steal centerContainer from an open
-        // DM view. switchView() shows errorNode itself once the user leaves Messages.
-        if (currentViewMode == ViewMode.MESSAGES) return;
-        centerContainer.getChildren().setAll(errorNode);
+        spacesList.getChildren().setAll(errorNode);
     }
 
     // ─── Drag and drop (server cards used internally for ordering) ────────────
@@ -1096,7 +874,7 @@ public class HomePage extends StackPane {
             boolean ok = false;
             if (ev.getDragboard().hasString() && draggedIndex != idx) {
                 allServerCards.add(idx, allServerCards.remove(draggedIndex));
-                applyServerFilter();
+                applyFilters();
                 saveServerOrder();
                 ok = true;
             }
@@ -1128,7 +906,7 @@ public class HomePage extends StackPane {
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
-    private Button iconBtn(Feather icon, String tooltip) {
+    private Button iconBtn(org.kordamp.ikonli.Ikon icon, String tooltip) {
         Button btn = new Button(null, new FontIcon(icon));
         btn.setFocusTraversable(false);
         btn.getStyleClass().addAll(Styles.BUTTON_ICON, Styles.FLAT, Styles.SMALL);

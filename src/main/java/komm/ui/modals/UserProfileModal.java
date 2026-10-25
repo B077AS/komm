@@ -415,21 +415,38 @@ public class UserProfileModal extends HBox {
         return scroll;
     }
 
+    /** A member's role assignment together with the custom roles needed to display it. */
+    private record RoleBadgeData(ServerMemberSummary member, List<CustomRoleSummary> customRoles) {}
+
     private void loadRoleRows(UserSummary s, VBox container) {
-        Service<ServerMemberSummary> svc = new Service<>() {
-            @Override protected Task<ServerMemberSummary> createTask() {
+        Service<RoleBadgeData> svc = new Service<>() {
+            @Override protected Task<RoleBadgeData> createTask() {
                 return new Task<>() {
-                    @Override protected ServerMemberSummary call() throws Exception {
+                    @Override protected RoleBadgeData call() throws Exception {
                         try { App.getServices().installation(); } catch (IllegalStateException e) { return null; }
-                        return App.getServices().installation()
-                                .getInstallationPermissionService().getMember(s.getUserId());
+                        var permissions = App.getServices().installation().getInstallationPermissionService();
+                        ServerMemberSummary member = permissions.getMember(s.getUserId());
+                        if (member == null) return null;
+
+                        // The shared PermissionManager is cleared when leaving the server page and refilled
+                        // asynchronously (or left empty if that fetch failed), so it can't be trusted to
+                        // resolve role ids. Ask the server directly when it can't.
+                        List<CustomRoleSummary> roles = App.getPermissionManager().getCustomRoles();
+                        List<UUID> ids = member.getCustomRoleIds();
+                        if (ids != null && !ids.isEmpty()
+                                && !roles.stream().map(CustomRoleSummary::getRoleId).toList().containsAll(ids)) {
+                            var summary = permissions.getServerPermissions();
+                            if (summary != null && summary.getCustomRoles() != null) roles = summary.getCustomRoles();
+                        }
+                        return new RoleBadgeData(member, roles);
                     }
                 };
             }
         };
         svc.setOnSucceeded(e -> {
-            ServerMemberSummary member = svc.getValue();
-            if (member == null) return;
+            RoleBadgeData data = svc.getValue();
+            if (data == null) return;
+            ServerMemberSummary member = data.member();
 
             FlowPane flow = new FlowPane(6, 6);
 
@@ -440,7 +457,7 @@ public class UserProfileModal extends HBox {
                 flow.getChildren().add(buildRolePill(capitalize(baseRole), icon));
             }
 
-            List<CustomRoleSummary> allRoles = App.getPermissionManager().getCustomRoles();
+            List<CustomRoleSummary> allRoles = data.customRoles();
             List<UUID> memberCustomIds = member.getCustomRoleIds();
             if (memberCustomIds != null) {
                 for (CustomRoleSummary cr : allRoles) {
@@ -458,7 +475,7 @@ public class UserProfileModal extends HBox {
                 container.getChildren().setAll(flow);
             }
         });
-        svc.setOnFailed(e -> log.debug("Could not load member roles: {}", svc.getException().getMessage()));
+        svc.setOnFailed(e -> log.warn("Could not load member roles: {}", svc.getException().getMessage()));
         svc.start();
     }
 

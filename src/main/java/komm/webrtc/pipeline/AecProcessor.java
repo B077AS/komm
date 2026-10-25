@@ -8,11 +8,10 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * Wraps WebRTC AEC3 via webrtc-java AudioProcessing.
  *
- * Note: for full AEC effectiveness the render (speaker playback) signal should be fed via
- * processRenderFrame() before each mic processCapture(). In Komm's current architecture the
- * speaker output is rendered by the hardware ADM, so we cannot easily intercept that signal.
- * AEC3 still provides some suppression through its internal model even without explicit render
- * frames — users with speakers will see reduced echo, users with headphones are unaffected.
+ * Note: no render (speaker) reference is fed to AEC3. Feeding one was tried and made AEC3 remove
+ * large parts of the user's own speech, so it was dropped. AEC3 still provides some suppression
+ * through its internal model — users with speakers see reduced echo, users with headphones are
+ * unaffected.
  *
  * Processes in two 10 ms sub-frames as required by the WebRTC APM (each call to
  * processStream/processReverseStream must be exactly 10 ms of audio).

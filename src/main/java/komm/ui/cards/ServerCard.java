@@ -3,6 +3,8 @@ package komm.ui.cards;
 import atlantafx.base.theme.Styles;
 import javafx.animation.FadeTransition;
 import javafx.animation.ScaleTransition;
+import javafx.beans.value.ChangeListener;
+import javafx.beans.value.WeakChangeListener;
 import javafx.concurrent.Service;
 import javafx.concurrent.Task;
 import javafx.geometry.Insets;
@@ -47,9 +49,11 @@ public class ServerCard extends HBox {
     @Getter
     private final ServerSummary serverSummary;
 
-    private static final int AVATAR_SIZE = 62;
-    private static final double AVATAR_R  = AVATAR_SIZE / 2.0;
+    private final boolean compact;
+    private final int avatarSize;
+    private final double avatarR;
     private static final int ROW_HEIGHT   = 90;
+    private static final int COMPACT_ROW_HEIGHT = 56;
 
     private Label activeUsersValue;
     private MenuButton optionsBtn;
@@ -57,26 +61,79 @@ public class ServerCard extends HBox {
     private HBox statsArea;
     private MenuItem connectMenuItem;
     private Runnable connectAction;
+    /** Held strongly here; the App property only keeps a weak reference, so discarded cards don't leak. */
+    private final ChangeListener<UUID> connectedListener = (obs, was, now) -> updateActiveHighlight();
 
     public ServerCard(ServerSummary serverSummary) {
+        this(serverSummary, false);
+    }
+
+    /**
+     * @param compact slim row for the Home page's spaces column: small avatar, name and
+     *                online count only (no stats cells). The options menu is unchanged.
+     */
+    public ServerCard(ServerSummary serverSummary, boolean compact) {
         this.serverSummary = serverSummary;
+        this.compact = compact;
+        this.avatarSize = compact ? 38 : 62;
+        this.avatarR = avatarSize / 2.0;
+        int rowHeight = compact ? COMPACT_ROW_HEIGHT : ROW_HEIGHT;
         setMaxWidth(Double.MAX_VALUE);
-        setMinHeight(ROW_HEIGHT);
-        setMaxHeight(ROW_HEIGHT);
-        setPrefHeight(ROW_HEIGHT);
+        setMinHeight(rowHeight);
+        setMaxHeight(rowHeight);
+        setPrefHeight(rowHeight);
         getStyleClass().add("server-row");
+        if (compact) getStyleClass().add("compact");
         initialize();
+        App.connectedServerIdProperty().addListener(new WeakChangeListener<>(connectedListener));
+        updateActiveHighlight();
+    }
+
+    /**
+     * Keeps the hover look on while this server is being connected to or is the connected one, so the row
+     * reads as "you are in this one" even without the pointer on it. Cleared again if the connection fails
+     * or the user disconnects.
+     */
+    private void updateActiveHighlight() {
+        boolean active = connectingSpinner != null
+                || serverSummary.getServerId().equals(App.connectedServerIdProperty().get());
+        if (active == getStyleClass().contains("active-server")) return;
+        if (active) getStyleClass().add("active-server");
+        else getStyleClass().remove("active-server");
+        if (!compact) animateCard(active || isHover() ? 1.03 : 1.0, 1.0);
     }
 
     private void initialize() {
         setAlignment(Pos.CENTER_LEFT);
         setFillHeight(false);   // prevent children from stretching to row height
-        setPadding(new Insets(0, 10, 0, 16));
+        setPadding(compact ? new Insets(0, 4, 0, 10) : new Insets(0, 10, 0, 16));
         setSpacing(0);
 
         // ── Avatar ────────────────────────────────────────────────────────────
         StackPane avatar = buildAvatar();
-        HBox.setMargin(avatar, new Insets(0, 16, 0, 0));
+        HBox.setMargin(avatar, new Insets(0, compact ? 10 : 16, 0, 0));
+
+        if (compact) {
+            VBox info = new VBox(2);
+            info.setAlignment(Pos.CENTER_LEFT);
+            info.setMinWidth(0);
+            HBox.setHgrow(info, Priority.ALWAYS);
+
+            Label name = new Label(serverSummary.getServerName());
+            name.setStyle("-fx-font-size: 13.5px; -fx-font-weight: bold; -fx-text-fill: -color-fg-default;");
+            name.setMaxWidth(Double.MAX_VALUE);
+
+            boolean online = "ONLINE".equals(resolveStatus());
+            activeUsersValue = new Label(online ? serverSummary.getActiveUsers() + " online" : "Offline");
+            activeUsersValue.setStyle("-fx-font-size: 10.5px; -fx-text-fill: "
+                    + (online && serverSummary.getActiveUsers() > 0 ? "-color-success-fg" : "-color-fg-subtle") + ";");
+            info.getChildren().addAll(name, activeUsersValue);
+
+            optionsBtn = createOptionsMenu();
+            getChildren().addAll(avatar, info, optionsBtn);
+            setupInteractions();
+            return;
+        }
 
         // ── Identity column (name + status badge) ────────────────────────────
         VBox identity = new VBox(5);
@@ -124,11 +181,11 @@ public class ServerCard extends HBox {
 
     private StackPane buildImageAvatar(byte[] bytes) {
         StackPane pane = avatarShell();
-        Circle clip = new Circle(AVATAR_R, AVATAR_R, AVATAR_R);
-        Image img = new Image(new ByteArrayInputStream(bytes), AVATAR_SIZE, AVATAR_SIZE, true, true);
+        Circle clip = new Circle(avatarR, avatarR, avatarR);
+        Image img = new Image(new ByteArrayInputStream(bytes), avatarSize, avatarSize, true, true);
         ImageView iv = new ImageView(img);
-        iv.setFitWidth(AVATAR_SIZE);
-        iv.setFitHeight(AVATAR_SIZE);
+        iv.setFitWidth(avatarSize);
+        iv.setFitHeight(avatarSize);
         iv.setPreserveRatio(false);
         iv.setClip(clip);
         pane.getChildren().add(iv);
@@ -149,14 +206,14 @@ public class ServerCard extends HBox {
 
     private StackPane avatarShell() {
         StackPane pane = new StackPane();
-        pane.setMinSize(AVATAR_SIZE, AVATAR_SIZE);
-        pane.setMaxSize(AVATAR_SIZE, AVATAR_SIZE);
-        pane.setPrefSize(AVATAR_SIZE, AVATAR_SIZE);
+        pane.setMinSize(avatarSize, avatarSize);
+        pane.setMaxSize(avatarSize, avatarSize);
+        pane.setPrefSize(avatarSize, avatarSize);
         pane.setStyle(
-                "-fx-background-radius: " + AVATAR_R + "px;" +
+                "-fx-background-radius: " + avatarR + "px;" +
                 "-fx-border-color: -color-border-default;" +
                 "-fx-border-width: 1.5px;" +
-                "-fx-border-radius: " + AVATAR_R + "px;"
+                "-fx-border-radius: " + avatarR + "px;"
         );
         return pane;
     }
@@ -332,19 +389,24 @@ public class ServerCard extends HBox {
             if (connectAction != null) connectAction.run();
             else App.changePage(App.getOrCreateServerPage(serverSummary));
         });
-        setOnMouseEntered(e -> { if (isOnline) animateCard(1.03, 1.0); });
+        setOnMouseEntered(e -> { if (isOnline) animateCard(compact ? 1.0 : 1.03, 1.0); });
         setOnMouseExited(e -> {
             if (optionsBtn.isShowing()) return;
-            animateCard(1.0, 1.0);
+            animateCard(restScale(), 1.0);
         });
         optionsBtn.showingProperty().addListener((obs, wasShowing, isShowing) -> {
             if (isShowing) {
                 getStyleClass().add("menu-open");
             } else {
                 getStyleClass().remove("menu-open");
-                if (!isHover()) animateCard(1.0, 1.0);
+                if (!isHover()) animateCard(restScale(), 1.0);
             }
         });
+    }
+
+    /** Scale the card settles at when the pointer is away: still enlarged while it is the active server. */
+    private double restScale() {
+        return !compact && getStyleClass().contains("active-server") ? 1.03 : 1.0;
     }
 
     private void animateCard(double scale, double opacity) {
@@ -366,22 +428,25 @@ public class ServerCard extends HBox {
     public void showConnecting() {
         if (connectingSpinner != null) return;
         connectingSpinner = new ProgressIndicator();
+        connectingSpinner.setMinSize(16, 16);
         connectingSpinner.setPrefSize(16, 16);
         connectingSpinner.setMaxSize(16, 16);
-        HBox.setMargin(connectingSpinner, new Insets(0, 12, 0, 12));
-        int idx = getChildren().indexOf(statsArea);
+        HBox.setMargin(connectingSpinner, new Insets(0, compact ? 4 : 12, 0, compact ? 4 : 12));
+        int idx = getChildren().indexOf(compact ? optionsBtn : statsArea);
         if (idx >= 0) getChildren().add(idx, connectingSpinner);
+        updateActiveHighlight();
     }
 
     public void clearConnecting() {
         if (connectingSpinner == null) return;
         getChildren().remove(connectingSpinner);
         connectingSpinner = null;
+        updateActiveHighlight();
     }
 
     public void updateActiveUsers(int count) {
         if (serverSummary != null) serverSummary.setActiveUsers(count);
-        if (activeUsersValue != null) activeUsersValue.setText(String.valueOf(count));
+        if (activeUsersValue != null) activeUsersValue.setText(compact ? count + " online" : String.valueOf(count));
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

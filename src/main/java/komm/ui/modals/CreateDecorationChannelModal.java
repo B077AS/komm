@@ -130,7 +130,9 @@ public class CreateDecorationChannelModal extends VBox {
     private HBox buildHeader() {
         HBox header = new HBox();
         header.setAlignment(Pos.CENTER_LEFT);
-        header.setPadding(new Insets(12, 8, 0, 16));
+        header.setPadding(new Insets(12, 8, 10, 16));
+        header.setStyle("-fx-border-color: transparent transparent -color-border-default transparent;"
+                + " -fx-border-width: 0 0 1 0;");
 
         Label title = new Label(isEditMode ? "Edit Title" : "Create Decoration Channel");
         title.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
@@ -148,7 +150,7 @@ public class CreateDecorationChannelModal extends VBox {
 
     private VBox buildContent() {
         VBox content = new VBox(12);
-        content.setPadding(new Insets(12, 16, 0, 16));
+        content.setPadding(new Insets(16, 16, 16, 16));
         VBox.setVgrow(content, Priority.ALWAYS);
 
         // Title field — shared between create (shown contextually) and edit (always shown) modes.
@@ -191,6 +193,8 @@ public class CreateDecorationChannelModal extends VBox {
         HBox footer = new HBox(8);
         footer.setAlignment(Pos.CENTER_RIGHT);
         footer.setPadding(new Insets(12, 16, 12, 16));
+        footer.setStyle("-fx-border-color: -color-border-default transparent transparent transparent;"
+                + " -fx-border-width: 1 0 0 0;");
 
         Button confirmBtn = new Button(isEditMode ? "Save" : "Create");
         confirmBtn.setDefaultButton(true);

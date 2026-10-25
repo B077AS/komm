@@ -28,7 +28,6 @@ public class GeneralInstallationTab implements InstallationSettingsTab {
     private final TextField signalPortField = readOnlyField();
     private final TextField tcpPortField = readOnlyField();
     private final TextField mediaPortField = readOnlyField();
-    private final HBox statusPlaceholder = new HBox();
 
     private boolean loaded = false;
     private final ScrollPane pane;
@@ -100,13 +99,8 @@ public class GeneralInstallationTab implements InstallationSettingsTab {
         content.setAlignment(Pos.TOP_LEFT);
 
         // ── Overview ──────────────────────────────────────────────────────────
-        Region nameSpacer = new Region();
-        HBox.setHgrow(nameSpacer, Priority.ALWAYS);
-        HBox nameLabelRow = new HBox(nameSpacer, statusPlaceholder);
-        nameLabelRow.setAlignment(Pos.CENTER_LEFT);
-        nameLabelRow.getChildren().add(0, sectionLabel("Installation Name"));
 
-        VBox nameRow = new VBox(6, nameLabelRow, nameField);
+        VBox nameRow = new VBox(6, sectionLabel("Installation Name"), nameField);
 
         VBox ipRow = new VBox(6, sectionLabel("IP Address"), ipField);
 
@@ -145,7 +139,6 @@ public class GeneralInstallationTab implements InstallationSettingsTab {
         signalPortField.setText(d.getSignalPort() != 0 ? String.valueOf(d.getSignalPort()) : "-");
         tcpPortField.setText(d.getTcpPort() != 0 ? String.valueOf(d.getTcpPort()) : "-");
         mediaPortField.setText(d.getMediaPort() != 0 ? String.valueOf(d.getMediaPort()) : "-");
-        statusPlaceholder.getChildren().setAll(buildStatusBadge(d.getStatus()));
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

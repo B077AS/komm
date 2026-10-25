@@ -9,8 +9,8 @@ import javax.sound.sampled.*;
  * Receives decoded PCM frames from a remote participant's mic WebRTC track,
  * applies the listener's personal volume, and plays them through a SourceDataLine.
  *
- * The matching AudioTrack is kept disabled in the hardware ADM (setEnabled(false))
- * so this sink is the sole audio output for that track — no double-playback.
+ * The peer connection's audio device is headless (it renders to nowhere), so this sink is
+ * the sole audio output for the track — no double-playback.
  * One UserVoiceReceiver is created per remote mic track, giving each listener
  * fully independent volume control (0%–200%) over incoming voice audio.
  */

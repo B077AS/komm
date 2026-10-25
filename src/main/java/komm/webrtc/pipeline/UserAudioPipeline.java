@@ -18,9 +18,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *   MicCapture (javax.sound) → captureQueue
  *   pipelineThread: captureQueue → AEC3 → RNNoise/WebRTC-NS → AGC2 → Silero-VAD → CustomAudioSource
  *
- * The hardware AudioDeviceModule is used for speaker playout only (subscriber PC's
- * remote audio tracks render directly through it). Capture is handled entirely by
- * this pipeline, giving full control over the DSP chain.
+ * Remote audio is delivered to AudioTrackSinks (UserVoiceReceiver / SoundboardReceiver),
+ * driven by a headless AudioDeviceModule that opens no real device. Capture is handled
+ * entirely by this pipeline, giving full control over the DSP chain.
  *
  * All DSP stages are independently toggleable at runtime (hot-swap) via their
  * respective setEnabled() methods — no reconnection or restart needed.

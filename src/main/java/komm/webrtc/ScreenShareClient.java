@@ -22,16 +22,18 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * probes upward over 5-15 seconds using REMB/TWCC feedback. This is the
  * <em>actual</em> cause of both symptoms — not the rendering pipeline.
  * The fix is to call {@link #applyBitrateSettings()} immediately after
- * {@code addTrack()} / {@code replaceTrack()} so the encoder never starts
- * below a usable floor.</p>
+ * {@code addTrack()} / {@code replaceTrack()}: it restarts the estimator from a
+ * usable bitrate with {@code RTCPeerConnection.setBitrate(null, start, max)}
+ * (webrtc-java 0.20+), so the first seconds don't crawl at the default.</p>
  *
  * <p>Bitrate values scale with the selected quality preset (see
- * {@link #targetBitrateBps}): the floor is half the preset's target — enough to
- * skip the BWE warm-up without forcing the encoder above what the link can
- * actually carry — and the ceiling is twice the target, capped at
- * {@link #MAX_BITRATE_CAP_BPS}. A blanket floor that exceeds real path
- * capacity makes LiveKit's congestion controller periodically pause the
- * stream, which shows up as rhythmic stuttering on the viewer's side.</p>
+ * {@link #targetBitrateBps}): the estimator starts at half the preset's target
+ * and the encoder ceiling is twice the target, capped at
+ * {@link #MAX_BITRATE_CAP_BPS}. Only the <em>estimate</em> is seeded, never the
+ * encoder's {@code minBitrate}: pinning a floor above what the path can really
+ * carry makes LiveKit's congestion controller periodically pause the stream,
+ * which shows up as rhythmic stuttering on the viewer's side. (Before 0.20 the
+ * only way to skip the warm-up was such a floor.)</p>
  * <p>Per the webrtc-java constraints docs, you must always do
  * {@code getParameters() → modify → setParameters()}. Constructing a new
  * {@code RTCRtpSendParameters} from scratch loses the transaction ID and the
@@ -382,31 +384,37 @@ public class ScreenShareClient {
      *
      * <p>Called immediately after {@code addTrack()} (first stream) and after
      * {@code replaceTrack()} (subsequent streams), before the offer is sent.
-     * This ensures the very first negotiated encoding already has a high
-     * bitrate floor, eliminating the ~10 s BWE ramp-up period.</p>
+     * The per-encoding ceiling/fps go through the sender; the estimator restart
+     * goes through the peer connection (it is shared by all senders of the
+     * publisher PC, which is fine — the other senders are a few tens of kbps of audio).</p>
      */
     private void applyBitrateSettings() {
         if (sender == null) return;
+        ScreenShareQuality q = this.quality;
+        int start = startBitrateBps(q);
+        int max = maxBitrateBps(q);
         try {
-            ScreenShareQuality q = this.quality;
-            int min = minBitrateBps(q);
-            int max = maxBitrateBps(q);
             RTCRtpSendParameters params = sender.getParameters();
             if (params.encodings == null || params.encodings.isEmpty()) {
                 log.warn("[ScreenShare] No encodings on sender — bitrate constraints not applied.");
-                return;
+            } else {
+                for (RTCRtpEncodingParameters enc : params.encodings) {
+                    enc.minBitrate = null; // never pin an encoder floor — see class doc
+                    enc.maxBitrate = max;
+                    enc.maxFramerate = (double) q.fps;
+                    // Leave scaleResolutionDownBy at its default (1.0 = full resolution).
+                }
+                sender.setParameters(params);
             }
-            for (RTCRtpEncodingParameters enc : params.encodings) {
-                enc.minBitrate = min;
-                enc.maxBitrate = max;
-                enc.maxFramerate = (double) q.fps;
-                // Leave scaleResolutionDownBy at its default (1.0 = full resolution).
-            }
-            sender.setParameters(params);
-            log.info("[ScreenShare] Bitrate constraints applied: min={}kbps max={}kbps fps={}",
-                    min / 1000, max / 1000, q.fps);
         } catch (Exception e) {
-            log.error("[ScreenShare] Failed to apply bitrate constraints: {}", e.getMessage(), e);
+            log.error("[ScreenShare] Failed to apply sender bitrate constraints: {}", e.getMessage(), e);
+        }
+        try {
+            publisherPc.setBitrate(null, start, max);
+            log.info("[ScreenShare] Bitrate applied: estimator start={}kbps max={}kbps fps={}",
+                    start / 1000, max / 1000, q.fps);
+        } catch (Exception e) {
+            log.error("[ScreenShare] Failed to restart bandwidth estimate: {}", e.getMessage(), e);
         }
     }
 
@@ -427,13 +435,13 @@ public class ScreenShareClient {
     }
 
     /**
-     * Bitrate floor: keeps the BWE from starting at its ~300 kbps default
-     * (which causes ~10 s of warm-up choppiness) while staying low enough that
-     * the encoder is never forced to overshoot what the link can carry —
-     * a floor above the real path capacity causes the SFU's congestion
-     * controller to periodically pause the stream.
+     * Where the bandwidth estimator restarts: keeps it from starting at its
+     * ~300 kbps default (which causes ~10 s of warm-up choppiness). It is only
+     * an estimate, so on a slower link it simply backs off — unlike an encoder
+     * floor, which would force the encoder above what the path can carry and
+     * make the SFU's congestion controller periodically pause the stream.
      */
-    private static int minBitrateBps(ScreenShareQuality q) {
+    private static int startBitrateBps(ScreenShareQuality q) {
         return targetBitrateBps(q) / 2;
     }
 

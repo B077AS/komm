@@ -65,6 +65,7 @@ public class InstallationCard extends VBox {
     private Label lastSeenValue;
     private Node offlineBanner;
     private final Consumer<Double> onUptimeResolved;
+    private final boolean compact;
 
     public InstallationCard(InstallationSummary installation) {
         this(installation, null);
@@ -77,14 +78,60 @@ public class InstallationCard extends VBox {
      *                         cards without making its own redundant requests. May be {@code null}.
      */
     public InstallationCard(InstallationSummary installation, Consumer<Double> onUptimeResolved) {
+        this(installation, onUptimeResolved, false);
+    }
+
+    /** Slim row for the Home page's spaces column: status icon, name, status and the options menu. */
+    public InstallationCard(InstallationSummary installation, boolean compact) {
+        this(installation, null, compact);
+    }
+
+    private InstallationCard(InstallationSummary installation, Consumer<Double> onUptimeResolved, boolean compact) {
         this.installation = installation;
         this.onUptimeResolved = onUptimeResolved;
-        getStyleClass().add("installation-status-card");
+        this.compact = compact;
         setMaxWidth(Double.MAX_VALUE);
+        if (compact) {
+            getStyleClass().addAll("server-row", "compact");
+            setMinHeight(56);
+            setMaxHeight(56);
+            setPadding(new Insets(0, 4, 0, 10));
+            setAlignment(Pos.CENTER_LEFT);
+            initializeCompact();
+            return;
+        }
+        getStyleClass().add("installation-status-card");
         setSpacing(14);
         setPadding(new Insets(16, 18, 16, 18));
         initialize();
         loadUptime();
+    }
+
+    private void initializeCompact() {
+        String color = statusColor(installation.getStatus());
+        StackPane badge = new StackPane(IconColorUtil.colored(MaterialDesignS.SERVER, color, 18));
+        badge.setMinSize(38, 38);
+        badge.setMaxSize(38, 38);
+        badge.setStyle("-fx-background-color: -color-bg-subtle; -fx-border-color: " + color + "; -fx-border-width: 1.5px;");
+
+        Label name = new Label(installation.getInstallationName());
+        name.setStyle("-fx-font-size: 13.5px; -fx-font-weight: bold; -fx-text-fill: -color-fg-default;");
+        name.setMaxWidth(Double.MAX_VALUE);
+        VBox info = new VBox(2, name, buildStatusBadge());
+        info.setAlignment(Pos.CENTER_LEFT);
+        info.setMinWidth(0);
+        HBox.setHgrow(info, Priority.ALWAYS);
+
+        optionsBtn = createOptionsMenu();
+        HBox row = new HBox(10, badge, info, optionsBtn);
+        row.setAlignment(Pos.CENTER_LEFT);
+        getChildren().add(row);
+        setupInteractions();
+        setCursor(javafx.scene.Cursor.HAND);
+        setOnMouseClicked(e -> {
+            if (e.getButton() == javafx.scene.input.MouseButton.PRIMARY && !optionsBtn.isHover())
+                App.showModal(new InstallationSettingsModal(installation));
+        });
     }
 
     private void initialize() {
@@ -508,7 +555,7 @@ public class InstallationCard extends VBox {
     // ── Interactions ──────────────────────────────────────────────────────────
 
     private void setupInteractions() {
-        setOnMouseEntered(e -> animateCard(1.015));
+        setOnMouseEntered(e -> animateCard(compact ? 1.0 : 1.015));
         setOnMouseExited(e -> {
             if (optionsBtn.isShowing()) return;
             animateCard(1.0);

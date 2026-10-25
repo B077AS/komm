@@ -56,6 +56,7 @@
 	-color-danger-7: #b3685a;
 	-color-danger-8: #8c5246;
 	-color-danger-9: #663c33;
+	-color-sidebar-header: -color-bg-default;
 	-color-fg-default: #f8f8f2;
 	-color-fg-muted: #a6a4ae;
 	-color-fg-subtle: #6b6a73;
@@ -5443,7 +5444,7 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 }
 
 .code-area .selection {
-	-fx-fill: -color-highlight;
+	-fx-highlight-fill: -color-highlight;
 }
 
 /* line-number gutter — custom factory leaves styling to CSS (no white square) */
@@ -5806,7 +5807,8 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 }
 
 .server-row:hover,
-.server-row.menu-open {
+.server-row.menu-open,
+.server-row.active-server {
 	-fx-border-color: -color-accent-emphasis;
 	-fx-border-width: 1px;
 	-fx-border-radius: 3px;
@@ -6699,4 +6701,57 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 	-fx-icon-color: -color-fg-default;
 	-fx-fill: -color-fg-default;
 	-fx-icon-size: 50px;
+}
+
+/* ── Home: spaces column (compact server / installation rows) ─────── */
+.server-row.compact {
+	-fx-background-color: transparent;
+	-fx-border-color: transparent transparent transparent transparent;
+	-fx-border-width: 0 0 0 3px;
+	-fx-border-radius: 0;
+	-fx-background-radius: 0;
+}
+
+.server-row.compact:hover,
+.server-row.compact.menu-open,
+.server-row.compact.active-server {
+	-fx-background-color: -color-bg-middle;
+	-fx-border-color: transparent transparent transparent -color-accent-emphasis;
+	-fx-border-width: 0 0 0 3px;
+	-fx-border-radius: 0;
+}
+
+.server-row.compact.drag-target {
+	-fx-background-color: -color-accent-subtle;
+}
+
+/* Create / Join under the Home spaces column: same fill as the sidebar, grey on hover */
+.button.sidebar-action-btn {
+	-fx-background-color: -color-bg-subtle;
+}
+
+.button.sidebar-action-btn:hover,
+.button.sidebar-action-btn:pressed {
+	-fx-background-color: -color-bg-middle;
+}
+
+/* Keep label + icon readable on hover (the default outlined hover swaps the text to the filled-button colour) */
+.button.sidebar-action-btn:hover,
+.button.sidebar-action-btn:pressed {
+	-fx-text-fill: -color-fg-default;
+}
+
+.button.sidebar-action-btn:hover .ikonli-font-icon,
+.button.sidebar-action-btn:pressed .ikonli-font-icon {
+	-fx-icon-color: -color-fg-default;
+}
+
+.button.sidebar-action-btn.accent:hover,
+.button.sidebar-action-btn.accent:pressed {
+	-fx-text-fill: -color-accent-fg;
+}
+
+.button.sidebar-action-btn.accent:hover .ikonli-font-icon,
+.button.sidebar-action-btn.accent:pressed .ikonli-font-icon {
+	-fx-icon-color: -color-accent-fg;
 }

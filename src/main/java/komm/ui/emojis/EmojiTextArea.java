@@ -11,10 +11,12 @@ import javafx.beans.property.*;
 import javafx.css.PseudoClass;
 import javafx.geometry.Point2D;
 import javafx.geometry.Pos;
+import java.text.BreakIterator;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.MenuItem;
+import javafx.scene.control.ScrollBar;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.control.Tooltip;
@@ -22,6 +24,7 @@ import javafx.scene.input.Clipboard;
 import javafx.scene.image.ImageView;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseButton;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.input.ScrollEvent;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
@@ -314,6 +317,25 @@ public class EmojiTextArea extends HBox {
         });
         layerStack.setOnMouseReleased(e -> e.consume());
 
+        // layerStack is only as tall as the text, but a min-lines area is taller than that, so a click
+        // below the last line misses it entirely (no focus, no caret). Catch presses in the capture
+        // phase (the ScrollPane skin may consume them on the way up) and, when they landed in that
+        // empty space rather than on the text, the picker button or a scrollbar, treat them as a click
+        // at the end of the text.
+        addEventFilter(MouseEvent.MOUSE_PRESSED, e -> {
+            if (e.getButton() != MouseButton.PRIMARY) return;
+            Node target = e.getTarget() instanceof Node n ? n : null;
+            for (Node n = target; n != null; n = n.getParent()) {
+                if (n == layerStack || n == pickerButton || n instanceof ScrollBar) return;
+            }
+            layerStack.requestFocus();
+            int end = buf.length();
+            dragAnchorRaw = end;
+            setCaretAndAnchor(end, end);
+            refreshOverlay();
+            e.consume();
+        });
+
         scrollPane.addEventFilter(ScrollEvent.SCROLL, e -> {
             double vpH = scrollPane.getViewportBounds().getHeight();
             double contentH = contentBox.getHeight();
@@ -506,10 +528,10 @@ public class EmojiTextArea extends HBox {
                             e.consume();
                             return;
                         }
-                        int available = maxLength - (buf.length() - (selEnd() - selStart()));
+                        int available = capacityLeft();
                         if (available > 0) {
-                            if (s.length() > available) s = s.substring(0, available);
-                            replaceSelection(s);
+                            s = truncateAtGraphemeBoundary(s, available);
+                            if (!s.isEmpty()) replaceSelection(s);
                         }
                     }
                     e.consume();
@@ -524,9 +546,37 @@ public class EmojiTextArea extends HBox {
         if (!editableProp.get()) return;
         String ch = e.getCharacter();
         if (ch == null || ch.isEmpty() || ch.charAt(0) < 32 || ch.charAt(0) == 127) return;
-        if (buf.length() - (selEnd() - selStart()) + ch.length() > maxLength) return;
+        // The OS emoji panel can deliver an emoji as two separate key events (high then low surrogate).
+        // Reserve room for both up front, or the first half fits in the last slot and the second is
+        // rejected, leaving half an emoji that renders as an empty square.
+        int needed = ch.length() == 1 && Character.isHighSurrogate(ch.charAt(0)) ? 2 : ch.length();
+        // The second half of a split emoji is only valid straight after its first half. If the first half
+        // was rejected for lack of room, its partner must be rejected too, or it lands alone and renders as
+        // an empty square.
+        if (ch.length() == 1 && Character.isLowSurrogate(ch.charAt(0))) {
+            int p = selStart();
+            if (p == 0 || !Character.isHighSurrogate(buf.charAt(p - 1))) return;
+        }
+        if (needed > capacityLeft()) return;
         replaceSelection(ch);
         e.consume();
+    }
+
+    /** How many more UTF-16 chars fit under {@link #maxLength}, counting the current selection as replaced. */
+    private int capacityLeft() {
+        return maxLength - (buf.length() - (selEnd() - selStart()));
+    }
+
+    /**
+     * Longest prefix of {@code s} that is at most {@code max} chars and ends on a grapheme boundary, so a
+     * surrogate pair, a ZWJ sequence or an emoji with a skin tone / variation selector is never cut in half.
+     */
+    private static String truncateAtGraphemeBoundary(String s, int max) {
+        if (s.length() <= max) return s;
+        BreakIterator it = BreakIterator.getCharacterInstance();
+        it.setText(s);
+        int end = it.preceding(max + 1);
+        return end <= 0 ? "" : s.substring(0, end);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -1215,7 +1265,8 @@ public class EmojiTextArea extends HBox {
     }
 
     public void insertEmoji(Emoji emoji) {
-        replaceSelection(emoji.character());
+        // All or nothing: an emoji that doesn't fully fit under the limit is not inserted at all.
+        if (emoji.character().length() <= capacityLeft()) replaceSelection(emoji.character());
         layerStack.requestFocus();
     }
 
