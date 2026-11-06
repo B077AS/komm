@@ -9,8 +9,8 @@
 </p>
 
 <p align="center">
-  <img alt="Java 21" src="https://img.shields.io/badge/Java-21-orange?logo=openjdk&logoColor=white">
-  <img alt="JavaFX 22" src="https://img.shields.io/badge/JavaFX-22-1B6AC6">
+  <img alt="Java 25" src="https://img.shields.io/badge/Java-25-orange?logo=openjdk&logoColor=white">
+  <img alt="JavaFX 25" src="https://img.shields.io/badge/JavaFX-25-1B6AC6">
   <img alt="WebRTC" src="https://img.shields.io/badge/WebRTC-native-333333?logo=webrtc&logoColor=white">
   <img alt="Windows | Linux" src="https://img.shields.io/badge/Windows%20%7C%20Linux-X11%20%2B%20Wayland-4CAF50">
   <img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-blue">
@@ -183,7 +183,7 @@ If some of these are missing, the app still runs - but you may end up with no au
 
 ## Building from source (developers)
 
-Requirements: **Java 21** and Maven.
+Requirements: **Java 25** and Maven.
 
 ```bash
 # Run in development
@@ -211,9 +211,9 @@ On first launch the client creates its app data directory - `%APPDATA%\Komm` on 
 
 | Layer | Technology |
 |---|---|
-| Language / runtime | Java 21 |
-| UI | JavaFX 22, [AtlantaFX](https://github.com/mkpaz/atlantafx) themes, Ikonli icon packs, RichTextFX, emojifx |
-| Voice / video | [webrtc-java](https://github.com/devopvoid/webrtc-java) 0.17.0, LiveKit signaling |
+| Language / runtime | Java 25 |
+| UI | JavaFX 25, [AtlantaFX](https://github.com/mkpaz/atlantafx) themes, Ikonli icon packs, RichTextFX, emojifx |
+| Voice / video | [webrtc-java](https://github.com/devopvoid/webrtc-java) 1.0.0, LiveKit signaling |
 | Audio DSP | RNNoise (rnnoise4j), WebRTC VAD (webrtc-java), WebRTC AEC3/AGC2, mp3spi |
 | System integration | JNA / JNA Platform (WASAPI loopback, PipeWire patch bay), JNativeHook (global hotkeys) |
 | Networking | Java `HttpClient`, Tyrus WebSocket client, Spring WebSocket/messaging (client-side) |
