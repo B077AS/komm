@@ -439,7 +439,7 @@ public class AudioUserTab implements UserSettingsTab {
         return wrapScroll(pane);
     }
 
-    // Sensitivity slider maps to the Silero probability threshold in [THRESHOLD_MIN, THRESHOLD_MAX].
+    // Sensitivity slider drives the WebRTC VAD profile (see VadProcessor); range [THRESHOLD_MIN, THRESHOLD_MAX].
     //   0 (Lenient) → 0.10   50 (Balanced) → 0.525   100 (Strict) → 0.95
     // This is the ONLY thing the slider controls. The loudness floor (noise gate) is a
     // fixed −40 dBFS click backstop with no UI — see UserSettings.getVadNoiseGateDb().

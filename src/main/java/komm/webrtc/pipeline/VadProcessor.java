@@ -1,223 +1,169 @@
 package komm.webrtc.pipeline;
 
-import ai.onnxruntime.*;
-import komm.Launcher;
+import dev.onvoid.webrtc.media.audio.StandaloneVoiceActivityDetector;
 import lombok.extern.slf4j.Slf4j;
 
-import java.io.InputStream;
-import java.nio.LongBuffer;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.util.HashMap;
-import java.util.Map;
-
 /**
- * Silero VAD (Voice Activity Detection) powered by ONNX Runtime.
+ * Voice activity gate built on webrtc-java's stock {@link StandaloneVoiceActivityDetector}
+ * (WebRTC's classic GMM speech detector, boolean per 10 ms).
  *
- * Runs at 48 kHz. Each 20 ms frame (960 samples) is 3:1 decimated to
- * 320 samples at 16 kHz before being fed to the Silero model, which requires
- * exactly 16 kHz input. Samples accumulate in a window buffer until 512 are
- * ready for a single inference pass (~0.5 ms on modern CPUs).
+ * <h3>Why this detector, fed this way</h3>
+ * <ul>
+ *   <li>The pitch-based probability estimator and Silero were both tried and rejected: the
+ *       estimator flagged only ~15% of real speech frames on a quiet mic, Silero needed the
+ *       post-RNNoise signal and its own click workarounds.</li>
+ *   <li>The detector must see audio from <em>before</em> noise suppression (RNNoise output
+ *       confuses it). The pipeline feeds it the AEC output through a side-chain AGC that only
+ *       exists for detection, so a quiet mic still reaches a level it handles.</li>
+ *   <li>Keystrokes: RNNoise removes them from the cleaned signal (post-AGC about −65..−85 dBFS)
+ *       but keeps speech (−22..−35), so the cleaned frame must carry real signal both to open
+ *       the gate and to keep it open.</li>
+ * </ul>
  *
- * The LSTM hidden states h/c are carried across frames (stateful model).
- * A configurable hangover period prevents clipping the end of words.
+ * <h3>Slider</h3>
+ * One slider, four coordinated effects (see {@link #applySliderProfile}): detector
+ * aggressiveness, onset length, how many 10 ms halves of a frame must be speech, and a loudness
+ * floor on the RAW mic level (the only signal that still reflects how loudly you talk once AGC
+ * has normalised everything).
  *
- * The model (silero_vad.onnx) is bundled directly in the JAR under
- * /silero_vad.onnx and loaded from the classpath at startup.
- *
- * If the model fails to load VAD falls back to "always transmit" so voice
- * still works — the user just won't benefit from bandwidth savings.
- *
- * Ported from Java-vad reference project, adapted for Komm.
+ * <p>If the native detector cannot be created the gate is bypassed (always transmit) so voice
+ * still works. Called only from the audio pipeline thread, except the setters.
  */
 @Slf4j
 public class VadProcessor implements AutoCloseable {
 
-    public static final int VAD_WINDOW_SIZE = 512;
-    public static final int VAD_SAMPLE_RATE = 16_000;
+    private static final int   CHUNK            = 480;      // 10 ms @ 48 kHz
+    private static final int   WARMUP_CHUNKS    = 5;        // detector state settling after (re)start
+    private static final int   FRAME_16K        = 320;      // hangover is counted in 16 kHz samples
+    private static final int   HANGOVER_RATE    = 16_000;
+    private static final float DEAD_MIC_RMS     = 0.0008f;  // ≈ −62 dBFS raw: no mic signal at all
+    private static final float SUSTAIN_MIN_RMS  = 0.003f;   // ≈ −50 dBFS post-AGC: must carry signal to hold the gate
 
-    private static final String CLASSPATH_MODEL = "/silero_vad.onnx";
+    private StandaloneVoiceActivityDetector detector;
+    private int detectorCalls = 0;
+    private final short[] chunkBuf = new short[CHUNK];
 
-    private OrtEnvironment ortEnv;
-    private OrtSession     vadSession;
-    private boolean        modelLoaded = false;
+    private volatile boolean enabled = true;
+    private volatile double  threshold = 0.5;
+    private volatile int     hangoverSamples = (int) (0.3 * HANGOVER_RATE);   // 300 ms
 
-    private final VadState state = new VadState();
+    // Slider profile (derived from threshold).
+    private volatile int    onsetCountRequired = 3;
+    private volatile double gateLevel          = 0.5;     // share of a frame's chunks that must be speech
+    private volatile float  rawFloorRms        = 0.01f;   // slider loudness floor, raw mic
+    // Post-AGC floor for opening the gate (the "noise gate" user setting, −40 dBFS default).
+    private volatile float  onsetMinRms        = 0.01f;
 
-    // Accumulator for 3:1 decimated samples (audio frames are 320, VAD needs 512)
-    private final float[] accumulator  = new float[VAD_WINDOW_SIZE];
-    private int           accumulatorPos = 0;
-
-    private volatile boolean enabled        = true;
-    private volatile double  threshold      = 0.5;
-    private volatile int     hangoverSamples = (int)(0.3 * VAD_SAMPLE_RATE); // 300 ms default
-
-    // Offset hysteresis: once the gate is open, a window only needs to score
-    // threshold − 0.15 to keep it open. Matches Silero's reference VADIterator,
-    // which uses the same offset so probability dips mid-sentence don't flap
-    // the gate at high thresholds.
-    private static final double OFFSET_HYSTERESIS = 0.15;
-
-    // Onset gate: require this many consecutive above-threshold inference windows
-    // before opening the transmit gate.  One inference window ≈ 32 ms at 16 kHz.
-    // 2 windows = ~64 ms — long enough that a single transient can't open the gate,
-    // short enough that word onsets aren't clipped.  The energy floor (onsetMinRms)
-    // is the primary click filter; this is just the temporal backstop.
-    private volatile int onsetCountRequired     = 2;
-    private          int consecutiveHighInferences = 0;
-
-    // Minimum RMS energy a frame must have (post-AGC, float [-1,1]) before its
-    // Silero score counts toward the onset counter.  Provides a backstop when AGC
-    // hasn't had time to fully ramp a brief transient up to full target level.
-    // ~0.01 ≈ −40 dBFS — well below normal speech but above desk-transmitted clicks.
-    private volatile float onsetMinRms = 0.01f;
+    // Gate state.
+    private int     consecutiveHigh = 0;
+    private int     hangoverLeft    = 0;
+    private boolean speechActive    = false;
+    private volatile float speechProbability = 0f;
 
     public volatile String statusMessage = "VAD not initialized";
 
     public VadProcessor(boolean enabled, double threshold) {
         this.enabled   = enabled;
         this.threshold = threshold;
-        loadModel();
+        try {
+            detector = new StandaloneVoiceActivityDetector(modeFor(threshold));
+            applySliderProfile(threshold);
+            statusMessage = "WebRTC VAD ready";
+            log.info("[VAD] WebRTC standalone VAD ready, mode {}", modeFor(threshold));
+        } catch (Throwable t) {
+            statusMessage = "Load failed: " + t.getMessage();
+            log.error("[VAD] WebRTC VAD failed to initialise — voice gate bypassed: {}", t.getMessage(), t);
+        }
     }
 
-    // ── Model loading ─────────────────────────────────────────────────────────
+    // ── Slider mapping ────────────────────────────────────────────────────────
 
-    private void loadModel() {
-        try {
-            Path modelPath = ensureModelOnDisk();
-            if (modelPath == null) {
-                statusMessage = "Model missing from JAR";
-                return;
-            }
-            ortEnv = OrtEnvironment.getEnvironment();
-            OrtSession.SessionOptions opts = new OrtSession.SessionOptions();
-            opts.setIntraOpNumThreads(1);
-            vadSession  = ortEnv.createSession(modelPath.toString(), opts);
-            modelLoaded = true;
-            statusMessage = "Silero VAD ready";
-            log.info("[VAD] Silero model loaded from {}", modelPath);
-        } catch (Exception e) {
-            log.error("[VAD] Failed to load ONNX model: {}", e.getMessage(), e);
-            statusMessage = "Load failed: " + e.getMessage();
-        }
+    private static StandaloneVoiceActivityDetector.Mode modeFor(double t) {
+        if (t < 0.35) return StandaloneVoiceActivityDetector.Mode.QUALITY;
+        if (t < 0.60) return StandaloneVoiceActivityDetector.Mode.LOW_BITRATE;
+        if (t < 0.80) return StandaloneVoiceActivityDetector.Mode.AGGRESSIVE;
+        return StandaloneVoiceActivityDetector.Mode.VERY_AGGRESSIVE;
     }
 
     /**
-     * Returns a path to silero_vad.onnx on disk, extracting it from the
-     * bundled classpath resource if it isn't already in the data directory.
+     *  - detector aggressiveness (mode): QUALITY .. VERY_AGGRESSIVE
+     *  - onset length: 2 / 3 / 4 frames (40 / 60 / 80 ms; the pipeline pre-roll is 80 ms so nothing is clipped)
+     *  - strict end (&gt; 0.75): both 10 ms halves of a frame must be speech, not just one
+     *  - loudness floor on the RAW mic level of the onset frame: −70 dBFS (slider min) .. −40 dBFS (max),
+     *    about −56 dBFS at the 0.5 default — what makes "speak up to open" tangible
      */
-    private Path ensureModelOnDisk() {
-        Path target = Launcher.getDataDirectory().resolve("models").resolve("silero_vad.onnx");
-
-        if (Files.exists(target) && isValidModel(target)) {
-            log.debug("[VAD] Model already on disk at {}", target);
-            return target;
-        }
-
-        try (InputStream is = getClass().getResourceAsStream(CLASSPATH_MODEL)) {
-            if (is == null) {
-                log.error("[VAD] Bundled model not found on classpath at {}", CLASSPATH_MODEL);
-                return null;
-            }
-            Files.createDirectories(target.getParent());
-            Files.copy(is, target, StandardCopyOption.REPLACE_EXISTING);
-            log.info("[VAD] Model extracted from JAR to {}", target);
-            return target;
-        } catch (Exception e) {
-            log.error("[VAD] Failed to extract model from JAR: {}", e.getMessage(), e);
-            return null;
-        }
-    }
-
-    private boolean isValidModel(Path path) {
-        try { return Files.size(path) > 1024; } catch (Exception e) { return false; }
+    private void applySliderProfile(double t) {
+        detector.setMode(modeFor(t));
+        onsetCountRequired = t < 0.30 ? 2 : (t < 0.70 ? 3 : 4);
+        gateLevel          = t > 0.75 ? 1.0 : 0.5;
+        double clamped     = Math.max(0.10, Math.min(0.95, t));
+        double db          = -70.0 + (clamped - 0.10) / 0.85 * 30.0;
+        rawFloorRms        = (float) Math.pow(10.0, db / 20.0);
     }
 
     // ── Processing ────────────────────────────────────────────────────────────
 
     /**
-     * Process a 960-sample (20 ms @ 48 kHz) float frame.
-     * Decimates 3:1 to 16 kHz, accumulates until 512 samples are ready,
-     * then runs a Silero inference pass.
+     * Process one 960-sample (20 ms @ 48 kHz) frame.
      *
-     * @param frame  float[960] normalized to [-1, 1] at 48 kHz
-     * @return true if speech should be transmitted (VAD active or in hangover)
+     * @param frame         post-AGC frame, float [-1,1] (cleaned signal: level checks)
+     * @param detectorFrame what the detector analyses: AEC output after the side-chain AGC
+     * @param rawRms        RMS of the raw mic frame, before AEC/NS/AGC
+     * @return true if audio should be transmitted (speech or hangover)
      */
-    public boolean processFrame(float[] frame) {
-        if (!enabled) {
-            state.isSpeechActive    = true;
-            state.speechProbability = 1.0f;
-            return true;
-        }
-        if (!modelLoaded) {
-            // Model not ready yet — pass everything through so voice still works
-            state.isSpeechActive    = true;
-            state.speechProbability = 1.0f;
+    public boolean processFrame(float[] frame, float[] detectorFrame, float rawRms) {
+        if (!enabled || detector == null) {
+            speechActive      = true;
+            speechProbability = 1.0f;
             return true;
         }
 
-        // 3:1 average decimation: 960 samples @ 48 kHz → 320 samples @ 16 kHz
-        float[] downsampled = downsample3to1(frame);
+        float p = detect(detectorFrame, rawRms);
+        speechProbability = p;
+        float frameRms = rms(frame);
 
-        boolean inferenceFired = false;
-        for (float s : downsampled) {
-            accumulator[accumulatorPos++] = s;
-            if (accumulatorPos >= VAD_WINDOW_SIZE) {
-                runInference();
-                accumulatorPos = 0;
-                inferenceFired = true;
-            }
+        if (speechActive) {
+            consecutiveHigh = 0;
+            if (p >= 0.5 && frameRms >= SUSTAIN_MIN_RMS) hangoverLeft = hangoverSamples;
+        } else {
+            boolean levelOk = rawRms >= rawFloorRms && frameRms >= onsetMinRms;
+            consecutiveHigh = (p >= gateLevel && levelOk) ? consecutiveHigh + 1 : 0;
         }
 
-        // Gate decisions happen only at inference boundaries — not every frame.
-        // A transient click fires the model for one window then immediately drops
-        // back; real speech keeps the counter climbing.
-        //
-        // Closed → opening: require consecutive windows with probability ≥ threshold
-        // AND frame RMS ≥ onsetMinRms. The energy floor exists because mouse clicks
-        // are brief — even desk-conducted, AGC doesn't have time to ramp them up, so
-        // post-AGC RMS stays well below normal speech. It is deliberately checked
-        // only while the gate is CLOSED: it's a click backstop, not a speech gate,
-        // and quiet mid-sentence stretches must not be able to cut an open gate.
-        //
-        // Open → staying open: probability ≥ threshold − OFFSET_HYSTERESIS refreshes
-        // the hangover; the counter is retired so the hangover alone decides closure.
-        if (inferenceFired) {
-            if (state.isSpeechActive) {
-                consecutiveHighInferences = 0;
-                // Clamp the sustain threshold to half the onset threshold: a plain
-                // (threshold − 0.15) goes to zero or below near the slider's minimum,
-                // which would refresh the hangover on every window — even silence —
-                // and latch the gate open permanently after the first sound.
-                double sustainThreshold = Math.max(threshold - OFFSET_HYSTERESIS, threshold * 0.5);
-                if (state.speechProbability >= sustainThreshold) {
-                    state.hangoverSamplesLeft = hangoverSamples;
-                }
-            } else {
-                float frameRms = rms(frame);
-                if (state.speechProbability >= threshold && frameRms >= onsetMinRms) {
-                    consecutiveHighInferences++;
-                } else {
-                    consecutiveHighInferences = 0;
-                }
-            }
-        }
-
-        // Onset gate: open only after N consecutive high-probability inference
-        // windows.  Hangover is counted in 16 kHz samples (320 per frame).
         boolean speaking;
-        if (consecutiveHighInferences >= onsetCountRequired) {
-            state.hangoverSamplesLeft = hangoverSamples;
+        if (consecutiveHigh >= onsetCountRequired) {
+            hangoverLeft = hangoverSamples;
             speaking = true;
-        } else if (state.hangoverSamplesLeft > 0) {
-            state.hangoverSamplesLeft -= downsampled.length;
+        } else if (hangoverLeft > 0) {
+            hangoverLeft -= FRAME_16K;
             speaking = true;
         } else {
             speaking = false;
         }
-        state.isSpeechActive = speaking;
+        speechActive = speaking;
         return speaking;
+    }
+
+    /** Share of the frame's 10 ms chunks flagged as speech (0, 0.5, 1); 0 on a dead mic / warm-up. */
+    private float detect(float[] frame, float rawRms) {
+        try {
+            int hits = 0, chunks = 0;
+            for (int off = 0; off + CHUNK <= frame.length; off += CHUNK) {
+                for (int i = 0; i < CHUNK; i++) {
+                    int v = Math.round(frame[off + i] * 32768f);
+                    chunkBuf[i] = (short) Math.max(Short.MIN_VALUE, Math.min(Short.MAX_VALUE, v));
+                }
+                // Always feed the detector: its noise model is adaptive.
+                if (detector.isSpeech(chunkBuf, 48_000)) hits++;
+                detectorCalls++;
+                chunks++;
+            }
+            if (rawRms < DEAD_MIC_RMS || detectorCalls <= WARMUP_CHUNKS || chunks == 0) return 0f;
+            return (float) hits / chunks;
+        } catch (Exception e) {
+            log.warn("[VAD] detector error: {}", e.getMessage());
+            return 0f;
+        }
     }
 
     private static float rms(float[] frame) {
@@ -226,89 +172,53 @@ public class VadProcessor implements AutoCloseable {
         return (float) Math.sqrt(sum / frame.length);
     }
 
-    private static float[] downsample3to1(float[] in) {
-        int outLen = in.length / 3;
-        float[] out = new float[outLen];
-        for (int i = 0; i < outLen; i++) {
-            out[i] = (in[3 * i] + in[3 * i + 1] + in[3 * i + 2]) / 3.0f;
-        }
-        return out;
-    }
-
-    private void runInference() {
-        try (OnnxTensor inputTensor = createInputTensor();
-             OnnxTensor hTensor     = OnnxTensor.createTensor(ortEnv, state.h);
-             OnnxTensor cTensor     = OnnxTensor.createTensor(ortEnv, state.c);
-             OnnxTensor srTensor    = createSrTensor()) {
-
-            Map<String, OnnxTensor> feeds = new HashMap<>();
-            feeds.put("input", inputTensor);
-            feeds.put("h",     hTensor);
-            feeds.put("c",     cTensor);
-            feeds.put("sr",    srTensor);
-
-            try (OrtSession.Result result = vadSession.run(feeds)) {
-                float[][] probArray = (float[][]) result.get("output").get().getValue();
-                state.speechProbability = probArray[0][0];
-
-                state.h = (float[][][]) result.get("hn").get().getValue();
-                state.c = (float[][][]) result.get("cn").get().getValue();
-            }
-        } catch (OrtException e) {
-            log.warn("[VAD] Inference error: {}", e.getMessage());
-        }
-    }
-
-    private OnnxTensor createInputTensor() throws OrtException {
-        float[][] data = new float[1][VAD_WINDOW_SIZE];
-        System.arraycopy(accumulator, 0, data[0], 0, VAD_WINDOW_SIZE);
-        return OnnxTensor.createTensor(ortEnv, data);
-    }
-
-    private OnnxTensor createSrTensor() throws OrtException {
-        return OnnxTensor.createTensor(ortEnv,
-                LongBuffer.wrap(new long[]{ VAD_SAMPLE_RATE }), new long[]{ 1 });
-    }
-
     // ── Config ────────────────────────────────────────────────────────────────
 
-    public void setEnabled(boolean enabled)     { this.enabled = enabled; }
+    public void setEnabled(boolean enabled) { this.enabled = enabled; }
 
     public void setThreshold(double threshold) {
         boolean stricter = threshold > this.threshold;
         this.threshold = threshold;
-        // Raising the threshold drops the gate latch immediately: without this, an
-        // already-open gate keeps transmitting through its hangover/hysteresis and the
-        // slider feels dead until the room happens to go quiet. Speech re-opens the
-        // gate within ~64 ms if it clears the new threshold, so the cut is barely
-        // audible — but the setting takes effect the moment the user moves the slider.
+        if (detector != null) {
+            try { applySliderProfile(threshold); } catch (Exception ignored) {}
+        }
+        // Raising the strictness drops the gate latch immediately so the slider takes effect the
+        // moment it moves instead of after the hangover; speech re-opens it within ~60 ms.
         if (stricter) {
-            state.hangoverSamplesLeft = 0;
-            consecutiveHighInferences = 0;
+            hangoverLeft    = 0;
+            consecutiveHigh = 0;
         }
     }
-    public void setHangoverMs(int hangoverMs)   {
-        this.hangoverSamples = (int)(hangoverMs / 1000.0 * VAD_SAMPLE_RATE);
+
+    public void setHangoverMs(int hangoverMs) {
+        this.hangoverSamples = (int) (hangoverMs / 1000.0 * HANGOVER_RATE);
     }
-    /** Minimum consecutive above-threshold inference windows before speech gate opens (~32 ms each). */
-    public void setOnsetCount(int count)        { this.onsetCountRequired = Math.max(1, count); }
+
     /**
-     * Minimum post-AGC frame RMS (float [-1,1]) required before an above-threshold
-     * Silero window counts toward the onset gate.
-     * Default 0.01 (~−40 dBFS).  Lower = more sensitive; raise to filter louder clicks.
+     * Minimum post-AGC frame RMS (float [-1,1]) required to OPEN the gate (the "noise gate"
+     * setting). Default 0.01 (≈ −40 dBFS). Checked only while the gate is closed.
      */
-    public void setOnsetMinRms(float minRms)    { this.onsetMinRms = Math.max(0f, minRms); }
+    public void setOnsetMinRms(float minRms) { this.onsetMinRms = Math.max(0f, minRms); }
 
-    public boolean isEnabled()           { return enabled; }
-    public boolean isModelLoaded()       { return modelLoaded; }
-    public float   getSpeechProbability(){ return state.speechProbability; }
-    public boolean isSpeechActive()      { return state.isSpeechActive; }
+    public boolean isEnabled()            { return enabled; }
+    public boolean isModelLoaded()        { return detector != null; }
+    public float   getSpeechProbability() { return speechProbability; }
+    public boolean isSpeechActive()       { return speechActive; }
 
-    public void resetState() { state.reset(); accumulatorPos = 0; consecutiveHighInferences = 0; }
+    public void resetState() {
+        consecutiveHigh   = 0;
+        hangoverLeft      = 0;
+        speechActive      = false;
+        speechProbability = 0f;
+        detectorCalls     = 0;
+        if (detector != null) {
+            try { detector.reset(); } catch (Exception ignored) {}
+        }
+    }
 
     @Override
     public void close() {
-        try { if (vadSession != null) vadSession.close(); } catch (Exception ignored) {}
-        try { if (ortEnv    != null) ortEnv.close();     } catch (Exception ignored) {}
+        try { if (detector != null) detector.dispose(); } catch (Exception ignored) {}
+        detector = null;
     }
 }

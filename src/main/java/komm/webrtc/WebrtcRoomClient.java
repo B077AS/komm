@@ -50,7 +50,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * Audio architecture (post-pipeline refactor):
  * ─────────────────────────────────────────────
  *  Capture path (send):
- *    javax.sound mic → UserAudioPipeline (AEC3 → RNNoise → AGC2 → Silero-VAD)
+ *    javax.sound mic → UserAudioPipeline (AEC3 → RNNoise → AGC2 → WebRTC VAD gate)
  *    → CustomAudioSource.pushAudio() → Publisher PC → LiveKit
  *
  *  Playback path (receive):
@@ -962,7 +962,7 @@ public class WebrtcRoomClient {
                     UserSettings.getInstance().getSoundboardVolume(),
                     UserSettings.getInstance().getOutputDevice());
             if (speakerMuted) receiver.setActive(false);
-            remoteTrack.addSink(receiver);
+            remoteTrack.addSink(receiver, AudioDataAccess.REUSED);
             newSlot = new AudioSlot(remoteTrack, receiver, AudioSlotKind.SOUNDBOARD, participantId);
             log.info("[Subscriber] Remote soundboard track connected: mid={} sid={}", mid, trackSid);
         } else if ("screen_audio".equals(trackName)) {
@@ -977,7 +977,7 @@ public class WebrtcRoomClient {
             UserVoiceReceiver receiver = new UserVoiceReceiver(
                     savedStreamVol, UserSettings.getInstance().getOutputDevice());
             receiver.setActive(watching && !streamMuted);
-            remoteTrack.addSink(receiver);
+            remoteTrack.addSink(receiver, AudioDataAccess.REUSED);
             if (participantId != null) {
                 UserVoiceReceiver old = userIdToScreenAudioReceiver.put(participantId, receiver);
                 closeReplacedUserReceiver(old, receiver);
@@ -991,7 +991,7 @@ public class WebrtcRoomClient {
             UserVoiceReceiver receiver = new UserVoiceReceiver(
                     savedVol, UserSettings.getInstance().getOutputDevice());
             if (speakerMuted) receiver.setActive(false);
-            remoteTrack.addSink(receiver);
+            remoteTrack.addSink(receiver, AudioDataAccess.REUSED);
             UserVoiceReceiver old = userIdToMicReceiver.put(participantId, receiver);
             closeReplacedUserReceiver(old, receiver);
             newSlot = new AudioSlot(remoteTrack, receiver, AudioSlotKind.MIC, participantId);
@@ -1010,7 +1010,7 @@ public class WebrtcRoomClient {
             UserVoiceReceiver receiver = new UserVoiceReceiver(
                     1.0f, UserSettings.getInstance().getOutputDevice());
             if (speakerMuted) receiver.setActive(false);
-            remoteTrack.addSink(receiver);
+            remoteTrack.addSink(receiver, AudioDataAccess.REUSED);
             newSlot = new AudioSlot(remoteTrack, receiver, AudioSlotKind.MIC, null);
             log.warn("[Subscriber] Audio m-line {} has no participant mapping, playing anonymously: sid={}", mid, trackSid);
         }
@@ -1261,12 +1261,12 @@ public class WebrtcRoomClient {
         UserSettings.getInstance().setVadNoiseGateDb(db);
     }
 
-    /** Human-readable status of the Silero VAD model ("ready", "downloading…", "load failed", etc.) */
+    /** Human-readable status of the WebRTC VAD ("ready", "load failed", etc.) */
     public String getVadStatus() {
         return audioPipeline != null ? audioPipeline.getVadStatus() : "Pipeline not started";
     }
 
-    /** True once the Silero model has been loaded and VAD is functional. */
+    /** True once the WebRTC VAD is created and functional. */
     public boolean isVadModelReady() {
         return audioPipeline != null && audioPipeline.isVadModelReady();
     }
@@ -1302,7 +1302,7 @@ public class WebrtcRoomClient {
 
     /** Current mic level (post NS/AGC) as RMS in [0, 1] — what the VAD gate actually sees. */
     public float   getMicLevelRms() { return audioPipeline != null ? audioPipeline.postProcessRms : 0f; }
-    /** Latest Silero speech probability in [0, 1] — what the detection threshold compares against. */
+    /** Share of the last frame flagged as speech (0, 0.5 or 1). */
     public float   getVadProbability() { return audioPipeline != null ? audioPipeline.vadProbability : 0f; }
     /** True while the VAD gate is open, i.e. audio is currently being transmitted. */
     public boolean isVadSpeaking()  { return audioPipeline != null && audioPipeline.vadActive; }
@@ -1426,7 +1426,7 @@ public class WebrtcRoomClient {
             UserVoiceReceiver receiver = new UserVoiceReceiver(1.0f, UserSettings.getInstance().getOutputDevice());
             // Deliberately NOT tapped into the AEC reference: cancelling the very sound the
             // user is trying to hear would defeat the mic test.
-            remoteTrack.addSink(receiver);
+            remoteTrack.addSink(receiver, AudioDataAccess.REUSED);
             micTestRemoteTrack = remoteTrack;
             micTestReceiver    = receiver;
             log.info("[MicTest] Loopback track connected");

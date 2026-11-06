@@ -77,6 +77,11 @@ public class Launcher {
         System.setProperty("prism.text", "t2k");*/
         initializeSystemProperties();
         initializeDirectories();
+        // webrtc-java 0.20+ routes exceptions thrown inside native callbacks (sinks, observers,
+        // capture callbacks) to the thread's uncaught handler — log them or they vanish.
+        Thread.setDefaultUncaughtExceptionHandler((t, e) ->
+                org.slf4j.LoggerFactory.getLogger("komm.Uncaught")
+                        .error("Uncaught exception on thread {}", t.getName(), e));
         parseDeepLink(args);
         tryRegisterWindowsProtocol();
         App.appStart(args);

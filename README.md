@@ -36,7 +36,7 @@ This repo is the app everyone actually looks at: a native-feeling JavaFX desktop
 
 ## Features
 
-- **Crystal-clear voice** - low-latency WebRTC voice channels with a custom DSP pipeline: echo cancellation (AEC3), RNNoise noise suppression, automatic gain control and Silero-VAD voice activity detection (see [The audio pipeline](#the-audio-pipeline))
+- **Crystal-clear voice** - low-latency WebRTC voice channels with a custom DSP pipeline: echo cancellation (AEC3), RNNoise noise suppression, automatic gain control and WebRTC voice activity detection (see [The audio pipeline](#the-audio-pipeline))
 - **HD screen sharing with system audio** - multiple people can stream at once; viewers can pop streams out into separate windows, with live viewer counts. System audio is captured natively - WASAPI loopback on Windows, PipeWire on Linux
 - **Video** - camera support in voice channels
 - **Rich text chat** - channels and DMs with editing, deletion, emoji reactions, typing indicators, GIF search, file attachments and unread/read state
@@ -106,11 +106,11 @@ On Linux, screen sharing works natively on Wayland via webrtc-java's built-in Pi
 Your microphone doesn't go straight to the network - every 20 ms frame runs through a DSP chain on its own processing thread:
 
 ```
-mic ─► capture ─► AEC3 ─► RNNoise / WebRTC-NS ─► AGC2 ─► Silero VAD ─► WebRTC track ─► SFU
+mic ─► capture ─► AEC3 ─► RNNoise / WebRTC-NS ─► AGC2 ─► WebRTC VAD gate ─► WebRTC track ─► SFU
         (echo cancel)   (noise suppression)   (gain)   (speech gate)
 ```
 
-- **Silero VAD** (ONNX Runtime, model bundled in the JAR) decides when you're actually speaking; a fixed noise gate and hysteresis keep quiet voices in and keyboard clatter out.
+- **WebRTC VAD** (webrtc-java's `StandaloneVoiceActivityDetector`) decides when you're actually speaking; it analyses pre-RNNoise audio, and the cleaned signal must carry real signal to open or hold the gate, which keeps keyboard clatter out while quiet voices stay in.
 - **RNNoise** is the primary noise suppressor with WebRTC-NS as fallback, running inference asynchronously so the capture thread never stalls.
 - On the receiving side, per-user jitter buffering with a prefill cushion keeps playback smooth even on spiky connections (particularly on Linux/PipeWire).
 - Every stage can be toggled live from the audio settings, with a real-time mic activity meter.
@@ -214,7 +214,7 @@ On first launch the client creates its app data directory - `%APPDATA%\Komm` on 
 | Language / runtime | Java 21 |
 | UI | JavaFX 22, [AtlantaFX](https://github.com/mkpaz/atlantafx) themes, Ikonli icon packs, RichTextFX, emojifx |
 | Voice / video | [webrtc-java](https://github.com/devopvoid/webrtc-java) 0.17.0, LiveKit signaling |
-| Audio DSP | RNNoise (rnnoise4j), Silero VAD via ONNX Runtime, WebRTC AEC3/AGC2, mp3spi |
+| Audio DSP | RNNoise (rnnoise4j), WebRTC VAD (webrtc-java), WebRTC AEC3/AGC2, mp3spi |
 | System integration | JNA / JNA Platform (WASAPI loopback, PipeWire patch bay), JNativeHook (global hotkeys) |
 | Networking | Java `HttpClient`, Tyrus WebSocket client, Spring WebSocket/messaging (client-side) |
 | Code highlighting | RSyntaxTextArea's `TokenMaker` parsers, used headlessly (Java, JavaScript, Python, Go, HTML, CSS) |
