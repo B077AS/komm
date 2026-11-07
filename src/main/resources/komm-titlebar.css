@@ -1,0 +1,100 @@
+/*
+ * Komm custom title bar (komm.ui.utils.WindowChrome). Added as a SCENE stylesheet to every window
+ * that uses StageStyle.EXTENDED. It replaces atlantafx-decorations' own theme CSS, whose caption
+ * buttons are pre-rendered PNGs with a circular hover baked in, 16-22px wide, inside 5-6px of
+ * padding: round, and the last few pixels at the screen edge were not clickable.
+ *
+ * Here the buttons are rectangles that fill the whole bar height and sit flush against the window
+ * edge, so "mouse thrown to the top-right corner, click" always hits Close. Icons are vector
+ * shapes coloured through CSS variables.
+ */
+
+.komm-title-bar {
+	-fx-background-color: -color-border-muted, -color-bg-default;
+	-fx-background-insets: 0, 0 0 1 0;
+	-fx-min-height: 30;
+	-fx-pref-height: 30;
+	-fx-max-height: 30;
+	-fx-padding: 0 0 0 12;
+}
+
+.komm-title-text {
+	-fx-text-fill: -color-fg-muted;
+	-fx-font-size: 12px;
+}
+
+.komm-window-root:inactive .komm-title-text {
+	-fx-opacity: 0.6;
+}
+
+/* ── Caption buttons ─────────────────────────────────────────────────────────── */
+
+.header-button-group > .container {
+	-fx-spacing: 0;
+	-fx-padding: 0;
+}
+
+.header-button-group .header-button {
+	-fx-pref-width: 46;
+	-fx-pref-height: 30;
+	-fx-background-color: transparent;
+	-fx-background-insets: 0 0 1 0;
+	-fx-background-radius: 0;
+	-fx-cursor: default;
+}
+
+.header-button-group .header-button > .region {
+	-fx-background-color: -color-fg-default;
+	-fx-scale-shape: false;
+	-fx-position-shape: true;
+	-fx-background-radius: 0;
+}
+
+.header-button-group .header-button:hover {
+	-fx-background-color: -color-bg-subtle;
+}
+
+.header-button-group .header-button:pressed {
+	-fx-background-color: -color-border-muted;
+}
+
+.komm-window-root:inactive .header-button > .region {
+	-fx-opacity: 0.5;
+}
+
+/* Icons (10x10) */
+.header-button.minimize > .region {
+	-fx-shape: "M0,0 H10 V1 H0 Z";
+	/* 30px bar: a 1px line centres on a half pixel and blurs; nudge it onto the pixel grid */
+	-fx-translate-y: 0.5;
+}
+
+.header-button.maximize > .region {
+	-fx-shape: "M0,0 H10 V10 H0 Z M1,1 V9 H9 V1 Z";
+}
+
+/* Maximised: the button restores, so it shows two overlapping windows. */
+.komm-window-root:maximized .header-button.maximize > .region {
+	-fx-shape: "M2,0 L10,0 L10,8 L8,8 L8,7 L9,7 L9,1 L2,1 Z M0,2 L8,2 L8,10 L0,10 Z M1,3 L1,9 L7,9 L7,3 Z";
+}
+
+.header-button.close > .region {
+	-fx-shape: "M0,0.7 L0.7,0 L5,4.3 L9.3,0 L10,0.7 L5.7,5 L10,9.3 L9.3,10 L5,5.7 L0.7,10 L0,9.3 L4.3,5 Z";
+}
+
+/* Close: accent-coloured rectangle, white icon */
+.header-button-group .header-button.close:hover {
+	-fx-background-color: -color-accent-emphasis;
+}
+
+.header-button-group .header-button.close:hover > .region {
+	-fx-background-color: white;
+}
+
+.header-button-group .header-button.close:pressed {
+	-fx-background-color: -color-accent-fg;
+}
+
+.header-button-group .header-button.close:pressed > .region {
+	-fx-background-color: white;
+}

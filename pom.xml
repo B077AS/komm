@@ -13,7 +13,7 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.release>25</maven.compiler.release>
-        <javafx.version>25</javafx.version>
+        <javafx.version>27.0.1</javafx.version>
         <lombok.version>1.18.46</lombok.version>
         <!-- Dev-run hub override: mvn javafx:run -Dapi.url=... [-Dwebsocket.url=...]
              Empty by default. javafx:run forks the app JVM, so a bare -D on the mvn
@@ -95,7 +95,12 @@
         <dependency>
             <groupId>io.github.mkpaz</groupId>
             <artifactId>atlantafx-base</artifactId>
-            <version>2.1.0</version>
+            <version>3.0.0</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.mkpaz</groupId>
+            <artifactId>atlantafx-decorations</artifactId>
+            <version>3.0.0</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/net.java.dev.jna/jna -->
         <dependency>

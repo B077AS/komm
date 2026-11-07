@@ -1,0 +1,2564 @@
+/*
+ * Komm theme patch for AtlantaFX's stock Dracula theme (atlantafx-base).
+ * KommStylesheet applies it IN PLACE to the stock rules, so cascade order is the same as the old
+ * fully-vendored style.css (order matters for equal-specificity rules).
+ *   @replace <selector> #n  -> the rule below replaces the n-th stock rule with that selector
+ *   @after   <selector> #n  -> the rule below is inserted right after that stock rule
+ *   @first                  -> the rule below is inserted before everything
+ *   @remove  <selector> #n  -> that stock rule is dropped (no rule follows)
+ * Rules without a directive are appended. Regenerate/edit freely; unknown anchors fall back to append.
+ */
+
+@font-face {
+	font-family: "Noto Emoji";
+	src: url("/fonts/NotoEmoji-Regular.ttf");
+}
+
+/*@replace .root #0*/
+.root {
+	-color-dark: #0d0e12;
+	-color-light: #f8f8f2;
+	-color-base-0: #f2f2f7;
+	-color-base-1: #e5e5ea;
+	-color-base-2: #d1d1d6;
+	-color-base-3: #aeaeb2;
+	-color-base-4: rgb(142, 142, 147);
+	-color-base-5: rgb(99, 99, 102);
+	-color-base-6: rgb(72, 72, 74);
+	-color-base-7: rgb(58, 58, 60);
+	-color-base-8: rgb(44, 44, 46);
+	-color-base-9: rgb(28, 28, 30);
+	-color-accent-0: #e5dfff;
+	-color-accent-1: #d5ccff;
+	-color-accent-2: #c5b9ff;
+	-color-accent-3: #b5a6ff;
+	-color-accent-4: #9a86ff;
+	-color-accent-5: #7c5cff;
+	-color-accent-6: #7f6dd9;
+	-color-accent-7: #685ab3;
+	-color-accent-8: #52468c;
+	-color-accent-9: #3c3366;
+	-color-success-0: #e2ffdf;
+	-color-success-1: #d0ffcc;
+	-color-success-2: #bfffb9;
+	-color-success-3: #adffa6;
+	-color-success-4: #9cff93;
+	-color-success-5: #8AFF80;
+	-color-success-6: #75d96d;
+	-color-success-7: #61b35a;
+	-color-success-8: #4c8c46;
+	-color-success-9: #376633;
+	-color-warning-0: #fff2df;
+	-color-warning-1: #ffeacc;
+	-color-warning-2: #ffe2b9;
+	-color-warning-3: #ffdaa6;
+	-color-warning-4: #ffd293;
+	-color-warning-5: #FFCA80;
+	-color-warning-6: #d9ac6d;
+	-color-warning-7: #b38d5a;
+	-color-warning-8: #8c6f46;
+	-color-warning-9: #665133;
+	-color-danger-0: #ffe5df;
+	-color-danger-1: #ffd5cc;
+	-color-danger-2: #ffc5b9;
+	-color-danger-3: #ffb5a6;
+	-color-danger-4: #ffa593;
+	-color-danger-5: #FF9580;
+	-color-danger-6: #d97f6d;
+	-color-danger-7: #b3685a;
+	-color-danger-8: #8c5246;
+	-color-danger-9: #663c33;
+	-color-sidebar-header: -color-bg-default;
+	-color-fg-default: #f8f8f2;
+	-color-fg-muted: #a6a4ae;
+	-color-fg-subtle: #6b6a73;
+	-color-fg-self: #c7caff;
+	-color-highlight: #44475a;
+	-color-fg-emphasis: #252629;
+	-color-bg-default: #161616;
+	-color-bg-overlay: #161616;
+	-color-bg-subtle: rgb(28, 28, 30);
+	-color-bg-middle: rgb(36, 36, 38);
+	-color-bg-inset: #0b0b0c;
+	-color-bg-void: #0d0d0d;
+	-color-bg-elevated: #1e1e1e;
+	-color-bg-panel: #161616;
+	-color-bg-popup: #161616;
+	-color-border-default: rgb(72, 72, 74);
+	-color-border-muted: rgb(58, 58, 60);
+	-color-border-subtle: rgb(49, 49, 52);
+	-color-shadow-default: rgb(0, 0, 0);
+	-color-neutral-emphasis-plus: #94959b;
+	-color-neutral-emphasis: #7e7f86;
+	-color-neutral-muted: rgba(126, 127, 134, 0.4);
+	-color-neutral-subtle: rgba(148, 149, 155, 0.1);
+	-color-accent-fg: #7c5cff;
+	-color-accent-emphasis: #7c5cff;
+	-color-accent-muted: rgba(124, 92, 255, 0.4);
+	-color-accent-subtle: rgba(124, 92, 255, 0.1);
+	-color-warning-fg: #FFCA80;
+	-color-warning-emphasis: #FFCA80;
+	-color-warning-muted: rgba(255, 202, 128, 0.4);
+	-color-warning-subtle: rgba(255, 202, 128, 0.1);
+	-color-success-fg: #8AFF80;
+	-color-success-emphasis: #8AFF80;
+	-color-success-muted: rgba(138, 255, 128, 0.4);
+	-color-success-subtle: rgba(138, 255, 128, 0.1);
+	-color-danger-fg: rgba(239, 83, 80, 0.95);
+	-color-danger-emphasis: #e74c3c;
+	-color-danger-muted: rgba(239, 83, 80, 0.35);
+	-color-danger-subtle: rgba(239, 83, 80, 0.12);
+	-color-chart-1: #f3622d;
+	-color-chart-2: #fba71b;
+	-color-chart-3: #57b757;
+	-color-chart-4: #41a9c9;
+	-color-chart-5: #4258c9;
+	-color-chart-6: #9a42c8;
+	-color-chart-7: #c84164;
+	-color-chart-8: #888888;
+	-color-chart-1-alpha70: rgba(243, 98, 45, 0.7);
+	-color-chart-2-alpha70: rgba(251, 167, 27, 0.7);
+	-color-chart-3-alpha70: rgba(87, 183, 87, 0.7);
+	-color-chart-4-alpha70: rgba(65, 169, 201, 0.7);
+	-color-chart-5-alpha70: rgba(66, 88, 201, 0.7);
+	-color-chart-6-alpha70: rgba(154, 66, 200, 0.7);
+	-color-chart-7-alpha70: rgba(200, 65, 100, 0.7);
+	-color-chart-8-alpha70: rgba(136, 136, 136, 0.7);
+	-color-chart-1-alpha20: rgba(243, 98, 45, 0.2);
+	-color-chart-2-alpha20: rgba(251, 167, 27, 0.2);
+	-color-chart-3-alpha20: rgba(87, 183, 87, 0.2);
+	-color-chart-4-alpha20: rgba(65, 169, 201, 0.2);
+	-color-chart-5-alpha20: rgba(66, 88, 201, 0.2);
+	-color-chart-6-alpha20: rgba(154, 66, 200, 0.2);
+	-color-chart-7-alpha20: rgba(200, 65, 100, 0.2);
+	-color-chart-8-alpha20: rgba(136, 136, 136, 0.2);
+	-fx-background-color: -color-bg-default;
+	-fx-font-size: 14px;
+	-fx-background-radius: inherit;
+	-fx-background-insets: inherit;
+	-fx-padding: inherit;
+}
+
+/*@replace .text #0*/
+.text {
+	-fx-font-smoothing-type: gray;
+	-fx-bounds-type: logical_vertical_center;
+}
+
+/*@replace .button #0*/
+.button {
+	-color-button-bg: -color-bg-subtle;
+	-color-button-fg: -color-fg-default;
+	-color-button-border: -color-border-default;
+	-color-button-bg-hover: -color-base-5;
+	-color-button-fg-hover: -color-button-fg;
+	-color-button-border-hover: -color-button-border;
+	-color-button-bg-focused: -color-button-bg;
+	-color-button-fg-focused: -color-button-fg;
+	-color-button-border-focused: -color-accent-emphasis;
+	-color-button-bg-pressed: -color-bg-subtle;
+	-color-button-fg-pressed: -color-button-fg;
+	-color-button-border-pressed: transparent;
+	-color-button-shadow: -color-shadow-default;
+	-fx-background-color: -color-button-bg;
+	-fx-background-insets: 0;
+	-fx-background-radius: 3px;
+	-fx-border-color: -color-button-border;
+	-fx-border-width: 1px;
+	-fx-border-radius: 3px;
+	-fx-graphic-text-gap: 6px;
+	-fx-text-fill: -color-button-fg;
+	-fx-alignment: CENTER;
+	-fx-padding: 8px 12px 8px 12px;
+	-fx-cursor: hand;
+	-fx-skin: "komm.ui.customnodes.NotchedButtonSkin";
+}
+
+/*@replace .button.button-icon #0*/
+.button.button-icon {
+	-fx-padding: 8px;
+	-fx-content-display: graphic-only;
+	-fx-skin: "javafx.scene.control.skin.ButtonSkin";
+}
+
+/*@replace .button.button-circle #0*/
+.button.button-circle {
+	-fx-background-radius: 3px;
+	-fx-padding: 5px;
+	-fx-content-display: graphic-only;
+	-fx-effect: none;
+	-fx-skin: "javafx.scene.control.skin.ButtonSkin";
+}
+
+/*@replace .button.left-pill #0*/
+.button.left-pill {
+	-fx-skin: "javafx.scene.control.skin.ButtonSkin";
+	-fx-background-radius: 3px 0 0 3px, 2px 0 0 2px;
+	-fx-background-insets: 0, 1px 0 1px 1px;
+	-fx-effect: none;
+}
+
+/*@replace .button.center-pill #0*/
+.button.center-pill {
+	-fx-skin: "javafx.scene.control.skin.ButtonSkin";
+	-fx-background-radius: 0;
+	-fx-background-insets: 0, 1px 0 1px 0;
+	-fx-effect: none;
+}
+
+/*@replace .button.right-pill #0*/
+.button.right-pill {
+	-fx-skin: "javafx.scene.control.skin.ButtonSkin";
+	-fx-background-radius: 0 3px 3px 0, 0 2px 2px 0;
+	-fx-background-insets: 0, 1px 1px 1px 0;
+	-fx-effect: none;
+}
+
+/*@replace .button:hover #0*/
+.button:hover {
+	-fx-background-color: -color-button-bg-hover;
+	-fx-border-color: -color-button-border-hover;
+	-fx-text-fill: -color-button-fg-hover;
+	-fx-opacity: 0.7;
+}
+
+/*@replace .button:hover:focused #0*/
+.button:hover:focused {
+	-fx-background-color: -color-button-bg-hover;
+	-fx-border-color: -color-button-border-focused;
+}
+
+/*@replace .button:focused #0*/
+.button:focused {
+	-fx-background-color: -color-button-bg-focused;
+	-fx-border-color: -color-button-border-focused;
+	-fx-text-fill: -color-button-fg-focused;
+}
+
+/*@replace .button:armed, .button:focused:armed #0*/
+.button:armed, .button:focused:armed {
+	-fx-background-color: -color-button-bg-pressed;
+	-fx-border-color: -color-button-border-pressed;
+	-fx-text-fill: -color-button-fg-pressed;
+}
+
+/*@replace .button.success #0*/
+.button.success {
+	-fx-skin: "javafx.scene.control.skin.ButtonSkin";
+	-color-button-bg: -color-success-emphasis;
+	-color-button-fg: -color-fg-emphasis;
+	-color-button-border: -color-success-emphasis;
+	-color-button-bg-hover: -color-success-emphasis;
+	-color-button-fg-hover: -color-fg-emphasis;
+	-color-button-border-hover: -color-success-emphasis;
+	-color-button-bg-focused: -color-success-6;
+	-color-button-fg-focused: -color-fg-emphasis;
+	-color-button-border-focused: -color-success-emphasis;
+	-color-button-bg-pressed: -color-success-emphasis;
+	-color-button-fg-pressed: -color-fg-emphasis;
+	-color-button-border-pressed: transparent;
+}
+
+/*@replace .button.danger #0*/
+.button.danger {
+	-fx-skin: "javafx.scene.control.skin.ButtonSkin";
+	-color-button-bg: -color-danger-emphasis;
+	-color-button-fg: -color-fg-emphasis;
+	-color-button-border: -color-danger-emphasis;
+	-color-button-bg-hover: -color-danger-emphasis;
+	-color-button-fg-hover: -color-fg-emphasis;
+	-color-button-border-hover: -color-danger-emphasis;
+	-color-button-bg-focused: -color-danger-6;
+	-color-button-fg-focused: -color-fg-emphasis;
+	-color-button-border-focused: -color-danger-emphasis;
+	-color-button-bg-pressed: -color-danger-emphasis;
+	-color-button-fg-pressed: -color-fg-emphasis;
+	-color-button-border-pressed: transparent;
+}
+
+/*@replace .button.flat #0*/
+.button.flat {
+	-fx-skin: "javafx.scene.control.skin.ButtonSkin";
+	-color-button-bg: transparent;
+	-color-button-fg: -color-fg-default;
+	-color-button-border: transparent;
+	-color-button-bg-hover: -color-bg-subtle;
+	-color-button-fg-hover: -color-button-fg;
+	-color-button-border-hover: -color-bg-subtle;
+	-color-button-bg-focused: -color-button-bg;
+	-color-button-fg-focused: -color-button-fg;
+	-color-button-border-focused: -color-button-bg;
+	-color-button-bg-pressed: -color-button-bg;
+	-color-button-fg-pressed: -color-button-fg;
+	-color-button-border-pressed: transparent;
+	-fx-effect: none;
+}
+
+/*@replace .button.flat:hover #0*/
+.button.flat:hover {
+	-fx-underline: false;
+	-fx-background-color: -color-base-6;
+	-fx-border-color: transparent;
+}
+
+/*@replace .check-box #0*/
+.check-box {
+	-fx-text-fill: -color-fg-default;
+	-fx-label-padding: 0px 0px 0px 6px;
+	-fx-cursor: hand;
+}
+
+/*@replace .check-box>.box #0*/
+.check-box>.box {
+	-fx-background-color: -color-border-default, -color-bg-default;
+	-fx-background-insets: 0, 1.5px;
+	-fx-background-radius: 2px, 1px;
+	-fx-padding: 4px 4px 4px 4px;
+	-fx-alignment: CENTER;
+}
+
+/*@replace .check-box>.box>.mark #0*/
+.check-box>.box>.mark {
+	-fx-background-color: transparent;
+	-fx-shape: "M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z";
+	-fx-scale-shape: true;
+	-fx-min-height: 0.85em;
+	-fx-max-height: 0.85em;
+	-fx-min-width: 0.85em;
+	-fx-max-width: 0.85em;
+}
+
+/*@replace .combo-box-base #0*/
+.combo-box-base {
+	-fx-background-color: -color-border-default, -color-bg-default;
+	-fx-background-insets: 0, 1px;
+	-fx-background-radius: 3px, 2px;
+	-fx-text-fill: -color-fg-default;
+	-fx-alignment: CENTER;
+	-fx-content-display: LEFT;
+}
+
+/*@replace .combo-box-base.left-pill #0*/
+.combo-box-base.left-pill {
+	-fx-background-radius: 3px 0 0 3px, 2px 0 0 2px;
+	-fx-background-insets: 0, 1px 0 1px 1px;
+}
+
+/*@replace .combo-box-base.right-pill #0*/
+.combo-box-base.right-pill {
+	-fx-background-radius: 0 3px 3px 0, 0 2px 2px 0;
+	-fx-background-insets: 0, 1px 1px 1px 0;
+}
+
+/*@replace .combo-box-base>.text-field #0*/
+.combo-box-base>.text-field {
+	-fx-background-insets: 0, 1px 0 1px 1px;
+	-fx-background-radius: 3px 0 0 3px, 2px 0 0 2px;
+}
+
+/*@replace .combo-box-popup>.list-view #0*/
+.combo-box-popup>.list-view {
+	-fx-background-color: -color-border-default, -color-bg-default;
+	-fx-background-insets: 0, 1;
+	-fx-border-radius: 3px, 2px;
+	-fx-background-radius: 3px, 2px;
+	-fx-padding: 5px 5px 5px 5px;
+	-fx-effect: dropshadow(three-pass-box, -color-shadow-default, 8px, 0.6, 0, 2);
+}
+
+/*@replace .combo-box-popup>.list-view>.virtual-flow>.clipped-container>.sheet>.list-cell #0*/
+.combo-box-popup>.list-view>.virtual-flow>.clipped-container>.sheet>.list-cell {
+	-fx-cell-size: 0;
+	-fx-background-color: -color-bg-default;
+	-fx-background-radius: 0px;
+	-fx-padding: 8px 12px 8px 12px;
+	-fx-graphic-text-gap: 6px;
+	-fx-text-fill: -color-fg-default;
+}
+
+/*@replace .combo-box-popup>.list-view>.virtual-flow>.clipped-container>.sheet>.list-cell:filled:hover #0*/
+.combo-box-popup>.list-view>.virtual-flow>.clipped-container>.sheet>.list-cell:filled:hover {
+	-fx-background-color: -color-accent-subtle, -color-accent-subtle;
+}
+
+/*@replace .combo-box-popup>.list-view>.virtual-flow>.clipped-container>.sheet>.list-cell:filled:selected, .combo-box-popup>.list-view>.virtual-flow>.clipped-container>.sheet>.list-cell:filled:selected:hover #0*/
+.combo-box-popup>.list-view>.virtual-flow>.clipped-container>.sheet>.list-cell:filled:selected, .combo-box-popup>.list-view>.virtual-flow>.clipped-container>.sheet>.list-cell:filled:selected:hover {
+	-fx-background-color: -color-accent-subtle, -color-accent-subtle;
+}
+
+/*@replace .choice-box #0*/
+.choice-box {
+	-fx-background-color: -color-border-default, -color-bg-default;
+	-fx-background-insets: 0, 1px;
+	-fx-background-radius: 3px, 2px;
+	-fx-text-fill: -color-fg-default;
+	-fx-alignment: CENTER;
+	-fx-content-display: LEFT;
+	-fx-padding: 8px 12px 8px 12px;
+}
+
+/*@replace .choice-box.left-pill #0*/
+.choice-box.left-pill {
+	-fx-background-radius: 3px 0 0 3px, 2px 0 0 2px;
+	-fx-background-insets: 0, 1px 0 1px 1px;
+}
+
+/*@replace .choice-box.right-pill #0*/
+.choice-box.right-pill {
+	-fx-background-radius: 0 3px 3px 0, 0 2px 2px 0;
+	-fx-background-insets: 0, 1px 1px 1px 0;
+}
+
+/*@replace .table-view>.virtual-flow>.clipped-container>.sheet>.table-row-cell .table-cell:selected, .tree-table-view>.virtual-flow>.clipped-container>.sheet>.tree-table-row-cell .tree-table-cell:selected #0*/
+.table-view>.virtual-flow>.clipped-container>.sheet>.table-row-cell .table-cell:selected, .tree-table-view>.virtual-flow>.clipped-container>.sheet>.tree-table-row-cell .tree-table-cell:selected {
+	-fx-background-color: -color-cell-bg-selected;
+	-fx-background-insets: 0 0 2 0;
+}
+
+/*@replace .table-view:focused>.virtual-flow>.clipped-container>.sheet>.table-row-cell .table-cell:selected, .tree-table-view:focused>.virtual-flow>.clipped-container>.sheet>.tree-table-row-cell .tree-table-cell:selected #0*/
+.table-view:focused>.virtual-flow>.clipped-container>.sheet>.table-row-cell .table-cell:selected, .tree-table-view:focused>.virtual-flow>.clipped-container>.sheet>.tree-table-row-cell .tree-table-cell:selected {
+	-fx-background-color: -color-cell-bg-selected-focused;
+}
+
+/*@replace .list-view .list-cell #0*/
+.list-view .list-cell {
+	-fx-background-color: -color-cell-bg;
+	-fx-text-fill: -color-cell-fg;
+	-fx-padding: 0 0.5em 0 0.5em;
+	-fx-cell-size: 2.8em;
+	-fx-border-width: 0 0 1 0;
+	-fx-border-color: transparent;
+}
+
+/*@after .table-view.striped .table-row-cell:filled:odd #0*/
+Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-background {
+	-fx-max-height: 0;
+	-fx-pref-height: 0;
+	-fx-min-height: 0;
+}
+
+/*@replace .table-view .table-row-cell #0*/
+.table-view .table-row-cell {
+	-fx-background-color: -color-cell-border, -color-cell-bg;
+	-fx-background-insets: 0, 0 0 1 0;
+	-fx-padding: 0;
+	-fx-cell-size: 2.8em;
+}
+
+/*@replace .tree-table-view .tree-table-row-cell #0*/
+.tree-table-view .tree-table-row-cell {
+	-fx-background-color: -color-cell-border, -color-cell-bg;
+	-fx-background-insets: 0, 0 0 1 0;
+	-fx-padding: 0;
+	-fx-cell-size: 2.8em;
+	-fx-indent: 1em;
+}
+
+/*@replace .combo-box-popup>.date-picker-popup #0*/
+.combo-box-popup>.date-picker-popup {
+	-fx-effect: dropshadow(three-pass-box, -color-shadow-default, 8px, 0.6, 0, 2);
+	-fx-background-radius: 3px, 2px;
+}
+
+/*@replace .date-picker-popup #0*/
+.date-picker-popup {
+	-color-date-bg: -color-bg-default;
+	-color-date-border: -color-border-default;
+	-color-date-month-year-bg: -color-bg-default;
+	-color-date-month-year-fg: -color-fg-default;
+	-color-date-day-bg: -color-bg-default;
+	-color-date-day-bg-hover: -color-bg-subtle;
+	-color-date-day-bg-selected: -color-accent-emphasis;
+	-color-date-day-fg: -color-fg-default;
+	-color-date-day-fg-hover: -color-fg-default;
+	-color-date-day-fg-selected: -color-fg-emphasis;
+	-color-date-week-bg: -color-bg-subtle;
+	-color-date-week-fg: -color-fg-muted;
+	-color-date-today-bg: -color-accent-subtle;
+	-color-date-today-fg: -color-accent-fg;
+	-color-date-other-month-fg: -color-fg-subtle;
+	-color-date-chrono-fg: -color-success-fg;
+	-fx-background-color: -color-date-border, -color-date-bg;
+	-fx-background-insets: 0, 1;
+	-fx-background-radius: 3px, 2px;
+	-fx-alignment: CENTER;
+	-fx-spacing: 0;
+	-fx-padding: 1px;
+}
+
+/*@replace .date-picker-popup>.month-year-pane #0*/
+.date-picker-popup>.month-year-pane {
+	-fx-padding: 8px 8px 8px 8px;
+	-fx-background-color: -color-date-month-year-bg;
+	-fx-background-insets: 0;
+	-fx-background-radius: 3px 3px 0 0;
+}
+
+/*@replace .date-picker-popup>.calendar-grid #0*/
+.date-picker-popup>.calendar-grid {
+	-fx-background-color: -color-date-bg;
+	-fx-padding: 8px;
+	-fx-hgap: 5px;
+	-fx-vgap: 0;
+	-fx-background-radius: 3px;
+}
+
+/*@replace .menu-bar>.container>.menu-button #0*/
+.menu-bar>.container>.menu-button {
+	-fx-background-color: transparent;
+	-fx-background-insets: 0 0 1px 0;
+	-fx-background-radius: 2px;
+	-fx-padding: 6px 10px 6px 10px;
+	-fx-effect: none;
+}
+
+/*@replace .menu-item #0*/
+.menu-item {
+	-fx-background-color: -color-bg-default;
+	-fx-padding: 8px 12px 8px 12px;
+	-fx-background-radius: 0px;
+}
+
+/*@replace .menu-item:focused #0*/
+.menu-item:focused {
+	-fx-background-color: -color-accent-subtle, -color-accent-subtle;
+}
+
+/*@replace .menu-item:focused .font-icon, .menu-item:focused .ikonli-font-icon #0*/
+.menu-item:focused .font-icon, .menu-item:focused .ikonli-font-icon {
+
+}
+
+/*@replace .context-menu #0*/
+.context-menu {
+	-fx-background-color: -color-border-muted, -color-bg-default;
+	-fx-background-insets: 0, 1;
+	-fx-padding: 5px 5px 5px 5px;
+	-fx-background-radius: 3px, 2px;
+	-fx-effect: dropshadow(three-pass-box, -color-shadow-default, 4px, 0.3, 0, 1);
+}
+
+/*@replace .menu-button, .split-menu-button #0*/
+.menu-button, .split-menu-button {
+	-color-button-bg: -color-bg-subtle;
+	-color-button-fg: -color-fg-default;
+	-color-button-border: -color-border-default;
+	-color-button-bg-hover: -color-base-5;
+	-color-button-fg-hover: -color-button-fg;
+	-color-button-border-hover: -color-button-border;
+	-color-button-bg-focused: -color-button-bg;
+	-color-button-fg-focused: -color-button-fg;
+	-color-button-border-focused: -color-accent-emphasis;
+	-color-button-bg-pressed: -color-bg-subtle;
+	-color-button-fg-pressed: -color-button-fg;
+	-color-button-border-pressed: transparent;
+	-color-button-shadow: -color-shadow-default;
+	-fx-background-color: -color-button-border, -color-button-bg;
+	-fx-background-insets: 0, 1px;
+	-fx-background-radius: 3px, 2px;
+	-fx-graphic-text-gap: 6px;
+	-fx-text-fill: -color-button-fg;
+	-fx-alignment: CENTER;
+	-fx-padding: 0;
+	-fx-alignment: CENTER_LEFT;
+	-fx-cursor: hand;
+}
+
+/*@replace .menu-button.button-circle, .split-menu-button.button-circle #0*/
+.menu-button.button-circle, .split-menu-button.button-circle {
+	-fx-background-radius: 3px;
+	-fx-padding: 5px;
+	-fx-content-display: graphic-only;
+	-fx-effect: none;
+}
+
+/*@replace .menu-button.left-pill, .split-menu-button.left-pill #0*/
+.menu-button.left-pill, .split-menu-button.left-pill {
+	-fx-background-radius: 3px 0 0 3px, 2px 0 0 2px;
+	-fx-background-insets: 0, 1px 0 1px 1px;
+	-fx-effect: none;
+}
+
+/*@replace .menu-button.right-pill, .split-menu-button.right-pill #0*/
+.menu-button.right-pill, .split-menu-button.right-pill {
+	-fx-background-radius: 0 3px 3px 0, 0 2px 2px 0;
+	-fx-background-insets: 0, 1px 1px 1px 0;
+	-fx-effect: none;
+}
+
+/*@after .menu-button.flat, .split-menu-button.flat #0*/
+.split-menu-button.flat:hover {
+	-fx-background-color: -color-base-6;
+}
+
+/*@after .menu-button.flat, .split-menu-button.flat #0*/
+.menu-button.flat:hover {
+	-fx-background-color: transparent;
+}
+
+/*@replace .split-menu-button:hover>.arrow-button, .split-menu-button:focused:hover>.arrow-button #0*/
+.split-menu-button:hover>.arrow-button, .split-menu-button:focused:hover>.arrow-button {
+	-fx-background-color: -color-accent-emphasis;
+	-fx-background-insets: 1px;
+	-fx-background-radius: 2px;
+	-fx-border-color: transparent;
+	-fx-opacity: 0.75;
+}
+
+/*@replace .split-menu-button>.arrow-button #0*/
+.split-menu-button>.arrow-button {
+	-fx-padding: 8px 12px 8px 12px;
+	-fx-background-radius: 0 2px 2px 0;
+	-fx-border-color: -color-button-fg;
+	-fx-border-width: 0 0 0 0.75px;
+	-fx-border-insets: 7px 0 7px 0;
+}
+
+/*@replace .radio-button #0*/
+.radio-button {
+	-fx-background-color: transparent;
+	-fx-text-fill: -color-fg-default;
+	-fx-label-padding: 2px 2px 0 6px;
+}
+
+/*@replace .slider #0*/
+.slider {
+	-color-slider-thumb: -color-fg-default;
+	-color-slider-thumb-border: -color-fg-default;
+	-color-slider-track: -color-accent-8;
+	-color-slider-track-progress: -color-accent-emphasis;
+	-color-slider-tick: -color-fg-muted;
+}
+
+/*@replace .slider>.track #0*/
+.slider>.track {
+	-fx-background-color: transparent, -color-slider-track;
+	-fx-background-radius: 3px;
+}
+
+/*@replace .slider.progress-slider:horizontal>.progress #0*/
+.slider.progress-slider:horizontal>.progress {
+	-fx-background-insets: 0, 6px 0 6px 0;
+	-fx-background-radius: 3px 0 0 3px;
+}
+
+/*@replace .slider.progress-slider:vertical>.progress #0*/
+.slider.progress-slider:vertical>.progress {
+	-fx-background-radius: 0 0 3px 3px;
+	-fx-background-insets: 0, 0 6px 0 6px;
+}
+
+/*@replace .spinner #0*/
+.spinner {
+	-fx-background-color: -color-bg-default;
+	-fx-border-color: -color-border-default;
+	-fx-border-radius: 3px;
+	-fx-border-width: 1px;
+}
+
+/*@replace .spinner>.text-field #0*/
+.spinner>.text-field {
+	-fx-background-radius: 3px 0 0 3px;
+	-fx-background-insets: 0;
+	-fx-padding: 7px 11px 7px 11px;
+}
+
+/*@replace .spinner>.increment-arrow-button #0*/
+.spinner>.increment-arrow-button {
+	-fx-background-color: -color-bg-subtle;
+	-fx-background-insets: 0;
+	-fx-background-radius: 0 3px 0 0;
+	-fx-padding: 10px;
+}
+
+/*@replace .spinner>.decrement-arrow-button #0*/
+.spinner>.decrement-arrow-button {
+	-fx-background-color: -color-bg-subtle;
+	-fx-background-insets: -1 0 0 0;
+	-fx-background-radius: 0 0 3px 0;
+	-fx-padding: 10px;
+}
+
+/*@replace .spinner.arrows-on-left-vertical>.text-field #0*/
+.spinner.arrows-on-left-vertical>.text-field {
+	-fx-background-radius: 0 3px 3px 0;
+	-fx-alignment: CENTER_RIGHT;
+}
+
+/*@replace .spinner.arrows-on-left-vertical>.increment-arrow-button #0*/
+.spinner.arrows-on-left-vertical>.increment-arrow-button {
+	-fx-background-radius: 3px 0 0 0;
+}
+
+/*@replace .spinner.arrows-on-left-vertical>.decrement-arrow-button #0*/
+.spinner.arrows-on-left-vertical>.decrement-arrow-button {
+	-fx-background-radius: 0 0 0 3px;
+}
+
+/*@replace .spinner.arrows-on-right-horizontal>.increment-arrow-button #0*/
+.spinner.arrows-on-right-horizontal>.increment-arrow-button {
+	-fx-background-radius: 0 3px 3px 0;
+	-fx-background-insets: 0;
+}
+
+/*@replace .spinner.arrows-on-left-horizontal>.text-field #0*/
+.spinner.arrows-on-left-horizontal>.text-field {
+	-fx-background-radius: 0 3px 3px 0;
+	-fx-alignment: CENTER_RIGHT;
+}
+
+/*@replace .spinner.arrows-on-left-horizontal>.decrement-arrow-button #0*/
+.spinner.arrows-on-left-horizontal>.decrement-arrow-button {
+	-fx-background-radius: 3px 0 0 3px;
+	-fx-background-insets: 0;
+}
+
+/*@replace .spinner.split-arrows-horizontal>.increment-arrow-button #0*/
+.spinner.split-arrows-horizontal>.increment-arrow-button {
+	-fx-background-radius: 0 3px 3px 0;
+	-fx-background-insets: 0;
+}
+
+/*@replace .spinner.split-arrows-horizontal>.decrement-arrow-button #0*/
+.spinner.split-arrows-horizontal>.decrement-arrow-button {
+	-fx-background-radius: 3px 0 0 3px;
+	-fx-background-insets: 0;
+}
+
+/*@replace .spinner.split-arrows-vertical>.increment-arrow-button #0*/
+.spinner.split-arrows-vertical>.increment-arrow-button {
+	-fx-background-radius: 3px 3px 0 0;
+	-fx-background-insets: 0;
+}
+
+/*@replace .spinner.split-arrows-vertical>.decrement-arrow-button #0*/
+.spinner.split-arrows-vertical>.decrement-arrow-button {
+	-fx-background-radius: 0 0 3px 3px;
+	-fx-background-insets: 0;
+}
+
+/*@replace .tab-pane.floating>.tab-header-area>.headers-region>.tab>.tab-container #0*/
+.tab-pane.floating>.tab-header-area>.headers-region>.tab>.tab-container {
+	-fx-background-color: -color-border-subtle, -color-bg-inset;
+	-fx-background-insets: 0, 0 1 0 0;
+	-fx-background-radius: 0;
+	-fx-border-radius: 3px;
+	-fx-border-width: 1px, 0 3px 0 0;
+	-fx-border-color: transparent, transparent;
+}
+
+/*@replace .text-input #0*/
+.text-input {
+	-color-input-bg: -color-bg-default;
+	-color-input-fg: -color-fg-default;
+	-color-input-border: -color-border-default;
+	-color-input-bg-focused: -color-bg-default;
+	-color-input-border-focused: -color-accent-emphasis;
+	-color-input-bg-readonly: -color-bg-subtle;
+	-color-input-bg-highlight: -color-highlight;
+	-color-input-fg-highlight: -color-fg-default;
+	-fx-background-color: -color-input-border, -color-input-bg;
+	-fx-background-insets: 0, 1px;
+	-fx-background-radius: 3px, 2px;
+	-fx-text-fill: -color-input-fg;
+	-fx-highlight-fill: -color-input-bg-highlight;
+	-fx-highlight-text-fill: -color-input-fg-highlight;
+	-fx-prompt-text-fill: -color-fg-subtle;
+	-fx-padding: 8px 12px 8px 12px;
+	-fx-cursor: text;
+}
+
+/*@replace .text-input.left-pill #0*/
+.text-input.left-pill {
+	-fx-background-radius: 3px 0 0 3px, 2px 0 0 2px;
+	-fx-background-insets: 0, 1px 0 1px 1px;
+}
+
+/*@replace .text-input.right-pill #0*/
+.text-input.right-pill {
+	-fx-background-radius: 0 3px 3px 0, 0 2px 2px 0;
+	-fx-background-insets: 0, 1px 1px 1px 0;
+}
+
+/*@replace .toggle-button #0*/
+.toggle-button {
+	-color-button-bg: -color-bg-subtle;
+	-color-button-fg: -color-fg-default;
+	-color-button-border: -color-border-default;
+	-color-button-bg-hover: -color-base-5;
+	-color-button-fg-hover: -color-button-fg;
+	-color-button-border-hover: -color-button-border;
+	-color-button-bg-focused: -color-button-bg;
+	-color-button-fg-focused: -color-button-fg;
+	-color-button-border-focused: -color-accent-emphasis;
+	-color-button-bg-pressed: -color-bg-subtle;
+	-color-button-fg-pressed: -color-button-fg;
+	-color-button-border-pressed: transparent;
+	-color-button-shadow: -color-shadow-default;
+	-fx-background-color: -color-button-border, -color-button-bg;
+	-fx-background-insets: 0, 1px;
+	-fx-background-radius: 3px, 2px;
+	-fx-graphic-text-gap: 6px;
+	-fx-text-fill: -color-button-fg;
+	-fx-alignment: CENTER;
+	-color-button-bg-selected: -color-accent-emphasis;
+	-color-button-fg-selected: -color-fg-emphasis;
+	-fx-padding: 8px 12px 8px 12px;
+	-fx-cursor: hand;
+}
+
+/*@replace .toggle-button .font-icon, .toggle-button .ikonli-font-icon #0*/
+.toggle-button .font-icon, .toggle-button .ikonli-font-icon {
+	-fx-icon-color: -color-button-fg;
+	-fx-fill: -color-button-fg;
+	-fx-icon-size: 22px;
+}
+
+/*@replace .toggle-button.button-circle #0*/
+.toggle-button.button-circle {
+	-fx-background-radius: 3px;
+	-fx-padding: 5px;
+	-fx-content-display: graphic-only;
+	-fx-effect: none;
+}
+
+/*@replace .toggle-button.left-pill #0*/
+.toggle-button.left-pill {
+	-fx-background-radius: 3px 0 0 3px, 2px 0 0 2px;
+	-fx-background-insets: 0, 1px 0 1px 1px;
+	-fx-effect: none;
+}
+
+/*@replace .toggle-button.right-pill #0*/
+.toggle-button.right-pill {
+	-fx-background-radius: 0 3px 3px 0, 0 2px 2px 0;
+	-fx-background-insets: 0, 1px 1px 1px 0;
+	-fx-effect: none;
+}
+
+/*@after .toggle-switch #0*/
+.toggle-switch:hover {
+	-fx-cursor: hand;
+}
+
+/*@replace .toggle-switch>.label-container>.label #0*/
+.toggle-switch>.label-container>.label {
+	-fx-font-size: 1em;
+	-fx-text-fill: -color-fg-default;
+	-fx-padding: 2px 6px 2px 0;
+}
+
+/*@replace .toggle-switch>.thumb-area #0*/
+.toggle-switch>.thumb-area {
+	-fx-background-radius: 1em;
+	-fx-background-color: rgb(225, 90, 90), -color-bg-default;
+	-fx-background-insets: 0, 2px;
+	-fx-padding: 0.85em 1.4em 0.85em 1.4em;
+}
+
+/*@replace .toggle-switch:selected>.thumb #0*/
+.toggle-switch:selected>.thumb {
+	-fx-background-color: transparent, -color-fg-default;
+	-fx-opacity: 1;
+}
+
+/*@replace .tool-bar>.container .breadcrumbs #0*/
+.tool-bar>.container .breadcrumbs {
+	-fx-background-color: -color-border-default, -color-bg-default;
+	-fx-background-insets: 0, 1px;
+	-fx-background-radius: 3px, 2px;
+	-fx-padding: 6px 1em 6px 1em;
+}
+
+/*@replace .tool-bar>.container .breadcrumbs>.hyperlink:hover #0*/
+.tool-bar>.container .breadcrumbs>.hyperlink:hover {
+	-fx-background-color: -color-base-5;
+	-fx-background-radius: 3px, 2px;
+}
+
+/*@replace .accordion>.titled-pane.first-titled-pane>.title #0*/
+.accordion>.titled-pane.first-titled-pane>.title {
+	-fx-background-insets: 0, 1px;
+	-fx-background-radius: 3px 3px 0 0;
+}
+
+/*@replace .breadcrumbs>.hyperlink #0*/
+.breadcrumbs>.hyperlink {
+	-color-link-fg: white;
+	-fx-underline: false;
+}
+
+/*@replace .card>.container #0*/
+.card>.container {
+	-fx-background-color: -color-bg-default;
+	-fx-alignment: TOP_LEFT;
+	-fx-padding: 1em 0 1em 0;
+	-fx-spacing: 1em;
+	-fx-border-color: -color-border-default;
+	-fx-border-width: 1px;
+	-fx-border-radius: 3px;
+}
+
+/*@after .card>.container>.footer #0*/
+.card>.container.elevated-1 {
+	-fx-effect: dropshadow(three-pass-box, -color-shadow-default, 2px, 0.5, 0, 2);
+}
+
+/*@after .card>.container>.footer #0*/
+.card>.container.elevated-2 {
+	-fx-effect: dropshadow(three-pass-box, -color-shadow-default, 8px, 0.5, 0, 2);
+}
+
+/*@after .card>.container>.footer #0*/
+.card>.container.elevated-3 {
+	-fx-effect: dropshadow(three-pass-box, -color-shadow-default, 16px, 0.5, 0, 2);
+}
+
+/*@after .card>.container>.footer #0*/
+.card>.container.elevated-4 {
+	-fx-effect: dropshadow(three-pass-box, -color-shadow-default, 20px, 0.5, 0, 2);
+}
+
+/*@after .card>.container>.footer #0*/
+.card>.container.interactive:hover {
+	-fx-effect: dropshadow(three-pass-box, -color-shadow-default, 8px, 0.5, 0, 2);
+}
+
+/*@replace .card.edge-to-edge>.container #0*/
+.card.edge-to-edge>.container {
+	-fx-border-width: 0;
+	-fx-border-radius: 0;
+	-fx-effect: none;
+}
+
+/*@replace .chart-symbol #0*/
+.chart-symbol {
+	-fx-background-color: -color-chart-1;
+	-fx-background-radius: 2px;
+	-fx-padding: 5px;
+}
+
+/*@replace .default-color5.chart-symbol #0*/
+.default-color5.chart-symbol {
+	-fx-background-color: -color-chart-6, white;
+	-fx-background-insets: 0, 2;
+	-fx-background-radius: 2px;
+	-fx-padding: 5px;
+}
+
+/*@replace .chart-line-symbol #0*/
+.chart-line-symbol {
+	-fx-background-color: -color-chart-1, white;
+	-fx-background-insets: 0, 2;
+	-fx-background-radius: 2px;
+	-fx-padding: 5px;
+}
+
+/*@replace .chart-area-symbol #0*/
+.chart-area-symbol {
+	-fx-background-color: -color-chart-1, white;
+	-fx-background-insets: 0, 1;
+	-fx-background-radius: 2px;
+	-fx-padding: 3px;
+}
+
+/*@replace .area-legend-symbol #0*/
+.area-legend-symbol {
+	-fx-padding: 6px;
+	-fx-background-radius: 3px;
+	-fx-background-insets: 0, 3;
+}
+
+/*@replace .bubble-legend-symbol #0*/
+.bubble-legend-symbol {
+	-fx-background-radius: 3px;
+	-fx-padding: 8px;
+}
+
+/*@replace .pie-legend-symbol.chart-pie #0*/
+.pie-legend-symbol.chart-pie {
+	-fx-background-radius: 3px;
+	-fx-padding: 8px;
+	-fx-border-color: none;
+}
+
+/*@replace .color-palette #0*/
+.color-palette {
+	-fx-background-color: -color-border-default, -color-bg-default;
+	-fx-background-insets: 0, 1px;
+	-fx-background-radius: 3px, 2px;
+	-fx-spacing: 10px;
+	-fx-padding: 1em;
+	-fx-effect: dropshadow(three-pass-box, -color-shadow-default, 8px, 0.6, 0, 2);
+}
+
+/*@after .color-palette-region #0*/
+.hover-square {
+	visibility: hidden;
+}
+
+/*@replace .color-palette-region>.color-square.hover-square #0*/
+.color-palette-region>.color-square.hover-square {
+	-fx-scale-x: 1.5;
+	-fx-scale-y: 1.5;
+	-fx-border-color: -color-accent-fg;
+}
+
+/*@replace .custom-color-dialog>.controls-pane #settings-pane>.customcolor-controls-background #0*/
+.custom-color-dialog>.controls-pane #settings-pane>.customcolor-controls-background {
+	-fx-background-color: -color-border-default, -color-bg-default;
+	-fx-background-insets: 13px 0 5px 0, 14px 1px 6px 1px;
+	-fx-background-radius: 3px, 2px;
+}
+
+/*@replace .custom-color-dialog>.controls-pane .transparent-pattern #0*/
+.custom-color-dialog>.controls-pane .transparent-pattern {
+	-fx-background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAA2hpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMC1jMDYxIDY0LjE0MDk0OSwgMjAxMC8xMi8wNy0xMDo1NzowMSAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wTU09Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9tbS8iIHhtbG5zOnN0UmVmPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvc1R5cGUvUmVzb3VyY2VSZWYjIiB4bWxuczp4bXA9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8iIHhtcE1NOk9yaWdpbmFsRG9jdW1lbnRJRD0ieG1wLmRpZDpCOTBEQkE1RjJFMjA2ODExOUExMUM5NDhFOTUyQzM3MCIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDpGRkE3MDZERThFNUYxMUUxQjU5RUNFQTE3OTA1RDFFMSIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDpGRkE3MDZERDhFNUYxMUUxQjU5RUNFQTE3OTA1RDFFMSIgeG1wOkNyZWF0b3JUb29sPSJBZG9iZSBQaG90b3Nob3AgQ1M1LjEgTWFjaW50b3NoIj4gPHhtcE1NOkRlcml2ZWRGcm9tIHN0UmVmOmluc3RhbmNlSUQ9InhtcC5paWQ6MDk4MDExNzQwNzIwNjgxMTg3MUZDMUExNDFCMTYwNzkiIHN0UmVmOmRvY3VtZW50SUQ9InhtcC5kaWQ6QjkwREJBNUYyRTIwNjgxMTlBMTFDOTQ4RTk1MkMzNzAiLz4gPC9yZGY6RGVzY3JpcHRpb24+IDwvcmRmOlJERj4gPC94OnhtcG1ldGE+IDw/eHBhY2tldCBlbmQ9InIiPz71FDCdAAAAKElEQVR42mI8c+YMAwwYGxvD2UwMOADpEoz///+Hc86ePUsLOwACDABC1ghwV8TLOQAAAABJRU5ErkJggg==");
+	-fx-background-repeat: repeat;
+	-fx-background-size: auto;
+}
+
+/*@replace .alert.information.dialog-pane #0*/
+.alert.information.dialog-pane {
+	-fx-graphic: url("data:image/png;base64,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");
+}
+
+/*@replace .alert.warning.dialog-pane #0*/
+.alert.warning.dialog-pane {
+	-fx-graphic: url("data:image/png;base64,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");
+}
+
+/*@replace .alert.error.dialog-pane #0*/
+.alert.error.dialog-pane {
+	-fx-graphic: url("data:image/png;base64,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");
+}
+
+/*@replace .alert.confirmation.dialog-pane, .text-input-dialog.dialog-pane, .choice-dialog.dialog-pane #0*/
+.alert.confirmation.dialog-pane, .text-input-dialog.dialog-pane, .choice-dialog.dialog-pane {
+	-fx-graphic: url("data:image/png;base64,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");
+}
+
+/*@replace .label.left-pill #0*/
+.label.left-pill {
+	-fx-background-radius: 3px 0 0 3px, 2px 0 0 2px;
+}
+
+/*@replace .label.right-pill #0*/
+.label.right-pill {
+	-fx-background-radius: 0 3px 3px 0, 0 2px 2px 0;
+}
+
+/*@replace .message.tile-base>.container #0*/
+.message.tile-base>.container {
+	-fx-background-color: -color-message-bg;
+	-fx-alignment: CENTER_LEFT;
+	-fx-border-color: -color-message-border;
+	-fx-border-width: 1px;
+	-fx-border-radius: 3px;
+}
+
+/*@replace .modal-pane #0*/
+.modal-pane {
+	-color-modal-pane-overlay: rgba(10, 8, 8, 0.75);
+}
+
+/*@replace .modal-box>.close-button #0*/
+.modal-box>.close-button {
+	-fx-background-radius: 3px;
+	-fx-padding: 0.6em;
+}
+
+/*@replace .modal-box>.close-button:hover #0*/
+.modal-box>.close-button:hover {
+	-fx-background-color: -color-modal-box-close-bg-hover;
+}
+
+/*@replace .notification>.container #0*/
+.notification>.container {
+	-fx-background-color: -color-notify-border, -color-notify-bg;
+	-fx-background-insets: 0, 1px;
+	-fx-background-radius: 3px;
+	-fx-spacing: 1em;
+	-fx-padding: 0 0 1em 0;
+}
+
+/*@after .notification>.container>.button-bar #0*/
+.notification>.container.elevated-1>.container {
+	-fx-effect: dropshadow(three-pass-box, -color-shadow-default, 2px, 0.5, 0, 2);
+}
+
+/*@after .notification>.container>.button-bar #0*/
+.notification>.container.elevated-2>.container {
+	-fx-effect: dropshadow(three-pass-box, -color-shadow-default, 8px, 0.5, 0, 2);
+}
+
+/*@after .notification>.container>.button-bar #0*/
+.notification>.container.elevated-3>.container {
+	-fx-effect: dropshadow(three-pass-box, -color-shadow-default, 16px, 0.5, 0, 2);
+}
+
+/*@after .notification>.container>.button-bar #0*/
+.notification>.container.elevated-4>.container {
+	-fx-effect: dropshadow(three-pass-box, -color-shadow-default, 20px, 0.5, 0, 2);
+}
+
+/*@after .notification>.container>.button-bar #0*/
+.notification>.container.interactive:hover>.container {
+	-fx-effect: dropshadow(three-pass-box, -color-shadow-default, 8px, 0.5, 0, 2);
+}
+
+/*@replace .notification.accent>.container #0*/
+.notification.accent>.container {
+	-fx-background-color: -color-notify-border, -color-notify-bg, -color-notify-border-intent -color-notify-bg -color-notify-bg -color-notify-bg, -color-notify-bg;
+	-fx-background-insets: 0, 1, 1, 1 1 1 6px;
+	-fx-background-radius: 3px;
+}
+
+/*@replace .notification.success>.container #0*/
+.notification.success>.container {
+	-fx-background-color: -color-notify-border, -color-notify-bg, -color-notify-border-intent -color-notify-bg -color-notify-bg -color-notify-bg, -color-notify-bg;
+	-fx-background-insets: 0, 1, 1, 1 1 1 6px;
+	-fx-background-radius: 3px;
+}
+
+/*@replace .notification.warning>.container #0*/
+.notification.warning>.container {
+	-fx-background-color: -color-notify-border, -color-notify-bg, -color-notify-border-intent -color-notify-bg -color-notify-bg -color-notify-bg, -color-notify-bg;
+	-fx-background-insets: 0, 1, 1, 1 1 1 6px;
+	-fx-background-radius: 3px;
+}
+
+/*@replace .notification.danger>.container #0*/
+.notification.danger>.container {
+	-fx-background-color: -color-notify-border, -color-notify-bg, -color-notify-border-intent -color-notify-bg -color-notify-bg -color-notify-bg, -color-notify-bg;
+	-fx-background-insets: 0, 1, 1, 1 1 1 6px;
+	-fx-background-radius: 3px;
+}
+
+/*@after .pagination.bullet>.pagination-control>.control-box>.bullet-button:selected #0*/
+.pagination>.pagination-control {
+	-fx-padding: 0;
+	-fx-max-height: 0;
+	-fx-pref-height: 0;
+	-fx-opacity: 0;
+}
+
+/*@after .pagination.bullet>.pagination-control>.control-box>.bullet-button:selected #0*/
+.pagination>.pagination-control * {
+	-fx-cursor: default;
+}
+
+/*@replace .progress-bar>.track #0*/
+.progress-bar>.track {
+	-fx-background-color: -color-progress-bar-track;
+	-fx-background-insets: 0;
+	-fx-background-radius: 3px;
+}
+
+/*@replace .progress-bar>.bar #0*/
+.progress-bar>.bar {
+	-fx-background-color: -color-progress-bar-fill;
+	-fx-background-insets: 0;
+	-fx-background-radius: 3px;
+	-fx-padding: 0.4em;
+}
+
+/*@after .ring-progress-indicator:indeterminate>.container>.track #0*/
+.code-area {
+	-fx-font-family: "JetBrains Mono", "Consolas", "Menlo", "DejaVu Sans Mono", monospace;
+	-fx-font-size: 13px;
+}
+
+/*@after .ring-progress-indicator:indeterminate>.container>.track #0*/
+.code-area .text, .code-area .paragraph-box .text {
+	-fx-fill: -color-fg-default;
+	-fx-font-family: "JetBrains Mono", "Consolas", "Menlo", "DejaVu Sans Mono", monospace;
+}
+
+/*@after .ring-progress-indicator:indeterminate>.container>.track #0*/
+.code-area .caret {
+	-fx-stroke: -color-fg-default;
+}
+
+/*@after .ring-progress-indicator:indeterminate>.container>.track #0*/
+.code-area .selection {
+	-fx-highlight-fill: -color-highlight;
+}
+
+/*@after .ring-progress-indicator:indeterminate>.container>.track #0*/
+.code-area .lineno {
+	-fx-text-fill: -color-fg-subtle;
+	-fx-background-color: transparent;
+	-fx-font-family: "JetBrains Mono", "Consolas", "Menlo", "DejaVu Sans Mono", monospace;
+	-fx-font-size: 12px;
+	-fx-padding: 0 10 0 8;
+}
+
+/*@after .ring-progress-indicator:indeterminate>.container>.track #0*/
+.code-area .paragraph-box.code-row-odd, .code-area .paragraph-text.code-row-odd {
+	-fx-background-color: rgba(127, 127, 127, 0.06);
+}
+
+/*@after .ring-progress-indicator:indeterminate>.container>.track #0*/
+.code-area .text.cm-keyword {
+	-fx-fill: #c678dd;
+}
+
+/*@after .ring-progress-indicator:indeterminate>.container>.track #0*/
+.code-area .text.cm-string {
+	-fx-fill: #98c379;
+}
+
+/*@after .ring-progress-indicator:indeterminate>.container>.track #0*/
+.code-area .text.cm-comment {
+	-fx-fill: #5c6370;
+	-fx-font-style: italic;
+}
+
+/*@after .ring-progress-indicator:indeterminate>.container>.track #0*/
+.code-area .text.cm-number {
+	-fx-fill: #d19a66;
+}
+
+/*@after .ring-progress-indicator:indeterminate>.container>.track #0*/
+.code-area .text.cm-annotation {
+	-fx-fill: #e5c07b;
+}
+
+/*@after .ring-progress-indicator:indeterminate>.container>.track #0*/
+.code-area .text.cm-type {
+	-fx-fill: #e5c07b;
+}
+
+/*@after .ring-progress-indicator:indeterminate>.container>.track #0*/
+.code-area .text.cm-method {
+	-fx-fill: #61afef;
+}
+
+/*@after .ring-progress-indicator:indeterminate>.container>.track #0*/
+.code-area .text.cm-variable {
+	-fx-fill: #abb2bf;
+}
+
+/*@after .ring-progress-indicator:indeterminate>.container>.track #0*/
+.code-area .text.cm-final {
+	-fx-fill: #e06c75;
+}
+
+/*@replace .scroll-bar>.thumb #0*/
+.scroll-bar>.thumb {
+	-fx-background-color: -color-accent-4;
+	-fx-background-radius: 3px;
+}
+
+/*@replace .tile-base>.container #0*/
+.tile-base>.container {
+	-fx-padding: 1em;
+	-fx-alignment: CENTER_LEFT;
+	-fx-background-radius: 3px;
+	-fx-spacing: 1em;
+}
+
+/*@replace .titled-pane>.content #0*/
+.titled-pane>.content {
+	-fx-border-color: -color-border-default;
+	-fx-border-width: 0 1px 1px 1px;
+	-fx-border-radius: 0 0 3px 3px;
+	-fx-background-radius: 0 0 3px 3px;
+	-fx-background-color: -color-bg-default;
+	-fx-padding: 20px 20px 10px 20px;
+	-fx-alignment: TOP_LEFT;
+}
+
+/*@replace .titled-pane:expanded>.title #0*/
+.titled-pane:expanded>.title {
+	-fx-background-radius: 3px 3px 0 0, 2px 2px 0 0;
+	-fx-background-insets: 0, 1px 1px 0 1px;
+}
+
+/*@replace .titled-pane:collapsed>.title #0*/
+.titled-pane:collapsed>.title {
+	-fx-background-insets: 0, 1px;
+	-fx-background-radius: 3px, 2px;
+}
+
+/*@replace .tooltip #0*/
+.tooltip {
+	-fx-background-color: -color-border-default, -color-bg-overlay;
+	-fx-background-insets: 0, 1px;
+	-fx-background-radius: 3px, 2px;
+	-fx-text-fill: -color-fg-default;
+	-fx-font-size: 14px;
+	-fx-font-weight: normal;
+	-fx-padding: 8px 12px 8px 12px;
+	-fx-opacity: 0.85;
+	-fx-effect: dropshadow(three-pass-box, -color-shadow-default, 4px, 0.3, 0, 1);
+	-fx-scale-x: 0.85;
+	-fx-scale-y: 0.85;
+}
+
+/*@after .tooltip #0*/
+.server-card {
+	-fx-border-color: -color-border-default;
+	-fx-border-width: 1px;
+	-fx-border-radius: 3px;
+	-fx-cursor: hand;
+	-fx-background-color: -color-bg-overlay;
+}
+
+/*@after .tooltip #0*/
+.server-card:hover, .server-card.menu-open {
+	-fx-border-color: -color-accent-emphasis;
+	-fx-border-width: 1px;
+	-fx-border-radius: 3px;
+}
+
+/*@after .tooltip #0*/
+.server-list-row {
+	-fx-background-color: transparent;
+	-fx-background-radius: 3px;
+	-fx-cursor: hand;
+}
+
+/*@after .tooltip #0*/
+.server-list-row:hover {
+	-fx-background-color: rgba(124, 92, 255, 0.07);
+	-fx-background-radius: 3px;
+}
+
+/*@after .tooltip #0*/
+.server-list-row.selected {
+	-fx-background-color: -color-accent-subtle;
+	-fx-background-radius: 3px;
+}
+
+/*@after .tooltip #0*/
+.server-detail-stats {
+	-fx-background-color: -color-bg-middle;
+	-fx-background-radius: 4px;
+	-fx-border-color: -color-border-muted;
+	-fx-border-width: 1px;
+	-fx-border-radius: 4px;
+}
+
+/*@after .tooltip #0*/
+.server-row {
+	-fx-cursor: hand;
+	-fx-background-color: -color-bg-middle;
+	-fx-border-color: -color-border-default;
+	-fx-border-width: 1px;
+	-fx-border-radius: 3px;
+	-fx-background-radius: 3px;
+}
+
+/*@after .tooltip #0*/
+.server-row:hover, .server-row.menu-open, .server-row.active-server {
+	-fx-border-color: -color-accent-emphasis;
+	-fx-border-width: 1px;
+	-fx-border-radius: 3px;
+}
+
+/*@after .tooltip #0*/
+.server-row.drag-source {
+	-fx-opacity: 0.4;
+}
+
+/*@after .tooltip #0*/
+.server-row.drag-target {
+	-fx-border-color: -color-accent-emphasis;
+	-fx-background-color: -color-accent-subtle;
+}
+
+/*@after .tooltip #0*/
+.server-list-row.drag-source {
+	-fx-opacity: 0.4;
+}
+
+/*@after .tooltip #0*/
+.server-list-row.drag-target {
+	-fx-background-color: -color-accent-subtle;
+	-fx-background-radius: 3px;
+}
+
+/*@after .tooltip #0*/
+.installation-status-card {
+	-fx-cursor: default;
+	-fx-background-color: -color-bg-middle;
+	-fx-border-color: -color-border-default;
+	-fx-border-width: 1px;
+	-fx-border-radius: 3px;
+	-fx-background-radius: 3px;
+}
+
+/*@after .tooltip #0*/
+.installation-status-card:hover, .installation-status-card.menu-open {
+	-fx-border-color: -color-accent-emphasis;
+}
+
+/*@after .tooltip #0*/
+.channel-box.drag-source {
+	-fx-opacity: 0.4;
+}
+
+/*@after .tooltip #0*/
+.channel-box.drag-target {
+	-fx-background-color: -color-accent-subtle;
+	-fx-background-radius: 2px;
+}
+
+/*@after .tooltip #0*/
+.audio-device-selector {
+	-fx-background-color: transparent;
+	-fx-border-color: transparent;
+	-fx-border-width: 0;
+}
+
+/*@after .tooltip #0*/
+.audio-device-selector.disabled-state {
+	-fx-opacity: 0.6;
+}
+
+/*@after .tooltip #0*/
+.audio-device-selector.muted {
+	-fx-background-color: transparent;
+	-fx-border-color: transparent;
+}
+
+/*@after .tooltip #0*/
+.komm-toolbar {
+	-fx-background-color: -color-border-muted, -color-bg-subtle;
+	-fx-background-insets: 0, 1 0 0 0;
+	-fx-background-radius: 0;
+}
+
+/*@after .tooltip #0*/
+.toolbar-center-island {
+	-fx-background-color: -color-bg-middle;
+	-fx-background-radius: 4px;
+}
+
+/*@after .tooltip #0*/
+.toolbar-divider {
+	-fx-pref-width: 1px;
+	-fx-min-width: 1px;
+	-fx-max-width: 1px;
+	-fx-pref-height: 20px;
+	-fx-background-color: linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0) 100%);
+}
+
+/*@after .tooltip #0*/
+.toolbar-center {
+	-fx-padding: 7px 0 7px 0;
+}
+
+/*@after .tooltip #0*/
+.toolbar-side {
+	-fx-padding: 0;
+}
+
+/*@after .tooltip #0*/
+.button.toolbar-chip {
+	-fx-skin: "javafx.scene.control.skin.ButtonSkin";
+	-fx-background-color: derive(-color-bg-middle, 8%);
+	-fx-background-radius: 3px;
+	-fx-border-color: transparent;
+	-fx-border-width: 0;
+	-fx-padding: 0;
+}
+
+/*@after .tooltip #0*/
+.button.toolbar-chip:hover {
+	-fx-background-color: derive(-color-bg-middle, 18%);
+}
+
+/*@after .tooltip #0*/
+.button.toolbar-chip:pressed {
+	-fx-background-color: derive(-color-bg-middle, 4%);
+}
+
+/*@after .tooltip #0*/
+.button.toolbar-chip .ikonli-font-icon {
+	-fx-icon-color: -color-fg-default;
+	-fx-fill: -color-fg-default;
+	-fx-icon-size: 17px;
+}
+
+/*@after .tooltip #0*/
+.button.toolbar-chip:disabled {
+	-fx-background-color: derive(-color-bg-middle, 4%);
+	-fx-opacity: 0.45;
+}
+
+/*@after .tooltip #0*/
+.button.toolbar-chip-ghost {
+	-fx-skin: "javafx.scene.control.skin.ButtonSkin";
+	-fx-background-color: transparent;
+	-fx-background-radius: 3px;
+	-fx-border-color: transparent;
+	-fx-border-width: 0;
+	-fx-padding: 0;
+}
+
+/*@after .tooltip #0*/
+.button.toolbar-chip-ghost:hover {
+	-fx-background-color: derive(-color-bg-middle, 18%);
+}
+
+/*@after .tooltip #0*/
+.button.toolbar-chip-ghost:pressed {
+	-fx-background-color: derive(-color-bg-middle, 4%);
+}
+
+/*@after .tooltip #0*/
+.button.toolbar-chip-ghost .ikonli-font-icon {
+	-fx-icon-color: -color-fg-default;
+	-fx-fill: -color-fg-default;
+	-fx-icon-size: 17px;
+}
+
+/*@after .tooltip #0*/
+.button.toolbar-chip-ghost:disabled {
+	-fx-opacity: 0.35;
+}
+
+/*@after .tooltip #0*/
+.button.toolbar-chip-muted {
+	-fx-skin: "javafx.scene.control.skin.ButtonSkin";
+	-fx-background-color: rgba(160, 25, 25, 0.18);
+	-fx-background-radius: 3px;
+	-fx-border-color: transparent;
+	-fx-border-width: 0;
+	-fx-padding: 0;
+}
+
+/*@after .tooltip #0*/
+.button.toolbar-chip-muted:hover {
+	-fx-background-color: rgba(160, 25, 25, 0.30);
+}
+
+/*@after .tooltip #0*/
+.button.toolbar-chip-muted:pressed {
+	-fx-background-color: rgba(160, 25, 25, 0.42);
+}
+
+/*@after .tooltip #0*/
+.button.toolbar-chip-muted .ikonli-font-icon {
+	-fx-icon-color: rgb(225, 90, 90);
+	-fx-fill: rgb(225, 90, 90);
+	-fx-icon-size: 17px;
+}
+
+/*@after .tooltip #0*/
+.button.toolbar-chip-active {
+	-fx-skin: "javafx.scene.control.skin.ButtonSkin";
+	-fx-background-color: rgba(160, 25, 25, 0.18);
+	-fx-background-radius: 3px;
+	-fx-border-color: transparent;
+	-fx-border-width: 0;
+	-fx-padding: 0;
+}
+
+/*@after .tooltip #0*/
+.button.toolbar-chip-active:hover {
+	-fx-background-color: rgba(160, 25, 25, 0.30);
+}
+
+/*@after .tooltip #0*/
+.button.toolbar-chip-active .ikonli-font-icon {
+	-fx-icon-color: rgb(225, 90, 90);
+	-fx-fill: rgb(225, 90, 90);
+	-fx-icon-size: 17px;
+}
+
+/*@after .tooltip #0*/
+.button.toolbar-chip-bot-active {
+	-fx-skin: "javafx.scene.control.skin.ButtonSkin";
+	-fx-background-color: derive(-color-accent-emphasis, -65%);
+	-fx-background-radius: 3px;
+	-fx-border-color: transparent;
+	-fx-border-width: 0;
+	-fx-padding: 0;
+}
+
+/*@after .tooltip #0*/
+.button.toolbar-chip-bot-active:hover {
+	-fx-background-color: derive(-color-accent-emphasis, -55%);
+}
+
+/*@after .tooltip #0*/
+.button.toolbar-chip-bot-active:pressed {
+	-fx-background-color: derive(-color-accent-emphasis, -72%);
+}
+
+/*@after .tooltip #0*/
+.button.toolbar-chip-bot-active .ikonli-font-icon {
+	-fx-icon-color: -color-accent-emphasis;
+	-fx-fill: -color-accent-emphasis;
+	-fx-icon-size: 17px;
+}
+
+/*@after .tooltip #0*/
+.button.toolbar-chip-bot-active:disabled {
+	-fx-opacity: 0.35;
+}
+
+/*@after .tooltip #0*/
+.button.toolbar-chevron {
+	-fx-skin: "javafx.scene.control.skin.ButtonSkin";
+	-fx-background-color: transparent;
+	-fx-background-radius: 2px;
+	-fx-border-color: transparent;
+	-fx-border-width: 0;
+	-fx-padding: 0;
+}
+
+/*@after .tooltip #0*/
+.button.toolbar-chevron:hover {
+	-fx-background-color: derive(-color-bg-middle, 14%);
+}
+
+/*@after .tooltip #0*/
+.button.toolbar-chevron:pressed {
+	-fx-background-color: derive(-color-bg-middle, 2%);
+}
+
+/*@after .tooltip #0*/
+.button.toolbar-chevron .ikonli-font-icon {
+	-fx-icon-color: -color-fg-muted;
+	-fx-fill: -color-fg-muted;
+}
+
+/*@after .tooltip #0*/
+.button.toolbar-chevron-muted {
+	-fx-skin: "javafx.scene.control.skin.ButtonSkin";
+	-fx-background-color: transparent;
+	-fx-background-radius: 2px;
+	-fx-border-color: transparent;
+	-fx-border-width: 0;
+	-fx-padding: 0;
+}
+
+/*@after .tooltip #0*/
+.button.toolbar-chevron-muted:hover {
+	-fx-background-color: rgba(160, 25, 25, 0.15);
+}
+
+/*@after .tooltip #0*/
+.button.toolbar-chevron-muted .ikonli-font-icon {
+	-fx-icon-color: rgb(225, 90, 90);
+	-fx-fill: rgb(225, 90, 90);
+}
+
+/*@after .tooltip #0*/
+.button.toolbar-chevron.showing, .button.toolbar-chevron-muted.showing {
+	-fx-background-color: derive(-color-bg-middle, 20%);
+}
+
+/*@after .tooltip #0*/
+.toolbar-username {
+	-fx-font-weight: bold;
+	-fx-font-size: 13px;
+	-fx-text-fill: -color-fg-default;
+}
+
+/*@after .tooltip #0*/
+.toolbar-avatar-initials {
+	-fx-text-fill: white;
+	-fx-font-weight: bold;
+	-fx-font-size: 13px;
+}
+
+/*@after .tooltip #0*/
+.toolbar-status-row {
+	-fx-cursor: hand;
+}
+
+/*@after .tooltip #0*/
+.toolbar-status-row:hover .toolbar-status-label, .toolbar-status-row:hover .toolbar-status-chevron {
+	-fx-text-fill: -color-fg-default;
+	-fx-icon-color: -color-fg-default;
+	-fx-fill: -color-fg-default;
+}
+
+/*@after .tooltip #0*/
+.toolbar-status-label {
+	-fx-text-fill: -color-fg-muted;
+	-fx-font-size: 11px;
+}
+
+/*@after .tooltip #0*/
+.toolbar-status-chevron {
+	-fx-icon-color: -color-fg-muted;
+	-fx-fill: -color-fg-muted;
+}
+
+/*@after .tooltip #0*/
+.toolbar-status-item {
+	-fx-background-color: transparent;
+	-fx-cursor: hand;
+}
+
+/*@after .tooltip #0*/
+.toolbar-status-item:hover {
+	-fx-background-color: -color-accent-subtle, -color-accent-subtle;
+}
+
+/*@after .tooltip #0*/
+.toolbar-brand {
+	-fx-text-fill: -color-fg-default;
+	-fx-font-size: 11px;
+	-fx-font-weight: bold;
+}
+
+/*@after .tooltip #0*/
+.toolbar-version {
+	-fx-text-fill: -color-fg-muted;
+	-fx-font-size: 10px;
+}
+
+/*@after .tooltip #0*/
+.ping-cluster {
+	-fx-padding: 0;
+}
+
+/*@after .tooltip #0*/
+.toolbar-ping-label {
+	-fx-font-size: 11px;
+	-fx-text-fill: -color-fg-muted;
+}
+
+/*@after .tooltip #0*/
+.signal-bars {
+	-fx-padding: 0;
+}
+
+/*@after .tooltip #0*/
+.signal-bar {
+	-fx-stroke: transparent;
+	-fx-stroke-width: 0;
+}
+
+/*@after .tooltip #0*/
+.signal-bar-empty {
+	-fx-fill: -color-fg-muted;
+	-fx-opacity: 0.28;
+}
+
+/*@after .tooltip #0*/
+.signal-bar-filled.ping-good {
+	-fx-fill: #43b581;
+}
+
+/*@after .tooltip #0*/
+.signal-bar-filled.ping-ok {
+	-fx-fill: #9dcc5a;
+}
+
+/*@after .tooltip #0*/
+.signal-bar-filled.ping-warn {
+	-fx-fill: #faa61a;
+}
+
+/*@after .tooltip #0*/
+.signal-bar-filled.ping-bad {
+	-fx-fill: #f04747;
+}
+
+/*@after .tooltip #0*/
+.toolbar-ping-label.ping-good {
+	-fx-text-fill: #43b581;
+}
+
+/*@after .tooltip #0*/
+.toolbar-ping-label.ping-ok {
+	-fx-text-fill: #9dcc5a;
+}
+
+/*@after .tooltip #0*/
+.toolbar-ping-label.ping-warn {
+	-fx-text-fill: #faa61a;
+}
+
+/*@after .tooltip #0*/
+.toolbar-ping-label.ping-bad {
+	-fx-text-fill: #f04747;
+}
+
+/*@after .tooltip #0*/
+.button.custom-toolbar-button {
+	-fx-skin: "javafx.scene.control.skin.ButtonSkin";
+	-fx-background-color: derive(-color-bg-default, -3%);
+	-fx-background-radius: 3px;
+	-fx-border-color: transparent;
+	-fx-border-width: 0;
+}
+
+/*@after .tooltip #0*/
+.button.custom-toolbar-button:hover {
+	-fx-background-color: derive(-color-bg-default, 4%);
+}
+
+/*@after .tooltip #0*/
+.button.custom-toolbar-button:pressed {
+	-fx-background-color: derive(-color-bg-default, -6%);
+}
+
+/*@after .tooltip #0*/
+.button.toolbar-button-ghost {
+	-fx-skin: "javafx.scene.control.skin.ButtonSkin";
+	-fx-background-color: transparent;
+	-fx-background-radius: 3px;
+	-fx-border-color: transparent;
+	-fx-border-width: 0;
+}
+
+/*@after .tooltip #0*/
+.button.toolbar-button-ghost:hover {
+	-fx-background-color: derive(-color-bg-middle, 18%);
+}
+
+/*@after .tooltip #0*/
+.button.toolbar-button-ghost:pressed {
+	-fx-background-color: derive(-color-bg-middle, 8%);
+}
+
+/*@after .tooltip #0*/
+.button.custom-toolbar-button-active {
+	-fx-skin: "javafx.scene.control.skin.ButtonSkin";
+	-fx-background-color: rgba(160, 25, 25, 0.20);
+	-fx-background-radius: 3px;
+	-fx-border-color: transparent;
+	-fx-border-width: 0;
+}
+
+/*@after .tooltip #0*/
+.button.custom-toolbar-button-active:hover {
+	-fx-background-color: rgba(160, 25, 25, 0.32);
+}
+
+/*@after .tooltip #0*/
+.button.custom-toolbar-button-active:pressed {
+	-fx-background-color: rgba(160, 25, 25, 0.44);
+}
+
+/*@after .tooltip #0*/
+.button.custom-toolbar-button-active .ikonli-font-icon {
+	-fx-icon-color: rgb(225, 90, 90);
+	-fx-fill: rgb(225, 90, 90);
+}
+
+/*@after .tooltip #0*/
+.button.custom-toolbar-button-muted {
+	-fx-skin: "javafx.scene.control.skin.ButtonSkin";
+	-fx-background-color: rgba(160, 25, 25, 0.15);
+	-fx-background-radius: 3px;
+	-fx-border-color: transparent;
+	-fx-border-width: 0;
+}
+
+/*@after .tooltip #0*/
+.button.custom-toolbar-button-muted:hover {
+	-fx-background-color: rgba(160, 25, 25, 0.28);
+}
+
+/*@after .tooltip #0*/
+.button.custom-toolbar-button-muted:pressed {
+	-fx-background-color: rgba(160, 25, 25, 0.40);
+}
+
+/*@after .tooltip #0*/
+.button.audio-toggle-bordered {
+	-fx-skin: "javafx.scene.control.skin.ButtonSkin";
+	-fx-border-color: -color-border-default;
+	-fx-border-radius: 3px;
+	-fx-border-width: 1px;
+}
+
+/*@after .tooltip #0*/
+.button.audio-toggle-bordered.custom-toolbar-button-muted {
+	-fx-border-color: rgba(160, 25, 25, 0.45);
+}
+
+/*@after .tooltip #0*/
+.button.flat.audio-toggle-bordered:hover {
+	-fx-background-color: derive(-color-bg-default, 4%);
+	-fx-border-color: -color-accent-7;
+}
+
+/*@after .tooltip #0*/
+.button.flat.audio-toggle-bordered.custom-toolbar-button-muted:hover {
+	-fx-background-color: rgba(160, 25, 25, 0.28);
+	-fx-border-color: rgb(225, 90, 90);
+}
+
+/*@after .tooltip #0*/
+.button.custom-toolbar-button-muted .ikonli-font-icon {
+	-fx-icon-color: rgb(225, 90, 90);
+	-fx-fill: rgb(225, 90, 90);
+}
+
+/*@after .tooltip #0*/
+.button.custom-toolbar-button-muted:hover .ikonli-font-icon {
+	-fx-icon-color: rgb(255, 110, 110);
+	-fx-fill: rgb(255, 110, 110);
+}
+
+/*@after .tooltip #0*/
+.muted-status-icon {
+	-fx-icon-color: rgb(225, 90, 90);
+	-fx-fill: rgb(225, 90, 90);
+}
+
+/*@after .tooltip #0*/
+.self-muted-status-icon {
+	-fx-icon-color: #cdd0d5;
+	-fx-fill: #cdd0d5;
+}
+
+/*@after .tooltip #0*/
+.separator-bg {
+	-fx-background-color: transparent;
+	-fx-pref-width: 0;
+}
+
+/*@after .tooltip #0*/
+.button:showing {
+	-fx-background-color: derive(-color-bg-middle, 20%);
+}
+
+/*@after .tooltip #0*/
+.nav-item {
+	-fx-background-radius: 3px;
+	-fx-cursor: hand;
+	-fx-border-color: transparent;
+	-fx-border-radius: 3px;
+	-fx-border-width: 1px;
+}
+
+/*@after .tooltip #0*/
+.nav-item:hover {
+	-fx-background-color: -color-bg-default;
+}
+
+/*@after .tooltip #0*/
+.nav-item-light {
+	-fx-background-radius: 3px;
+	-fx-cursor: hand;
+	-fx-border-color: transparent;
+	-fx-border-radius: 3px;
+	-fx-border-width: 1px;
+}
+
+/*@after .tooltip #0*/
+.nav-item-light:hover {
+	-fx-background-color: -color-bg-subtle;
+}
+
+/*@after .tooltip #0*/
+.nav-item.nav-active {
+	-fx-background-color: -color-accent-subtle;
+	-fx-border-color: -color-accent-muted;
+}
+
+/*@after .tooltip #0*/
+.nav-item.nav-active:hover {
+	-fx-background-color: -color-accent-subtle;
+}
+
+/*@after .tooltip #0*/
+.nav-label {
+	-fx-font-size: 13px;
+	-fx-font-weight: bold;
+	-fx-text-fill: -color-fg-default;
+}
+
+/*@after .tooltip #0*/
+.nav-active .nav-label {
+	-fx-text-fill: -color-accent-fg;
+}
+
+/*@after .tooltip #0*/
+.custom-modal {
+	-fx-background-color: -color-bg-overlay;
+	-fx-background-radius: 4px;
+	-fx-border-radius: 4px;
+	-fx-border-color: -color-accent-8;
+	-fx-border-width: 1px;
+}
+
+/*@after .tooltip #0*/
+.list-cell:filled .status-online {
+	-fx-icon-color: #2ecc71 !important;
+	-fx-fill: #2ecc71 !important;
+}
+
+/*@after .tooltip #0*/
+.list-cell:filled .status-away {
+	-fx-icon-color: #f39c12 !important;
+	-fx-fill: #f39c12 !important;
+}
+
+/*@after .tooltip #0*/
+.list-cell:filled .status-dnd {
+	-fx-icon-color: #e74c3c !important;
+	-fx-fill: #e74c3c !important;
+}
+
+/*@after .tooltip #0*/
+.list-cell:filled .status-invisible {
+	-fx-icon-color: #95a5a6 !important;
+	-fx-fill: #95a5a6 !important;
+}
+
+/*@after .tooltip #0*/
+.status-online {
+	-fx-icon-color: #2ecc71;
+	-fx-fill: #2ecc71;
+}
+
+/*@after .tooltip #0*/
+.status-away {
+	-fx-icon-color: #f39c12;
+	-fx-fill: #f39c12;
+}
+
+/*@after .tooltip #0*/
+.status-dnd {
+	-fx-icon-color: #e74c3c;
+	-fx-fill: #e74c3c;
+}
+
+/*@after .tooltip #0*/
+.status-invisible {
+	-fx-icon-color: #95a5a6;
+	-fx-fill: #95a5a6;
+}
+
+/*@after .tooltip #0*/
+.server-status-online {
+	-fx-fill: #3fb950;
+}
+
+/*@after .tooltip #0*/
+.server-status-offline {
+	-fx-fill: #ef4444;
+}
+
+/*@after .tooltip #0*/
+.server-status-not-verified {
+	-fx-fill: #FFCA80;
+}
+
+/*@after .tooltip #0*/
+.server-status-unknown {
+	-fx-fill: #6e7681;
+}
+
+/*@after .tooltip #0*/
+.compact-combo.combo-box-base>.arrow-button {
+	-fx-padding: 6px 10px 6px 10px;
+}
+
+/*@after .tooltip #0*/
+.compact-combo.combo-box>.list-cell {
+	-fx-padding: 6px 10px 6px 10px;
+}
+
+/*@after .tooltip #0*/
+.compact-combo.combo-box-base>.arrow-button>.arrow {
+	-fx-scale-x: 0.8;
+	-fx-scale-y: 0.8;
+}
+
+/*@after .tooltip #0*/
+.emoji-text-field {
+	-fx-padding: 0;
+}
+
+/*@after .tooltip #0*/
+.emoji-input-sink {
+	-fx-text-fill: transparent;
+	-fx-highlight-fill: transparent;
+	-fx-highlight-text-fill: transparent;
+	-fx-prompt-text-fill: transparent;
+}
+
+/*@after .tooltip #0*/
+.emoji-category-bar {
+	-fx-padding: 2 0 2 0;
+	-fx-spacing: 1;
+}
+
+/*@after .tooltip #0*/
+.emoji-category-btn {
+	-fx-skin: "javafx.scene.control.skin.ButtonSkin";
+	-fx-font-family: "Noto Emoji";
+	-fx-font-weight: bold;
+	-fx-font-size: 17px;
+	-fx-background-radius: 3px;
+	-fx-border-color: transparent;
+	-fx-border-width: 0;
+	-fx-padding: 4 5 4 5;
+	-fx-cursor: hand;
+	-fx-min-width: 34px;
+	-fx-min-height: 34px;
+	-fx-max-width: 34px;
+	-fx-max-height: 34px;
+	-fx-background-color: transparent;
+	-fx-alignment: CENTER;
+}
+
+/*@after .tooltip #0*/
+.emoji-category-btn:hover {
+	-fx-background-color: -color-neutral-subtle;
+}
+
+/*@after .tooltip #0*/
+.emoji-category-btn.selected, .emoji-category-btn:selected, .emoji-category-btn:selected:hover {
+	-fx-background-color: -color-accent-muted;
+}
+
+/*@after .tooltip #0*/
+.emoji-grid {
+	-fx-hgap: 1;
+	-fx-vgap: 1;
+	-fx-padding: 2;
+	-fx-background-color: transparent;
+}
+
+/*@after .tooltip #0*/
+.emoji-btn {
+	-fx-skin: "javafx.scene.control.skin.ButtonSkin";
+	-fx-background-color: transparent;
+	-fx-background-radius: 3px;
+	-fx-border-color: transparent;
+	-fx-border-width: 0;
+	-fx-cursor: hand;
+	-fx-padding: 2;
+	-fx-alignment: CENTER;
+	-fx-content-display: GRAPHIC_ONLY;
+}
+
+/*@after .tooltip #0*/
+.emoji-btn:hover {
+	-fx-background-color: -color-neutral-subtle;
+	-fx-scale-x: 1.15;
+	-fx-scale-y: 1.15;
+}
+
+/*@after .tooltip #0*/
+.emoji-btn:pressed {
+	-fx-background-color: -color-neutral-muted;
+	-fx-scale-x: 0.90;
+	-fx-scale-y: 0.90;
+}
+
+/*@after .tooltip #0*/
+.connected-user-card {
+	-fx-background-color: transparent;
+	-fx-background-radius: 2px;
+}
+
+/*@after .tooltip #0*/
+.connected-user-card:hover {
+	-fx-background-color: rgba(255, 255, 255, 0.04);
+}
+
+/*@after .tooltip #0*/
+.friend-item {
+	-fx-background-color: transparent;
+	-fx-background-radius: 2px;
+}
+
+/*@after .tooltip #0*/
+.friend-item:hover {
+	-fx-background-color: rgba(255, 255, 255, 0.04);
+}
+
+/*@after .tooltip #0*/
+.live-share-card {
+	-fx-background-color: -color-accent-subtle;
+	-fx-background-radius: 3px;
+	-fx-border-color: -color-accent-muted;
+	-fx-border-width: 1px;
+	-fx-border-radius: 3px;
+	-fx-cursor: hand;
+}
+
+/*@after .tooltip #0*/
+.live-share-card:hover {
+	-fx-background-color: -color-accent-muted;
+}
+
+/*@after .tooltip #0*/
+.live-share-card:disabled {
+	-fx-cursor: default;
+	-fx-opacity: 0.65;
+}
+
+/*@after .tooltip #0*/
+.live-share-card .live-share-cta {
+	-fx-icon-color: -color-accent-fg;
+	-fx-fill: -color-accent-fg;
+}
+
+/*@after .tooltip #0*/
+.channel-box {
+	-fx-background-color: rgba(255, 255, 255, 0.03);
+	-fx-background-radius: 3px;
+	-fx-border-color: rgba(255, 255, 255, 0.06);
+	-fx-border-radius: 3px;
+	-fx-border-width: 1px;
+	-fx-cursor: hand;
+}
+
+/*@after .tooltip #0*/
+.channel-box:hover {
+	-fx-background-color: rgba(255, 255, 255, 0.07);
+	-fx-border-color: rgba(255, 255, 255, 0.10);
+}
+
+/*@after .tooltip #0*/
+.channel-box:selected {
+	-fx-background-color: -color-accent-subtle;
+	-fx-border-color: -color-accent-muted;
+}
+
+/*@after .tooltip #0*/
+.channel-box:selected:hover {
+	-fx-background-color: -color-accent-subtle;
+	-fx-border-color: -color-accent-muted;
+}
+
+/*@after .tooltip #0*/
+.decoration-channel {
+	-fx-background-color: transparent;
+	-fx-border-color: transparent;
+}
+
+/*@after .tooltip #0*/
+.source-card {
+	-fx-background-color: -color-bg-subtle;
+	-fx-background-radius: 3px;
+	-fx-border-color: -color-border-muted;
+	-fx-border-width: 1.5px;
+	-fx-border-radius: 3px;
+	-fx-cursor: hand;
+}
+
+/*@after .tooltip #0*/
+.source-card:hover {
+	-fx-border-color: -color-border-default;
+}
+
+/*@after .tooltip #0*/
+.source-card.source-card-selected {
+	-fx-background-color: -color-accent-muted;
+	-fx-border-color: -color-accent-emphasis;
+}
+
+/*@after .tooltip #0*/
+.custom-accent-icon {
+	-fx-icon-color: -color-accent-emphasis;
+	-fx-fill: -color-accent-emphasis;
+}
+
+/*@after .tooltip #0*/
+.custom-pop-up {
+	-fx-background-color: -color-bg-default;
+	-fx-border-color: -color-border-default;
+	-fx-border-width: 1px;
+	-fx-background-radius: 4px;
+	-fx-border-radius: 4px;
+	-fx-effect: dropshadow(three-pass-box, -color-shadow-default, 4px, 0.3, 0, 1);
+}
+
+/*@after .tooltip #0*/
+.custom-pop-up.audio-device-menu {
+	-fx-background-radius: 3px;
+	-fx-border-radius: 3px;
+}
+
+/*@after .tooltip #0*/
+.status-bubble {
+	-fx-background-color: -color-bg-default;
+	-fx-background-radius: 4px;
+	-fx-border-color: -color-border-default;
+	-fx-border-width: 1px;
+	-fx-border-radius: 4px;
+	-fx-effect: dropshadow(gaussian, -color-shadow-default, 6px, 0.25, 0, 1);
+}
+
+/*@after .tooltip #0*/
+.status-bubble-tail {
+	-fx-fill: -color-bg-default;
+	-fx-stroke: -color-border-default;
+	-fx-stroke-width: 1px;
+}
+
+/*@after .tooltip #0*/
+.toolbar-status-item.selected {
+	-fx-background-color: -color-accent-subtle, -color-accent-subtle;
+}
+
+/*@after .tooltip #0*/
+.soundboard-slot {
+	-fx-background-color: -color-bg-subtle;
+	-fx-background-radius: 3px;
+	-fx-border-color: -color-border-default;
+	-fx-border-width: 1px;
+	-fx-border-radius: 3px;
+	-fx-font-size: 11px;
+	-fx-text-alignment: center;
+	-fx-cursor: hand;
+}
+
+/*@after .tooltip #0*/
+.soundboard-slot:hover {
+	-fx-background-color: -color-bg-inset;
+	-fx-border-color: -color-accent-emphasis;
+}
+
+/*@after .tooltip #0*/
+.soundboard-slot:disabled {
+	-fx-opacity: 0.45;
+	-fx-cursor: default;
+}
+
+/*@after .tooltip #0*/
+.soundboard-slot-empty {
+	-fx-background-color: transparent;
+	-fx-border-style: segments(4, 4) line-cap round;
+	-fx-text-fill: -color-fg-subtle;
+}
+
+/*@after .tooltip #0*/
+.soundboard-adv-card {
+	-fx-background-color: -color-bg-subtle;
+	-fx-background-radius: 6px;
+	-fx-border-color: -color-border-muted;
+	-fx-border-width: 1px;
+	-fx-border-radius: 6px;
+}
+
+/*@after .tooltip #0*/
+.soundboard-adv-title {
+	-fx-font-size: 13px;
+	-fx-font-weight: bold;
+	-fx-text-fill: -color-fg-default;
+}
+
+/*@after .tooltip #0*/
+.friend-card-row {
+	-fx-background-color: -color-bg-subtle;
+	-fx-background-radius: 3px;
+	-fx-border-color: -color-border-default;
+	-fx-border-radius: 3px;
+}
+
+/*@after .tooltip #0*/
+.friend-card-row:hover {
+	-fx-background-color: -color-bg-middle;
+	-fx-border-color: -color-accent-8;
+}
+
+/*@after .tooltip #0*/
+.custom-alert-icon {
+	-fx-icon-color: -color-fg-default;
+	-fx-fill: -color-fg-default;
+	-fx-icon-size: 50px;
+}
+
+/*@after .tooltip #0*/
+.server-row.compact {
+	-fx-background-color: transparent;
+	-fx-border-color: transparent transparent transparent transparent;
+	-fx-border-width: 0 0 0 3px;
+	-fx-border-radius: 0;
+	-fx-background-radius: 0;
+}
+
+/*@after .tooltip #0*/
+.server-row.compact:hover, .server-row.compact.menu-open, .server-row.compact.active-server {
+	-fx-background-color: -color-bg-middle;
+	-fx-border-color: transparent transparent transparent -color-accent-emphasis;
+	-fx-border-width: 0 0 0 3px;
+	-fx-border-radius: 0;
+}
+
+/*@after .tooltip #0*/
+.server-row.compact.drag-target {
+	-fx-background-color: -color-accent-subtle;
+}
+
+/*@after .tooltip #0*/
+.button.sidebar-action-btn {
+	-fx-background-color: -color-bg-subtle;
+}
+
+/*@after .tooltip #0*/
+.button.sidebar-action-btn:hover, .button.sidebar-action-btn:pressed {
+	-fx-background-color: -color-bg-middle;
+}
+
+/*@after .tooltip #0*/
+.button.sidebar-action-btn:hover, .button.sidebar-action-btn:pressed {
+	-fx-text-fill: -color-fg-default;
+}
+
+/*@after .tooltip #0*/
+.button.sidebar-action-btn:hover .ikonli-font-icon, .button.sidebar-action-btn:pressed .ikonli-font-icon {
+	-fx-icon-color: -color-fg-default;
+}
+
+/*@after .tooltip #0*/
+.button.sidebar-action-btn.accent:hover, .button.sidebar-action-btn.accent:pressed {
+	-fx-text-fill: -color-accent-fg;
+}
+
+/*@after .tooltip #0*/
+.button.sidebar-action-btn.accent:hover .ikonli-font-icon, .button.sidebar-action-btn.accent:pressed .ikonli-font-icon {
+	-fx-icon-color: -color-accent-fg;
+}
+
+/*@remove .combo-box.small>.list-cell #0*/
+
+/*@remove .combo-box.small>.text-field #0*/
+
+/*@remove .combo-box.large>.list-cell #0*/
+
+/*@remove .combo-box.large>.text-field #0*/
+
+/*@remove .choice-box.small #0*/
+
+/*@remove .choice-box.small>.label #0*/
+
+/*@remove .choice-box.large #0*/
+
+/*@remove .choice-box.large>.label #0*/
+
+/*@remove .table-view.no-header>.column-header-background #0*/
+
+/*@remove .menu-item:focused>.label #0*/
+
+/*@remove .menu-button.accent .menu-item .font-icon, .menu-button.accent .menu-item .ikonli-font-icon, .split-menu-button.accent .menu-item .font-icon, .split-menu-button.accent .menu-item .ikonli-font-icon #0*/
+
+/*@remove .menu-button.success .menu-item .font-icon, .menu-button.success .menu-item .ikonli-font-icon, .split-menu-button.success .menu-item .font-icon, .split-menu-button.success .menu-item .ikonli-font-icon #0*/
+
+/*@remove .menu-button.danger .menu-item .font-icon, .menu-button.danger .menu-item .ikonli-font-icon, .split-menu-button.danger .menu-item .font-icon, .split-menu-button.danger .menu-item .ikonli-font-icon #0*/
+
+/*@remove .tab-line #0*/
+
+/*@remove .tab-line>.root-container #0*/
+
+/*@remove .tab-line>.root-container>.tabs #0*/
+
+/*@remove .tab-line>.root-container>.tabs>.tab #0*/
+
+/*@remove .tab-line>.root-container>.tabs>.tab>.tab-box #0*/
+
+/*@remove .tab-line>.root-container>.tabs>.tab>.tab-box>.label #0*/
+
+/*@remove .tab-line>.root-container>.tabs>.tab>.tab-box>.close-button #0*/
+
+/*@remove .tab-line>.root-container>.tabs>.tab>.tab-box>.close-button>.graphic #0*/
+
+/*@remove .tab-line>.root-container>.tabs>.tab>.tab-box>.close-button:hover #0*/
+
+/*@remove .tab-line>.root-container>.tabs>.tab>.tab-box>.close-button:hover>.graphic #0*/
+
+/*@remove .tab-line>.root-container>.tabs>.tab>.tab-box>.close-button:disabled #0*/
+
+/*@remove .tab-line>.root-container>.tabs>.tab:hover #0*/
+
+/*@remove .tab-line>.root-container>.tabs>.tab:hover>.label #0*/
+
+/*@remove .tab-line>.root-container>.tabs>.tab:selected #0*/
+
+/*@remove .tab-line>.root-container>.tabs>.tab:selected>.label #0*/
+
+/*@remove .tab-line>.root-container>.tabs>.tab:pinned>.tab-box>.close-button .graphic #0*/
+
+/*@remove .tab-line>.root-container>.tabs>.tab:min-width-exceeded:selected>.tab-box>.label #0*/
+
+/*@remove .tab-line>.root-container>.tabs>.tab:min-width-exceeded:selected>.tab-box>.close-button #0*/
+
+/*@remove .tab-line>.root-container>.tabs>.tab:min-width-exceeded>.tab-box>.close-button #0*/
+
+/*@remove .tab-line>.root-container>.tabs.selected-tab-closable>.tab .close-button #0*/
+
+/*@remove .tab-line>.root-container>.tabs.selected-tab-closable>.tab:selected .close-button, .tab-line>.root-container>.tabs.selected-tab-closable>.tab:pinned .close-button #0*/
+
+/*@remove .tab-line>.root-container>.tabs.no-tabs-closable>.tab .close-button #0*/
+
+/*@remove .tab-line.border-top>.root-container #0*/
+
+/*@remove .tab-line.border-top>.root-container>.tabs>.tab #0*/
+
+/*@remove .tab-line.border-top>.root-container>.tabs>.tab:first #0*/
+
+/*@remove .tab-line.border-top>.root-container>.tabs>.tab:last #0*/
+
+/*@remove .tab-line.border-top>.root-container>.tabs>.tab:selected #0*/
+
+/*@remove .tab-line.dense>.root-container>.tabs>.tab #0*/
+
+/*@remove .tab-line.floating #0*/
+
+/*@remove .tab-line.floating>.root-container #0*/
+
+/*@remove .tab-line.floating>.root-container>.tabs>.tab #0*/
+
+/*@remove .tab-line.floating>.root-container>.tabs>.tab:hover #0*/
+
+/*@remove .tab-line.floating>.root-container>.tabs>.tab:hover>.label #0*/
+
+/*@remove .tab-line.floating>.root-container>.tabs>.tab:selected #0*/
+
+/*@remove .tab-line.floating>.root-container>.tabs>.tab:selected>.label #0*/
+
+/*@remove .tab-line.floating.dense>.root-container>.tabs>.tab #0*/
+
+/*@remove .tab-line .tab-menu-button .tab-menu-icon #0*/
+
+/*@remove .tab-line .button #0*/
+
+/*@remove .tab-line .menu-button>.label #0*/
+
+/*@remove .combo-box-base:success>.text-field #0*/
+
+/*@remove .combo-box-base:danger>.text-field #0*/
+
+/*@remove .toggle-button.flat #0*/
+
+/*@remove .toggle-button.flat:hover #0*/
+
+/*@remove .toggle-button.flat:selected, .toggle-button.flat:selected:focused #0*/
+
+/*@remove .modal-pane>.scroll-pane>.scroll-bar #0*/
+
+/*@remove .segmented-control #0*/
+
+/*@remove .segmented-control>.root-container>.background #0*/
+
+/*@remove .segmented-control>.root-container>.background>.indicator #0*/
+
+/*@remove .segmented-control>.root-container>.labels #0*/
+
+/*@remove .segmented-control>.root-container>.labels>.toggle-label #0*/
+
+/*@remove .segmented-control>.root-container>.labels>.toggle-label .font-icon, .segmented-control>.root-container>.labels>.toggle-label .ikonli-font-icon #0*/
+
+/*@remove .segmented-control>.root-container>.labels>.toggle-label:hover #0*/
+
+/*@remove .segmented-control>.root-container>.labels>.toggle-label:hover .font-icon, .segmented-control>.root-container>.labels>.toggle-label:hover .ikonli-font-icon #0*/
+
+/*@remove .segmented-control>.root-container>.labels>.toggle-label:selected #0*/
+
+/*@remove .segmented-control>.root-container>.labels>.toggle-label:selected .font-icon, .segmented-control>.root-container>.labels>.toggle-label:selected .ikonli-font-icon #0*/
+
+/*@remove .segmented-control:disabled #0*/
+
+/*@remove .selectable-text #0*/
+
+/*@remove .selectable-text .context-menu .menu-item #0*/

@@ -23,7 +23,7 @@ import javafx.stage.Window;
 import komm.App;
 import komm.ui.avatar.AvatarCache;
 import komm.ui.avatar.AvatarColor;
-import komm.ui.utils.WindowsThemeUtil;
+import komm.ui.utils.WindowChrome;
 
 import static com.sun.jna.Platform.isWindows;
 
@@ -64,28 +64,18 @@ public class PokeNotificationWindow {
         }
 
         Stage stage = new Stage();
+        WindowChrome.prepare(stage);
         stage.setTitle("Poke from " + (senderUsername != null ? senderUsername : "someone"));
         stage.initModality(Modality.NONE);
         stage.initOwner(App.getStackPane().getScene().getWindow());
         stage.setResizable(false);
         stage.setAlwaysOnTop(true);
-        stage.setScene(new Scene(root));
         Stage primary = (Stage) App.getStackPane().getScene().getWindow();
         stage.getIcons().addAll(primary.getIcons());
+        stage.setScene(new Scene(WindowChrome.wrap(stage, root, true)));
 
-        stage.setOpacity(0);
-        stage.show();
+        WindowChrome.show(stage);
         centerOnPhysicalScreen(stage);
-
-        if (isWindows()) {
-            String title = stage.getTitle();
-            Thread.ofVirtual().start(() -> {
-                WindowsThemeUtil.enableDarkTitleBar(title);
-                Platform.runLater(() -> stage.setOpacity(1));
-            });
-        } else {
-            stage.setOpacity(1);
-        }
     }
 
     private void centerOnPhysicalScreen(Stage stage) {
