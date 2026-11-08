@@ -30,7 +30,7 @@ import java.util.stream.Stream;
  * Bundled notification sounds. JavaFX {@link Media} cannot read jar: URLs, so the
  * mp3s shipped under /sounds on the classpath are extracted to the app data folder
  * ({@code data/sounds}) and always played from disk — same approach as the emoji
- * assets and the Silero VAD model.
+ * assets.
  *
  * <p>On Linux, JavaFX Media decodes mp3 via the system libavcodec and only knows a
  * fixed set of sonames — distros shipping a newer ffmpeg (7/8) leave it unable to

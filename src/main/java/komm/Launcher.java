@@ -77,6 +77,11 @@ public class Launcher {
         System.setProperty("prism.text", "t2k");*/
         initializeSystemProperties();
         initializeDirectories();
+        // webrtc-java 0.20+ routes exceptions thrown inside native callbacks (sinks, observers,
+        // capture callbacks) to the thread's uncaught handler — log them or they vanish.
+        Thread.setDefaultUncaughtExceptionHandler((t, e) ->
+                org.slf4j.LoggerFactory.getLogger("komm.Uncaught")
+                        .error("Uncaught exception on thread {}", t.getName(), e));
         parseDeepLink(args);
         tryRegisterWindowsProtocol();
         App.appStart(args);
@@ -99,6 +104,10 @@ public class Launcher {
 
     static void tryRegisterWindowsProtocol() {
         if (!Platform.isWindows()) return;
+        // Started by the launcher: it registers komm:// to itself (Komm.exe), so links go through
+        // the update check and the client gets its JVM options. Overwriting that with a bare
+        // `javaw -jar` here would bypass both.
+        if (System.getProperty("launcher.version") != null) return;
         try {
             Path jarPath = Path.of(Launcher.class
                     .getProtectionDomain().getCodeSource().getLocation().toURI());

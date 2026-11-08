@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * Architecture:
  *   MicCapture (javax.sound) → captureQueue
- *   pipelineThread: captureQueue → AEC3 → RNNoise/WebRTC-NS → AGC2 → Silero-VAD → CustomAudioSource
+ *   pipelineThread: captureQueue → AEC3 → RNNoise/WebRTC-NS → AGC2 → WebRTC VAD gate → CustomAudioSource
  *
  * Remote audio is delivered to AudioTrackSinks (UserVoiceReceiver / SoundboardReceiver),
  * driven by a headless AudioDeviceModule that opens no real device. Capture is handled
@@ -53,6 +53,8 @@ public class UserAudioPipeline implements AutoCloseable {
     private final NoiseSuppressor ns;
     private final AgcProcessor    agc;
     private final VadProcessor    vad;
+    // Side-chain AGC feeding only the WebRTC VAD estimator (see pipelineLoop).
+    private final AgcProcessor    detectorAgc = new AgcProcessor(true);
 
     // ── Transport ─────────────────────────────────────────────────────────────
     private final CustomAudioSource customAudioSource;
@@ -173,6 +175,7 @@ public class UserAudioPipeline implements AutoCloseable {
         short[] aecOut = new short[FRAME_SAMPLES];
         short[] nsOut  = new short[FRAME_SAMPLES];
         short[] agcOut = new short[FRAME_SAMPLES];
+        short[] detOut = new short[FRAME_SAMPLES];
 
         // Pre-allocate push buffers (two 10 ms halves of the 20 ms frame)
         byte[] pushBuf0 = new byte[PUSH_BYTES];
@@ -206,7 +209,12 @@ public class UserAudioPipeline implements AutoCloseable {
 
                 // 4. VAD — decide whether to transmit or send silence
                 float[] agcFloat = AudioConverter.shortToFloat(agcOut);
-                boolean speech = vad.processFrame(agcFloat);
+                // The WebRTC detector analyses the pre-NS signal (RNNoise output confuses it):
+                // AEC output → its own side-chain AGC, which normalises a quiet mic to a level
+                // the detector handles. The side-chain is never sent anywhere.
+                detectorAgc.processFrame(aecOut, detOut);
+                boolean speech = vad.processFrame(agcFloat, AudioConverter.shortToFloat(detOut),
+                        preProcessRms);
                 vadProbability = vad.getSpeechProbability();
                 vadActive      = speech;
 
@@ -315,15 +323,9 @@ public class UserAudioPipeline implements AutoCloseable {
     }
 
     /**
-     * Set the Silero VAD speech probability threshold (0.0 = transmit everything, 1.0 = only
-     * unambiguous speech). Corresponds to the "Voice detection" slider in the Audio settings.
-     * <p>
-     * Controls ONLY the neural-net confidence gate. Deliberately decoupled from the loudness
-     * floor: Silero is largely loudness-independent (clear speech scores &gt;0.9 whether spoken
-     * loudly or softly), so this slider mainly decides the fate of marginal sounds — whispers,
-     * breaths, mumbling. Loudness gating is a separate user setting (see
-     * {@link #setVadNoiseGateDb}); coupling the two into one slider previously made quiet
-     * speech fail the loudness floor at any slider position above ~30%.
+     * Set the VAD sensitivity slider value (0.1 = lenient, whispers pass; 0.95 = strict, you have
+     * to speak up). Corresponds to the "Sensitivity" slider in the Audio settings. See
+     * {@link VadProcessor} for the four effects the slider drives.
      */
     public void setVadThreshold(double threshold) {
         vad.setThreshold(threshold);
@@ -380,6 +382,7 @@ public class UserAudioPipeline implements AutoCloseable {
         try { aec.close(); } catch (Exception e) { log.warn("[AudioPipeline] AEC close error", e); }
         try { ns.close();  } catch (Exception e) { log.warn("[AudioPipeline] NS close error",  e); }
         try { agc.close(); } catch (Exception e) { log.warn("[AudioPipeline] AGC close error", e); }
+        try { detectorAgc.close(); } catch (Exception e) { log.warn("[AudioPipeline] Detector AGC close error", e); }
         try { vad.close(); } catch (Exception e) { log.warn("[AudioPipeline] VAD close error", e); }
         log.info("[AudioPipeline] Closed");
     }

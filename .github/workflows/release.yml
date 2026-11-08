@@ -1,27 +1,29 @@
-# Release pipeline for the Komm client.
+# Release pipeline for Komm: the desktop client (repo root) and its launcher (launcher/).
 #
 # Release flow (create a GitHub release with tag e.g. 0.0.3):
-#   1. jar        — sets the Maven version from the release tag (the tag is the
-#                   single source of truth; app.properties' client.version is
-#                   filtered from it; a leading "v" is tolerated and stripped),
-#                   builds the fat jar and attaches it to the release. Nothing
-#                   further to deploy — the launcher fetches this jar straight
-#                   from the release (releases/latest via GitHub's API), verified
-#                   against the SHA-256 digest GitHub reports for the asset.
-#   2. installer / appimage — check out komm-launcher@main, bundle the exact
-#                   jar built in step 1 as the seed, and attach the resulting
-#                   Komm-Setup-<v>.exe / Komm-<v>-x86_64.AppImage to the SAME
-#                   release. Stable-named aliases (Komm-Setup.exe, Komm.AppImage)
-#                   are uploaded too so `releases/latest/download/...` links stay
-#                   stable across versions.
+#   1. jar        — sets the client's Maven version from the release tag (the tag is the
+#                   single source of truth; app.properties' client.version is filtered
+#                   from it; a leading "v" is tolerated and stripped), builds the fat jar
+#                   and attaches it to the release. The launcher fetches this jar straight
+#                   from the release (releases/latest via GitHub's API), verified against
+#                   the SHA-256 digest GitHub reports for the asset.
+#   2. launcher   — builds the launcher's own self-update jars from launcher/ with the SAME
+#                   version (launcher.version == client.version) and attaches them:
+#                   komm-launcher-windows.jar / komm-launcher-linux.jar. An installed
+#                   launcher checks this repo's latest release for them on every start
+#                   (launcher/.../UpdateManager); the client catches up launchers that
+#                   can't (LauncherUpdateService).
+#   3. installer / appimage — build the launcher from launcher/ (same commit), bundle the
+#                   exact client jar from step 1 as the seed, and attach
+#                   Komm-Setup-<v>.exe / Komm-<v>-x86_64.AppImage to the SAME release.
+#                   Stable-named aliases (Komm-Setup.exe, Komm.AppImage) are uploaded too
+#                   so `releases/latest/download/...` links stay stable across versions.
 #
 # Manual flow (Actions tab -> Run workflow, tag = existing release e.g. 0.0.3):
-#   Skips the jar build; rebuilds only the installers from the CURRENT
-#   komm-launcher main against that release's already-published jar and
-#   replaces the installer assets on it. Use this after launcher-only changes.
-#
-# Secrets:
-#   LAUNCHER_REPO_TOKEN (optional) — only needed if komm-launcher is private.
+#   Skips the client jar build; rebuilds the launcher jars and the installers from the
+#   launcher/ code of the branch the workflow runs on, against that release's
+#   already-published client jar, and replaces those assets on it. Use this after
+#   launcher-only changes.
 
 name: Release
 
@@ -31,17 +33,33 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing release tag (e.g. 0.0.3) — rebuilds only the exe/AppImage from current launcher main and replaces them on that release"
+        description: "Existing release tag (e.g. 0.0.3) — rebuilds the launcher jars + exe/AppImage from launcher/ and replaces them on that release"
         required: true
 
 permissions:
   contents: write
 
-env:
-  LAUNCHER_REPO: B077AS/komm-launcher
-
 jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.v.outputs.tag }}
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - name: Resolve version from the release tag
+        id: v
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            TAG="${{ github.event.release.tag_name }}"
+          else
+            TAG="${{ inputs.tag }}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
   jar:
+    name: Client jar
+    needs: version
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
     steps:
@@ -53,40 +71,67 @@ jobs:
           java-version: "25"
           cache: maven
 
-      - name: Resolve version from release tag
-        id: v
-        env:
-          TAG: ${{ github.event.release.tag_name }}
-        run: |
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
-
       - name: Build fat jar (version from tag)
         run: |
-          mvn -B versions:set -DnewVersion="${{ steps.v.outputs.version }}" -DgenerateBackupPoms=false
+          mvn -B versions:set -DnewVersion="${{ needs.version.outputs.version }}" -DgenerateBackupPoms=false
           mvn -B clean package -Ppackage,prod
 
       # Hands the exact released jar to the installer jobs of this run.
       - uses: actions/upload-artifact@v4
         with:
           name: client-jar
-          path: target/komm-${{ steps.v.outputs.version }}.jar
+          path: target/komm-${{ needs.version.outputs.version }}.jar
           if-no-files-found: error
 
       - name: Attach jar to the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release upload "${{ steps.v.outputs.tag }}" \
-            "target/komm-${{ steps.v.outputs.version }}.jar" \
+          gh release upload "${{ needs.version.outputs.tag }}" \
+            "target/komm-${{ needs.version.outputs.version }}.jar" \
+            --clobber -R "$GITHUB_REPOSITORY"
+
+  launcher:
+    name: Launcher self-update jars
+    needs: version
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+
+      - name: Set launcher version from the tag
+        run: mvn -B -f launcher/pom.xml versions:set -DnewVersion="${{ needs.version.outputs.version }}" -DgenerateBackupPoms=false
+
+      - name: Build Windows-native jar
+        run: |
+          mvn -B -f launcher/pom.xml clean package -Pwin-natives
+          cp launcher/target/komm-launcher.jar komm-launcher-windows.jar
+
+      - name: Build Linux-native jar
+        run: |
+          mvn -B -f launcher/pom.xml clean package -Plinux-natives
+          cp launcher/target/komm-launcher.jar komm-launcher-linux.jar
+
+      - name: Attach launcher jars to the release
+        run: |
+          gh release upload "${{ needs.version.outputs.tag }}" \
+            komm-launcher-windows.jar \
+            komm-launcher-linux.jar \
             --clobber -R "$GITHUB_REPOSITORY"
 
   installer:
     name: Windows installer
-    needs: jar
+    needs: [version, jar]
     # Runs after a successful jar build (release flow) or standalone when the jar
     # job was skipped (manual installers-only flow).
-    if: ${{ !cancelled() && (needs.jar.result == 'success' || needs.jar.result == 'skipped') }}
+    if: ${{ !cancelled() && needs.version.result == 'success' && (needs.jar.result == 'success' || needs.jar.result == 'skipped') }}
     runs-on: windows-latest
     defaults:
       run:
@@ -94,22 +139,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Resolve launcher release tag
-        id: launcher-v
-        run: |
-          TAG=$(gh release view --repo B077AS/komm-launcher --json tagName -q .tagName)
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
-
-      # Pinned to the launcher's own latest release (not a moving `main` HEAD) so
-      # every installer/AppImage build is reproducible and bundles a launcher jar
-      # that's already correctly self-versioned (see the version-set step below).
-      - name: Check out komm-launcher (latest release)
-        uses: actions/checkout@v4
-        with:
-          repository: B077AS/komm-launcher
-          ref: ${{ steps.launcher-v.outputs.tag }}
-          token: ${{ secrets.LAUNCHER_REPO_TOKEN || github.token }}
+      - uses: actions/checkout@v4
 
       - uses: actions/setup-java@v4
         with:
@@ -117,19 +147,8 @@ jobs:
           java-version: "25"
           cache: maven
 
-      - name: Set launcher Maven version from its release tag
-        run: mvn -B versions:set -DnewVersion="${{ steps.launcher-v.outputs.version }}" -DgenerateBackupPoms=false
-
-      - name: Resolve version
-        id: v
-        run: |
-          if [ "${{ github.event_name }}" = "release" ]; then
-            TAG="${{ github.event.release.tag_name }}"
-          else
-            TAG="${{ inputs.tag }}"
-          fi
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+      - name: Set launcher version from the tag
+        run: mvn -B -f launcher/pom.xml versions:set -DnewVersion="${{ needs.version.outputs.version }}" -DgenerateBackupPoms=false
 
       - name: Get client jar (from this run)
         if: github.event_name == 'release'
@@ -141,52 +160,37 @@ jobs:
       - name: Get client jar (from existing release)
         if: github.event_name == 'workflow_dispatch'
         run: |
-          gh release download "${{ steps.v.outputs.tag }}" \
-            --pattern "komm-${{ steps.v.outputs.version }}.jar" \
+          gh release download "${{ needs.version.outputs.tag }}" \
+            --pattern "komm-${{ needs.version.outputs.version }}.jar" \
             --dir client-jar -R "$GITHUB_REPOSITORY"
 
       - name: Build installer
         run: |
-          echo "Building installers from komm-launcher@$(git rev-parse HEAD)"
-          mvn -B clean package -Pinstaller \
-            "-Dclient.version=${{ steps.v.outputs.version }}" \
-            "-Dclient.jar=${{ github.workspace }}\client-jar\komm-${{ steps.v.outputs.version }}.jar" \
+          echo "Building the installer from launcher/ at $(git rev-parse HEAD)"
+          mvn -B -f launcher/pom.xml clean package -Pinstaller \
+            "-Dclient.version=${{ needs.version.outputs.version }}" \
+            "-Dclient.jar=${{ github.workspace }}\client-jar\komm-${{ needs.version.outputs.version }}.jar" \
             "-Discc.path=C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
 
-      - name: Upload installer to the client release
+      - name: Upload installer to the release
         run: |
-          V="${{ steps.v.outputs.version }}"
+          V="${{ needs.version.outputs.version }}"
           # Stable alias so the hub site's releases/latest/download link never changes.
-          cp "target/installer/Komm-Setup-$V.exe" "target/installer/Komm-Setup.exe"
-          gh release upload "${{ steps.v.outputs.tag }}" \
-            "target/installer/Komm-Setup-$V.exe" \
-            "target/installer/Komm-Setup.exe" \
+          cp "launcher/target/installer/Komm-Setup-$V.exe" "launcher/target/installer/Komm-Setup.exe"
+          gh release upload "${{ needs.version.outputs.tag }}" \
+            "launcher/target/installer/Komm-Setup-$V.exe" \
+            "launcher/target/installer/Komm-Setup.exe" \
             --clobber -R "$GITHUB_REPOSITORY"
 
   appimage:
     name: Linux AppImage
-    needs: jar
-    if: ${{ !cancelled() && (needs.jar.result == 'success' || needs.jar.result == 'skipped') }}
+    needs: [version, jar]
+    if: ${{ !cancelled() && needs.version.result == 'success' && (needs.jar.result == 'success' || needs.jar.result == 'skipped') }}
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Resolve launcher release tag
-        id: launcher-v
-        run: |
-          TAG=$(gh release view --repo B077AS/komm-launcher --json tagName -q .tagName)
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
-
-      # Pinned to the launcher's own latest release (not a moving `main` HEAD) so
-      # every installer/AppImage build is reproducible and bundles a launcher jar
-      # that's already correctly self-versioned (see the version-set step below).
-      - name: Check out komm-launcher (latest release)
-        uses: actions/checkout@v4
-        with:
-          repository: B077AS/komm-launcher
-          ref: ${{ steps.launcher-v.outputs.tag }}
-          token: ${{ secrets.LAUNCHER_REPO_TOKEN || github.token }}
+      - uses: actions/checkout@v4
 
       - uses: actions/setup-java@v4
         with:
@@ -194,19 +198,8 @@ jobs:
           java-version: "25"
           cache: maven
 
-      - name: Set launcher Maven version from its release tag
-        run: mvn -B versions:set -DnewVersion="${{ steps.launcher-v.outputs.version }}" -DgenerateBackupPoms=false
-
-      - name: Resolve version
-        id: v
-        run: |
-          if [ "${{ github.event_name }}" = "release" ]; then
-            TAG="${{ github.event.release.tag_name }}"
-          else
-            TAG="${{ inputs.tag }}"
-          fi
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+      - name: Set launcher version from the tag
+        run: mvn -B -f launcher/pom.xml versions:set -DnewVersion="${{ needs.version.outputs.version }}" -DgenerateBackupPoms=false
 
       - name: Get client jar (from this run)
         if: github.event_name == 'release'
@@ -218,8 +211,8 @@ jobs:
       - name: Get client jar (from existing release)
         if: github.event_name == 'workflow_dispatch'
         run: |
-          gh release download "${{ steps.v.outputs.tag }}" \
-            --pattern "komm-${{ steps.v.outputs.version }}.jar" \
+          gh release download "${{ needs.version.outputs.tag }}" \
+            --pattern "komm-${{ needs.version.outputs.version }}.jar" \
             --dir client-jar -R "$GITHUB_REPOSITORY"
 
       - name: Install appimagetool
@@ -231,17 +224,17 @@ jobs:
 
       - name: Build AppImage
         run: |
-          echo "Building installers from komm-launcher@$(git rev-parse HEAD)"
-          mvn -B clean package -Pappimage \
-            "-Dclient.version=${{ steps.v.outputs.version }}" \
-            "-Dclient.jar=$GITHUB_WORKSPACE/client-jar/komm-${{ steps.v.outputs.version }}.jar"
+          echo "Building the AppImage from launcher/ at $(git rev-parse HEAD)"
+          mvn -B -f launcher/pom.xml clean package -Pappimage \
+            "-Dclient.version=${{ needs.version.outputs.version }}" \
+            "-Dclient.jar=$GITHUB_WORKSPACE/client-jar/komm-${{ needs.version.outputs.version }}.jar"
 
-      - name: Upload AppImage to the client release
+      - name: Upload AppImage to the release
         run: |
-          V="${{ steps.v.outputs.version }}"
+          V="${{ needs.version.outputs.version }}"
           # Stable alias so the hub site's releases/latest/download link never changes.
-          cp "target/appimage/Komm-$V-x86_64.AppImage" "target/appimage/Komm.AppImage"
-          gh release upload "${{ steps.v.outputs.tag }}" \
-            "target/appimage/Komm-$V-x86_64.AppImage" \
-            "target/appimage/Komm.AppImage" \
+          cp "launcher/target/appimage/Komm-$V-x86_64.AppImage" "launcher/target/appimage/Komm.AppImage"
+          gh release upload "${{ needs.version.outputs.tag }}" \
+            "launcher/target/appimage/Komm-$V-x86_64.AppImage" \
+            "launcher/target/appimage/Komm.AppImage" \
             --clobber -R "$GITHUB_REPOSITORY"

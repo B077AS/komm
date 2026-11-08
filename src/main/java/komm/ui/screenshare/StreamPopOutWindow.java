@@ -6,7 +6,7 @@ import javafx.scene.layout.StackPane;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import komm.App;
-import komm.ui.utils.WindowsThemeUtil;
+import komm.ui.utils.WindowChrome;
 
 import java.util.HashSet;
 import java.util.List;
@@ -53,18 +53,16 @@ public class StreamPopOutWindow {
         StackPane root = new StackPane(videoSinkView);
         root.setStyle("-fx-background-color: -color-bg-void;");
 
-        Scene scene = new Scene(root, 960, 580);
-
         stage = new Stage(StageStyle.DECORATED);
+        WindowChrome.prepare(stage);
         stage.setTitle(username + "'s Screen - Live");
+        stage.getIcons().addAll(((Stage) App.getStackPane().getScene().getWindow()).getIcons());
+        Scene scene = new Scene(WindowChrome.wrap(stage, root, false), 960, 580);
         stage.setMinWidth(480);
         stage.setMinHeight(320);
         stage.setScene(scene);
-        // Owning the pop-out to the main window groups them at the OS/window-manager
-        // level (e.g. closing together on some platforms, shared taskbar grouping) —
-        // App.stop()/setOnCloseRequest is still what guarantees the hard teardown.
-        stage.initOwner(App.getPrimaryStage());
-        stage.getIcons().addAll(((Stage) App.getStackPane().getScene().getWindow()).getIcons());
+        // Deliberately NOT owned by the main window: owned windows minimize/restore with
+        // their owner. App.stop()/closeAll() guarantees teardown on app exit.
 
         stage.setOnHiding(e -> {
             OPEN_WINDOWS.remove(this);
@@ -78,17 +76,7 @@ public class StreamPopOutWindow {
     public void show() {
         OPEN_WINDOWS.add(this);
         App.getWebrtcRoomClient().subscribeToRemoteVideo(userId, videoSinkView);
-        if (isWindows()) {
-            stage.setOpacity(0);
-            stage.show();
-            String title = stage.getTitle();
-            Thread.ofVirtual().start(() -> {
-                WindowsThemeUtil.enableDarkTitleBar(title);
-                Platform.runLater(() -> stage.setOpacity(1));
-            });
-        } else {
-            stage.show();
-        }
+        WindowChrome.show(stage);
     }
 
     /**

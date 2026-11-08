@@ -18,7 +18,7 @@ public class UserSettings {
     private static final String INPUT_DEVICE_KEY      = "audio.input.device";
     private static final String OUTPUT_DEVICE_KEY     = "audio.output.device";
     private static final String VAD_ENABLED_KEY       = "audio.vad.enabled";
-    private static final String VAD_SENSITIVITY_KEY   = "audio.vad.sensitivity";   // Silero probability threshold 0.0–1.0
+    private static final String VAD_SENSITIVITY_KEY   = "audio.vad.sensitivity";   // VAD sensitivity slider 0.1–0.95
     private static final String VAD_NOISE_GATE_KEY    = "audio.vad.noisegate.db";  // dBFS −60…−20, default −40
     private static final String NOISE_SUPPRESSION_KEY = "audio.noise.suppression";
     private static final String ECHO_CANCELLATION_KEY = "audio.echo.cancellation";
@@ -33,6 +33,7 @@ public class UserSettings {
     private static final String THEME_KEY               = "ui.theme";
     private static final String SCREENSHARE_RESOLUTION_KEY = "screenshare.quality.resolution";
     private static final String SCREENSHARE_FPS_KEY        = "screenshare.quality.fps";
+    private static final String SCREENSHARE_CODEC_KEY      = "screenshare.codec";
     
     /**
      * {@code null} path means "pre-login defaults only" — reads return defaults, saves are no-ops.
@@ -160,9 +161,9 @@ public class UserSettings {
         }
     }
 
-    // VAD sensitivity — Silero speech probability threshold in [0.0, 1.0].
+    // VAD sensitivity slider value in [0.1, 0.95] (drives the WebRTC VAD profile, see VadProcessor).
     // Lower = more sensitive (catches whispers), higher = stricter (loud speech only).
-    // Default 0.5 matches Silero's recommended starting point.
+    // Default 0.5 = balanced.
     public float getVadSensitivity() {
         return Float.parseFloat(properties.getProperty(VAD_SENSITIVITY_KEY, "0.5"));
     }
@@ -379,6 +380,15 @@ public class UserSettings {
 
     public void setScreenShareFps(int fps) {
         set(SCREENSHARE_FPS_KEY, String.valueOf(fps));
+    }
+
+    /** Requested screen-share codec/encoder (default AUTO = GPU H.264 if available, else CPU VP8). */
+    public komm.webrtc.VideoCodecChoice getScreenShareCodec() {
+        return komm.webrtc.VideoCodecChoice.fromSetting(properties.getProperty(SCREENSHARE_CODEC_KEY));
+    }
+
+    public void setScreenShareCodec(komm.webrtc.VideoCodecChoice codec) {
+        set(SCREENSHARE_CODEC_KEY, codec.name());
     }
 
     // Generic getters/setters

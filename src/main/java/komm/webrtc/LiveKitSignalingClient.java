@@ -56,6 +56,8 @@ public class LiveKitSignalingClient extends Endpoint {
     private final Map<String, String> trackSidToParticipant = new ConcurrentHashMap<>();
     // Subscriber m-line mid → the track SID currently negotiated on it (from the latest offer's msid)
     private final Map<String, String> midToTrackSid         = new ConcurrentHashMap<>();
+    // Remote VIDEO track SID → publishing participant identity (only currently published tracks)
+    private final Map<String, String> videoTrackSidToParticipant = new ConcurrentHashMap<>();
 
     public void liveKitConnect(String livekitUrl, String token) {
         String url = "ws://" + livekitUrl + "/rtc?access_token=" + token
@@ -84,6 +86,7 @@ public class LiveKitSignalingClient extends Endpoint {
         trackSidToName.clear();
         trackSidToParticipant.clear();
         midToTrackSid.clear();
+        videoTrackSidToParticipant.clear();
     }
 
     /** Returns the track name registered in AddTrackRequest for a LiveKit track SID, or null. */
@@ -166,25 +169,51 @@ public class LiveKitSignalingClient extends Endpoint {
      * pausing the stream under any perceived congestion.
      */
     public void sendAddVideoTrackRequest(String cid, String name, LivekitModels.TrackSource source,
-                                         int width, int height, int maxBitrateBps) {
-        livekit.LivekitRtc.SignalRequest req = livekit.LivekitRtc.SignalRequest.newBuilder()
-                .setAddTrack(livekit.LivekitRtc.AddTrackRequest.newBuilder()
-                        .setCid(cid)
-                        .setName(name)
-                        .setType(LivekitModels.TrackType.VIDEO)
-                        .setSource(source)
+                                         int width, int height, int maxBitrateBps, String codec) {
+        livekit.LivekitRtc.AddTrackRequest.Builder add = livekit.LivekitRtc.AddTrackRequest.newBuilder()
+                .setCid(cid)
+                .setName(name)
+                .setType(LivekitModels.TrackType.VIDEO)
+                .setSource(source)
+                .setWidth(width)
+                .setHeight(height)
+                .addLayers(LivekitModels.VideoLayer.newBuilder()
+                        .setQuality(LivekitModels.VideoQuality.HIGH)
                         .setWidth(width)
                         .setHeight(height)
-                        .addLayers(LivekitModels.VideoLayer.newBuilder()
-                                .setQuality(LivekitModels.VideoQuality.HIGH)
-                                .setWidth(width)
-                                .setHeight(height)
-                                .setBitrate(maxBitrateBps))
-                        .build())
-                .build();
-        sendBinary(req);
-        log.debug("[LiveKit] → AddTrackRequest (video) sent cid={} {}x{} @{}kbps",
-                cid, width, height, maxBitrateBps / 1000);
+                        .setBitrate(maxBitrateBps));
+        // Declares the publishing codec the same way LiveKit's own SDKs do, so the SFU
+        // negotiates exactly that codec for this track (it otherwise falls back to the
+        // offer's order, which the transceiver's codec preferences already set too).
+        if (codec != null && !codec.isBlank()) {
+            add.addSimulcastCodecs(livekit.LivekitRtc.SimulcastCodec.newBuilder()
+                    .setCodec(codec)
+                    .setCid(cid));
+        }
+        sendBinary(livekit.LivekitRtc.SignalRequest.newBuilder().setAddTrack(add.build()).build());
+        log.debug("[LiveKit] → AddTrackRequest (video) sent cid={} {}x{} @{}kbps codec={}",
+                cid, width, height, maxBitrateBps / 1000, codec);
+    }
+
+    /**
+     * Asks the SFU to stop ({@code disabled=true}) or resume forwarding the given subscribed
+     * tracks to us. The subscription and its m-line stay in place — no renegotiation — and on
+     * resume the SFU requests a key frame from the publisher, so the picture is back within
+     * moments. Used to only receive (and decode) the screen shares the user is watching.
+     */
+    public void sendTrackDisabled(java.util.Collection<String> trackSids, boolean disabled) {
+        if (trackSids == null || trackSids.isEmpty()) return;
+        sendBinary(livekit.LivekitRtc.SignalRequest.newBuilder()
+                .setTrackSetting(livekit.LivekitRtc.UpdateTrackSettings.newBuilder()
+                        .addAllTrackSids(trackSids)
+                        .setDisabled(disabled))
+                .build());
+        log.debug("[LiveKit] → track settings disabled={} for {}", disabled, trackSids);
+    }
+
+    /** Remote video track SIDs per publishing participant identity (screen shares). */
+    public Map<String, String> getRemoteVideoTrackOwners() {
+        return Map.copyOf(videoTrackSidToParticipant);
     }
 
     public void sendPublisherOffer(RTCSessionDescription offer) {
@@ -287,6 +316,7 @@ public class LiveKitSignalingClient extends Endpoint {
                 // Cache existing participants
                 join.getOtherParticipantsList().forEach(p -> {
                     sidToIdentity.put(p.getSid(), p.getIdentity());
+                    recordVideoTracks(p);
                     p.getTracksList().forEach(t -> {
                         trackSidToName.put(t.getSid(), t.getName());
                         trackSidToParticipant.put(t.getSid(), p.getIdentity());
@@ -397,6 +427,7 @@ public class LiveKitSignalingClient extends Endpoint {
             case UPDATE -> {
                 msg.getUpdate().getParticipantsList().forEach(p -> {
                     sidToIdentity.put(p.getSid(), p.getIdentity());
+                    recordVideoTracks(p);
                     p.getTracksList().forEach(t -> {
                         trackSidToName.put(t.getSid(), t.getName());
                         trackSidToParticipant.put(t.getSid(), p.getIdentity());
@@ -408,6 +439,16 @@ public class LiveKitSignalingClient extends Endpoint {
 
             //default -> log.debug("[LiveKit] ← unhandled proto message: {}", msg.getMessageCase());
         }
+    }
+
+    /** Keeps {@link #videoTrackSidToParticipant} in sync: an UPDATE carries the participant's full track list. */
+    private void recordVideoTracks(LivekitModels.ParticipantInfo p) {
+        String identity = p.getIdentity();
+        videoTrackSidToParticipant.values().removeIf(identity::equals);
+        if (p.getState() == LivekitModels.ParticipantInfo.State.DISCONNECTED) return;
+        p.getTracksList().forEach(t -> {
+            if (t.getType() == LivekitModels.TrackType.VIDEO) videoTrackSidToParticipant.put(t.getSid(), identity);
+        });
     }
 
     @Override

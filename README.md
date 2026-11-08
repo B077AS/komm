@@ -9,8 +9,8 @@
 </p>
 
 <p align="center">
-  <img alt="Java 21" src="https://img.shields.io/badge/Java-21-orange?logo=openjdk&logoColor=white">
-  <img alt="JavaFX 22" src="https://img.shields.io/badge/JavaFX-22-1B6AC6">
+  <img alt="Java 25" src="https://img.shields.io/badge/Java-25-orange?logo=openjdk&logoColor=white">
+  <img alt="JavaFX 27" src="https://img.shields.io/badge/JavaFX-27-1B6AC6">
   <img alt="WebRTC" src="https://img.shields.io/badge/WebRTC-native-333333?logo=webrtc&logoColor=white">
   <img alt="Windows | Linux" src="https://img.shields.io/badge/Windows%20%7C%20Linux-X11%20%2B%20Wayland-4CAF50">
   <img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-blue">
@@ -26,18 +26,18 @@ The platform has three pieces - you choose how many to run:
 
 | Piece | Role | Who runs it |
 |---|---|---|
-| **komm** (this repo) (+ [komm-launcher](https://github.com/B077AS/komm-launcher)) | Desktop client for Windows & Linux, kept up to date by the launcher | Everyone |
+| **komm** (this repo: the client + its launcher in [`launcher/`](launcher/)) | Desktop client for Windows & Linux, kept up to date by the launcher | Everyone |
 | [komm-server](https://github.com/B077AS/komm-server) | A community's own server: channels, messages, voice rooms, permissions. One JAR, embedded database | Community owners |
 | [komm-hub](https://github.com/B077AS/komm-hub) | The network's directory: accounts, friends, DMs, and the CA that vouches for servers | Almost nobody - most people use [kommvoice.com](https://kommvoice.com) |
 
-This repo is the app everyone actually looks at: a native-feeling JavaFX desktop client that talks to the hub for your account, friends and DMs, and connects **directly** to each community's own server for chat and voice. Messages and voice never pass through the hub.
+This repo is the app everyone actually looks at: a native-feeling JavaFX desktop client that talks to the hub for your account, friends and DMs, and connects **directly** to each community's own server for chat and voice. Messages and voice never pass through the hub. It also contains the [launcher](launcher/) - the small auto-updater that the Windows installer and Linux AppImage are built from.
 
 > 📥 **Just want to use Komm?** Don't build this repo - grab the [launcher](https://kommvoice.com/download) (Windows installer / Linux AppImage). It installs the client and keeps it up to date automatically, every time you start the app.
 
 ## Features
 
-- **Crystal-clear voice** - low-latency WebRTC voice channels with a custom DSP pipeline: echo cancellation (AEC3), RNNoise noise suppression, automatic gain control and Silero-VAD voice activity detection (see [The audio pipeline](#the-audio-pipeline))
-- **HD screen sharing with system audio** - multiple people can stream at once; viewers can pop streams out into separate windows, with live viewer counts. System audio is captured natively - WASAPI loopback on Windows, PipeWire on Linux
+- **Crystal-clear voice** - low-latency WebRTC voice channels with a custom DSP pipeline: echo cancellation (AEC3), RNNoise noise suppression, automatic gain control and WebRTC voice activity detection (see [The audio pipeline](#the-audio-pipeline))
+- **HD screen sharing with system audio** - multiple people can stream at once; viewers can pop streams out into separate windows, with live viewer counts. Encoded on your graphics card where possible (NVENC / Media Foundation / VA-API H.264, CPU VP8/VP9 as fallback or by choice), and only the streams you're actually watching are sent to you. System audio is captured natively - WASAPI loopback on Windows, PipeWire on Linux
 - **Video** - camera support in voice channels
 - **Rich text chat** - channels and DMs with editing, deletion, emoji reactions, typing indicators, GIF search, file attachments and unread/read state
 - **Code snippets** - dedicated code blocks with automatic language detection and syntax highlighting (Java, JavaScript, Python, Go, HTML, CSS)
@@ -101,16 +101,20 @@ Voice and video run on a dedicated daemon thread (`webrtc-mta-thread`) using nat
 
 On Linux, screen sharing works natively on Wayland via webrtc-java's built-in PipeWire/xdg-desktop-portal support - no XWayland workarounds needed.
 
+**Screen-share encoding.** The peer-connection factory uses webrtc-java's hardware-first encoder factory: for each codec the GPU encoder goes first where the machine has one, with the software encoder of the same codec as automatic fallback. The share modal's *Encoder* row (`VideoCodecChoice`) picks the codec and with it GPU vs CPU - **Auto** (default: GPU H.264 when available, else CPU VP8), **H.264 · GPU** / **AV1 · GPU** (only listed where this machine encodes them in hardware), **VP9 · CPU**, **VP8 · CPU**. The choice is applied as the screen-share transceiver's codec preference and declared to LiveKit in the `AddTrackRequest`; the log shows the encoder actually in use (`[ScreenShare] Encoder in use: …`). Decoding stays in software by default - GPU-decoded frames are copied back to RAM, which measured slower at stream sizes (opt in with `-Dkomm.video.hardwareDecode=true`); `-Dkomm.video.hardware=false` turns hardware codecs off entirely.
+
+**Only watched streams are received.** Everyone in a voice channel is auto-subscribed to every track, so the client tells the SFU (`UpdateTrackSettings{disabled}`) to stop forwarding every screen share you aren't watching and to resume (with a fresh key frame) when you open it - no download or decode cost for streams you don't look at.
+
 ### The audio pipeline
 
 Your microphone doesn't go straight to the network - every 20 ms frame runs through a DSP chain on its own processing thread:
 
 ```
-mic ─► capture ─► AEC3 ─► RNNoise / WebRTC-NS ─► AGC2 ─► Silero VAD ─► WebRTC track ─► SFU
+mic ─► capture ─► AEC3 ─► RNNoise / WebRTC-NS ─► AGC2 ─► WebRTC VAD gate ─► WebRTC track ─► SFU
         (echo cancel)   (noise suppression)   (gain)   (speech gate)
 ```
 
-- **Silero VAD** (ONNX Runtime, model bundled in the JAR) decides when you're actually speaking; a fixed noise gate and hysteresis keep quiet voices in and keyboard clatter out.
+- **WebRTC VAD** (webrtc-java's `StandaloneVoiceActivityDetector`) decides when you're actually speaking; it analyses pre-RNNoise audio, and the cleaned signal must carry real signal to open or hold the gate, which keeps keyboard clatter out while quiet voices stay in.
 - **RNNoise** is the primary noise suppressor with WebRTC-NS as fallback, running inference asynchronously so the capture thread never stalls.
 - On the receiving side, per-user jitter buffering with a prefill cushion keeps playback smooth even on spiky connections (particularly on Linux/PipeWire).
 - Every stage can be toggled live from the audio settings, with a real-time mic activity meter.
@@ -129,7 +133,8 @@ mic ─► capture ─► AEC3 ─► RNNoise / WebRTC-NS ─► AGC2 ─► Sil
 | `ui/modals/` | Everything modal: user/server/channel/installation settings, invites, screen share picker, profiles |
 | `ui/code/`, `ui/emojis/`, `ui/gifs/` | Code blocks (RSyntaxTextArea tokenizers + RichTextFX), emoji rendering & pickers, GIF search |
 | `utils/` | App config, global hotkeys, audio device discovery, ping/packet-loss history, user settings |
-| `update/` | `LauncherUpdateService` - checks and self-updates the launcher that started this client (see below) |
+| `update/` | `LauncherUpdateService` - applies staged launcher updates and catches up launchers that can't update themselves (see below) |
+| `launcher/` (separate Maven project) | The auto-updating launcher: installer/AppImage packaging, client update + launch, shares the client's theme sources - see [launcher/README.md](launcher/README.md) |
 
 A few rules keep the client sane:
 
@@ -139,13 +144,13 @@ A few rules keep the client sane:
 
 ### Keeping the launcher up to date
 
-The client's `update/LauncherUpdateService` does something a little unusual: once per start, it checks whether the **[komm-launcher](https://github.com/B077AS/komm-launcher)** that started it is out of date, and if so, downloads and swaps the launcher's files in the background - not just its own jar. It has to be the client that does this, not the launcher: by the time the client is running, the launcher process has already exited, so there's nothing left to check on its own behalf.
+Client and launcher are released together from this repo and share one version: every release attaches the client JAR and the launcher's self-update JARs. The launcher checks this repo's latest release for its own update on every start; the client's `update/LauncherUpdateService` backs that up:
 
-- It reads `System.getProperty("launcher.version")` - a value the launcher forwards when it spawns the client - and compares it against the latest release tag from `GET api.github.com/repos/B077AS/komm-launcher/releases/latest`, verifying the per-OS asset it downloads against the SHA-256 digest GitHub reports for it. A missing value (an old launcher, from before this existed) is always treated as outdated.
-- On Windows it overwrites `app/komm-launcher.jar` next to the running install; on Linux it overwrites the `.AppImage` at `$APPIMAGE` (an AppImage is one opaque unit - there's no "just the launcher part" to update). Both are safe to replace while in use - the launcher process is already gone, and POSIX file semantics mean the currently-running AppImage keeps working until it next exits.
-- It's entirely best-effort and silent: any failure is logged and swallowed, since a failed launcher self-update must never interfere with the client actually running. No UI, no restart prompt - the new launcher is just what's there the next time the user opens the app.
+- **Windows**: the launcher can't overwrite its own locked `app/komm-launcher.jar`, so it stages updates at `bin/komm-launcher.jar.pending`; the client moves that into place once it runs (the launcher has exited by then).
+- **Catch-up**: the launcher forwards its version as `-Dlauncher.version`. If it differs from the client's own version - e.g. a launcher installed before the move from the old `komm-launcher` repo, which still polls that deleted repo - the client downloads the launcher JAR from its own release here (verified against GitHub's SHA-256 digest) and installs it: `app/komm-launcher.jar` on Windows, `bin/komm-launcher.jar` inside an AppImage (the launcher relaunches into it on its next start).
+- Entirely best-effort and silent: any failure is logged and swallowed, since a launcher update must never interfere with the client running.
 
-See [komm-launcher's README](https://github.com/B077AS/komm-launcher#how-the-launcher-updates-itself) for the full mechanics, including why Windows and Linux need genuinely different update artifacts.
+See [launcher/README.md](launcher/README.md#how-the-launcher-updates-itself) for the full mechanics.
 
 ## Getting the app (users)
 
@@ -183,7 +188,7 @@ If some of these are missing, the app still runs - but you may end up with no au
 
 ## Building from source (developers)
 
-Requirements: **Java 21** and Maven.
+Requirements: **Java 25** and Maven.
 
 ```bash
 # Run in development
@@ -197,7 +202,16 @@ mvn clean package -Ppackage
 
 # Production fat JAR - same, but baked for the official hub (https://kommvoice.com)
 mvn clean package -Ppackage,prod
+
+# The launcher (separate Maven project in launcher/, see launcher/README.md)
+mvn -f launcher/pom.xml javafx:run -Dlauncher.demo=true       # visual demo, no network
+mvn -f launcher/pom.xml clean package -Pinstaller             # Windows installer (needs the client jar above)
+mvn -f launcher/pom.xml clean package -Pappimage              # Linux AppImage (needs the client jar above)
 ```
+
+`mvn javafx:run` starts the client with the same memory options the launcher uses for the packaged client (`launcher/.../update/ClientJvmOptions.java`): small initial heap with a 2 GB ceiling, periodic G1 GC with tight heap free ratios so idle memory goes back to the OS, two GC threads and capped direct memory.
+
+Releases are built by `.github/workflows/release.yml`: publishing a GitHub release builds the client jar, the launcher's self-update jars, the Windows installer and the AppImage, all versioned from the tag, and attaches them to that release.
 
 By default the client points at a hub on `localhost` - the pom's `hub.url` / `hub.ws.url` properties are baked into `app.properties` at build time, and the `prod` profile switches them to the official hub. To bake any other hub: `-Dhub.url=https://my-hub -Dhub.ws.url=wss://my-hub/ws`. The production URLs end up **only inside the jar**: after packaging, the prod profile restores the localhost values in `target/classes`, so running the main class straight from your IDE after a prod build still targets your local hub.
 
@@ -211,22 +225,21 @@ On first launch the client creates its app data directory - `%APPDATA%\Komm` on 
 
 | Layer | Technology |
 |---|---|
-| Language / runtime | Java 21 |
-| UI | JavaFX 22, [AtlantaFX](https://github.com/mkpaz/atlantafx) themes, Ikonli icon packs, RichTextFX, emojifx |
-| Voice / video | [webrtc-java](https://github.com/devopvoid/webrtc-java) 0.17.0, LiveKit signaling |
-| Audio DSP | RNNoise (rnnoise4j), Silero VAD via ONNX Runtime, WebRTC AEC3/AGC2, mp3spi |
+| Language / runtime | Java 25 |
+| UI | JavaFX 27, [AtlantaFX](https://github.com/mkpaz/atlantafx) 3.0 themes and custom title bar, Ikonli icon packs, RichTextFX, emojifx |
+| Voice / video | [webrtc-java](https://github.com/devopvoid/webrtc-java) 1.0.0 (hardware-first video encoders: NVENC, Media Foundation, VA-API), LiveKit signaling |
+| Audio DSP | RNNoise (rnnoise4j), WebRTC VAD (webrtc-java), WebRTC AEC3/AGC2, mp3spi |
 | System integration | JNA / JNA Platform (WASAPI loopback, PipeWire patch bay), JNativeHook (global hotkeys) |
 | Networking | Java `HttpClient`, Tyrus WebSocket client, Spring WebSocket/messaging (client-side) |
 | Code highlighting | RSyntaxTextArea's `TokenMaker` parsers, used headlessly (Java, JavaScript, Python, Go, HTML, CSS) |
 | Serialization / crypto | Gson, BouncyCastle (CSR generation for hosting installations in-app), hub-CA TLS trust for community-server connections |
-| Build | Maven - `javafx-maven-plugin` for dev, `maven-shade-plugin` for the distributable fat JAR |
+| Build | Maven - `javafx-maven-plugin` for dev, `maven-shade-plugin` for the distributable fat JAR; the launcher adds jpackage + jlink, Inno Setup 6 and appimagetool |
 
 ## Related repositories
 
 | Repo | What it is |
 |---|---|
-| komm | This repo - desktop client (JavaFX, Windows & Linux) |
-| [komm-launcher](https://github.com/B077AS/komm-launcher) | Auto-updating launcher - Windows installer & Linux AppImage |
+| komm | This repo - desktop client (JavaFX, Windows & Linux) and its auto-updating launcher ([`launcher/`](launcher/): Windows installer & Linux AppImage) |
 | [komm-server](https://github.com/B077AS/komm-server) | Self-hosted community server (single JAR, embedded database) |
 | [komm-hub](https://github.com/B077AS/komm-hub) | Accounts, friends & DMs, server directory, CA, and the kommvoice.com website |
 
@@ -240,7 +253,9 @@ On first launch the client creates its app data directory - `%APPDATA%\Komm` on 
 
 **Can the hub read my community's messages?** No. After a one-time 60-second ticket exchange, the client talks directly to the community's server - messages, voice and files never pass through the hub.
 
-**How do updates work?** The launcher checks GitHub directly for a new client release on every start and swaps in the new JAR automatically. The client returns the favor: it checks whether the *launcher* itself is out of date (also straight from GitHub) and self-updates it in the background too (see [Keeping the launcher up to date](#keeping-the-launcher-up-to-date)). No hub involved in either direction - install once, forget about it.
+**How do updates work?** The launcher checks this repo's GitHub releases on every start and swaps in the new client JAR automatically; it updates itself from the same releases, and the client backs that up (see [Keeping the launcher up to date](#keeping-the-launcher-up-to-date)). No hub involved in either direction - install once, forget about it.
+
+**Does screen sharing use my GPU?** Yes, by default: *Auto* encodes with your graphics card's H.264 encoder where there is one and falls back to the CPU (VP8) otherwise. You can pick the encoder yourself in the share dialog's *Quality* tab.
 
 ## License
 

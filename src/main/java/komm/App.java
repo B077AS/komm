@@ -53,7 +53,7 @@ import komm.ui.avatar.AvatarCache;
 import komm.ui.pages.HomePage;
 import komm.ui.pages.LoginPage;
 import komm.ui.pages.ServerPage;
-import komm.ui.utils.WindowsThemeUtil;
+import komm.ui.utils.WindowChrome;
 import komm.update.LauncherUpdateService;
 import komm.utils.AppConfig;
 import komm.utils.GlobalHotkeyManager;
@@ -64,7 +64,6 @@ import komm.websocket.AppWebSocketClient;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
-import static com.sun.jna.Platform.isWindows;
 
 @Slf4j
 public class App extends Application {
@@ -219,34 +218,28 @@ public class App extends Application {
             changePage(new LoginPage());
         }
 
-        scene = new Scene(mainStackPane, 1305, 500);
-        Application.setUserAgentStylesheet(
-                Objects.requireNonNull(App.class.getClassLoader().getResource("style.css")).toExternalForm());
+        // Custom dark title bar (StageStyle.EXTENDED) when the platform supports it; must precede show().
+        WindowChrome.prepare(primaryStage);
+        primaryStage.setTitle("Komm");
+        scene = new Scene(WindowChrome.wrap(primaryStage, mainStackPane, false), 1305, 780);
+        Application.setUserAgentStylesheet(komm.ui.theme.KommStylesheet.userAgentUrl());
 
         primaryStage.setTitle("Komm");
         primaryStage.setScene(scene);
         primaryStage.setMinWidth(1305);
         primaryStage.setMinHeight(780);
         primaryStage.setMaximized(true);
-        primaryStage.setOpacity(0);
         // Stream pop-out windows are independent top-level stages, so JavaFX's
         // implicit exit (which waits for every window to close) would otherwise
         // leave the app — and the live voice/stream connection — running in the
         // background after the main window is closed. Force a full shutdown instead.
         primaryStage.setOnCloseRequest(e -> Platform.exit());
-        primaryStage.show();
+        // Fully transparent until the window has maximised and rendered its first frames (no visible resize / white flash).
+        WindowChrome.show(primaryStage);
 
         komm.ui.theme.ThemeManager.get().init();
         komm.ui.theme.ThemeManager.get().applyFromSettings();
 
-        if (isWindows()) {
-            Thread.ofVirtual().start(() -> {
-                WindowsThemeUtil.enableDarkTitleBar("Komm");
-                Platform.runLater(() -> primaryStage.setOpacity(1));
-            });
-        } else {
-            Platform.runLater(() -> primaryStage.setOpacity(1));
-        }
         initializeWebRTCDelayed();
         initializeGlobalHotkeys();
         initializeLauncherUpdateCheck();
@@ -396,7 +389,6 @@ public class App extends Application {
 
     public static void changePage(Node node) {
         Node current = stackPane.getChildren().isEmpty() ? null : stackPane.getChildren().getFirst();
-        log.debug("[scroll] changePage from={} to={}", current == null ? "null" : current.getClass().getSimpleName(), node.getClass().getSimpleName());
         if (current instanceof ServerPage sp) {
             sp.getChatSection().saveScrollPosition();
             if (!(node instanceof ServerPage)) {

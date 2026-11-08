@@ -50,7 +50,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * Audio architecture (post-pipeline refactor):
  * ─────────────────────────────────────────────
  *  Capture path (send):
- *    javax.sound mic → UserAudioPipeline (AEC3 → RNNoise → AGC2 → Silero-VAD)
+ *    javax.sound mic → UserAudioPipeline (AEC3 → RNNoise → AGC2 → WebRTC VAD gate)
  *    → CustomAudioSource.pushAudio() → Publisher PC → LiveKit
  *
  *  Playback path (receive):
@@ -184,6 +184,10 @@ public class WebrtcRoomClient {
     private final ConcurrentHashMap<String, VideoTrack>     remoteVideoTracks = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, VideoTrackSink> pendingSinks       = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, String>         activeSinkByUser   = new ConcurrentHashMap<>();
+    /** Last forwarding state sent to the SFU per remote video track SID (true = forwarded). */
+    private final ConcurrentHashMap<String, Boolean>        videoForwarding    = new ConcurrentHashMap<>();
+    /** Guards the remote-video maps above across the WS, FX and WebRTC threads. */
+    private final Object videoLock = new Object();
 
     /** LiveKit can send subscriber offers back-to-back; they must be applied one at a
      *  time or the overlapping setRemoteDescription calls fail with wrong-state errors
@@ -234,10 +238,17 @@ public class WebrtcRoomClient {
         // CustomAudioSource — receives processed PCM from our pipeline
         customAudioSource = new CustomAudioSource();
 
-        // Single factory: headless ADM (render pump for the sinks) + no AudioProcessing (we handle DSP)
-        factory = PeerConnectionFactory.builder()
-                .setAudioDeviceModule(audioDeviceModule)
-                .build();
+        // Single factory: headless ADM (render pump for the sinks) + no AudioProcessing (we handle DSP).
+        // Video codecs are hardware-first (GPU encoder/decoder where the machine has one, the
+        // software codec of the same name as automatic fallback); the screen share picks its
+        // codec — and with it GPU vs CPU — per share, see VideoCodecChoice.
+        PeerConnectionFactory.Builder factoryBuilder = PeerConnectionFactory.builder()
+                .setAudioDeviceModule(audioDeviceModule);
+        var videoEncoders = VideoCodecSupport.createEncoderFactory();
+        if (videoEncoders != null) factoryBuilder.setVideoEncoderFactory(videoEncoders);
+        var videoDecoders = VideoCodecSupport.createDecoderFactory();
+        if (videoDecoders != null) factoryBuilder.setVideoDecoderFactory(videoDecoders);
+        factory = factoryBuilder.build();
         localAudioTrack = factory.createAudioTrack(AUDIO_TRACK_CID, customAudioSource);
         localAudioTrack.setEnabled(true);
 
@@ -405,9 +416,12 @@ public class WebrtcRoomClient {
         // This handles channel switches where disconnectFromChannel() was not
         // called explicitly (e.g. server-forced move to another channel).
         clearRemoteAudio();
-        pendingSinks.clear();
-        activeSinkByUser.clear();
-        remoteVideoTracks.clear();
+        synchronized (videoLock) {
+            pendingSinks.clear();
+            activeSinkByUser.clear();
+            remoteVideoTracks.clear();
+            videoForwarding.clear();
+        }
         if (screenShareClient != null) { screenShareClient.dispose(); screenShareClient = null; }
         if (livekitSignaling   != null) { livekitSignaling.disconnect(); livekitSignaling = null; }
         closePeerConnections();
@@ -459,6 +473,8 @@ public class WebrtcRoomClient {
                     LivekitModels.TrackType.AUDIO, LivekitModels.TrackSource.MICROPHONE);
             signalingRef.sendAddTrackRequest(SCREEN_AUDIO_TRACK_CID, "screen_audio",
                     LivekitModels.TrackType.AUDIO, LivekitModels.TrackSource.SCREEN_SHARE_AUDIO);
+            // Shares already running when we join: only receive the ones we watch.
+            syncVideoForwarding();
 
             // Watchdog: if a TRACK_PUBLISHED ack is lost (e.g. it races the SFU cleaning
             // up a kicked duplicate session after an unclean reconnect), the all-acks
@@ -510,17 +526,22 @@ public class WebrtcRoomClient {
 
         // A participant UPDATE just landed — re-process any audio m-lines that arrived
         // before their track SID → participant mapping (see handleRemoteAudioTrack).
-        livekitSignaling.setOnParticipantsUpdated(() -> pendingAudioTracksByMid.forEach((mid, t) -> {
-            LiveKitSignalingClient s = livekitSignaling;
-            if (s == null) return;
-            String sid = s.getTrackSidForMid(mid);
-            if (sid == null) sid = t.getId();
-            boolean resolvable = s.getTrackParticipantId(sid) != null
-                    || "soundboard".equals(s.getTrackName(sid));
-            if (resolvable && pendingAudioTracksByMid.remove(mid) != null) {
-                handleRemoteAudioTrack(mid, t, false);
-            }
-        }));
+        livekitSignaling.setOnParticipantsUpdated(() -> {
+            pendingAudioTracksByMid.forEach((mid, t) -> {
+                LiveKitSignalingClient s = livekitSignaling;
+                if (s == null) return;
+                String sid = s.getTrackSidForMid(mid);
+                if (sid == null) sid = t.getId();
+                boolean resolvable = s.getTrackParticipantId(sid) != null
+                        || "soundboard".equals(s.getTrackName(sid));
+                if (resolvable && pendingAudioTracksByMid.remove(mid) != null) {
+                    handleRemoteAudioTrack(mid, t, false);
+                }
+            });
+            // A share may have started (or a video track SID got mapped to its owner).
+            syncVideoForwarding();
+            attachWaitingSinks();
+        });
 
         livekitSignaling.liveKitConnect(livekitUrl, token);
 
@@ -604,17 +625,20 @@ public class WebrtcRoomClient {
         }
         clearRemoteAudio();
 
-        // Detach remote video sinks
-        pendingSinks.clear();
-        for (Map.Entry<String, String> entry : activeSinkByUser.entrySet()) {
-            VideoTrack track = remoteVideoTracks.get(entry.getValue());
-            VideoTrackSink sink = pendingSinks.get(entry.getKey());
-            if (track != null && sink != null) {
-                try { track.removeSink(sink); } catch (Throwable ignored) {}
+        // Detach remote video sinks (before clearing pendingSinks — the loop needs it)
+        synchronized (videoLock) {
+            for (Map.Entry<String, String> entry : activeSinkByUser.entrySet()) {
+                VideoTrack track = remoteVideoTracks.get(entry.getValue());
+                VideoTrackSink sink = pendingSinks.get(entry.getKey());
+                if (track != null && sink != null) {
+                    try { track.removeSink(sink); } catch (Throwable ignored) {}
+                }
             }
+            pendingSinks.clear();
+            activeSinkByUser.clear();
+            remoteVideoTracks.clear();
+            videoForwarding.clear();
         }
-        activeSinkByUser.clear();
-        remoteVideoTracks.clear();
 
         if (screenShareClient != null) {
             screenShareClient.dispose();
@@ -670,7 +694,8 @@ public class WebrtcRoomClient {
             screenAudioActive = false;
         }
 
-        screenShareClient.startSharing(selection.getSourceId(), selection.isWindow(), selection.getQuality());
+        VideoCodecChoice codec = (selection.getCodec() != null ? selection.getCodec() : VideoCodecChoice.AUTO).resolve();
+        screenShareClient.startSharing(selection.getSourceId(), selection.isWindow(), selection.getQuality(), codec);
     }
 
     public void stopScreenShare() {
@@ -709,28 +734,93 @@ public class WebrtcRoomClient {
 
     public void subscribeToRemoteVideo(String userId, VideoTrackSink sink) {
         log.info("[RemoteVideo] Subscribing to video from userId={}", userId);
-        pendingSinks.put(userId, sink);
-        // Begin playing this user's screen audio (if any) now that we're watching them.
-        setScreenAudioActiveForUser(userId, true);
-        for (Map.Entry<String, VideoTrack> entry : remoteVideoTracks.entrySet()) {
-            if (isScreenShareTrack(entry.getValue(), userId)) {
-                attachSink(userId, entry.getKey(), entry.getValue(), sink);
-                return;
+        synchronized (videoLock) {
+            VideoTrackSink previous = pendingSinks.put(userId, sink);
+            String previousTrack = activeSinkByUser.remove(userId);
+            if (previous != null && previousTrack != null) {
+                VideoTrack t = remoteVideoTracks.get(previousTrack);
+                if (t != null) { try { t.removeSink(previous); } catch (Throwable ignored) {} }
             }
         }
-        log.debug("[RemoteVideo] No track yet for userId={}, sink queued", userId);
+        // Begin playing this user's screen audio (if any) now that we're watching them.
+        setScreenAudioActiveForUser(userId, true);
+        syncVideoForwarding();
+        attachWaitingSinks();
     }
 
     public void unsubscribeRemoteVideo(String userId) {
         log.info("[RemoteVideo] Unsubscribing from video for userId={}", userId);
-        VideoTrackSink sink   = pendingSinks.remove(userId);
-        String         trackId = activeSinkByUser.remove(userId);
-        if (sink != null && trackId != null) {
-            VideoTrack track = remoteVideoTracks.get(trackId);
-            if (track != null) { try { track.removeSink(sink); } catch (Throwable ignored) {} }
+        synchronized (videoLock) {
+            VideoTrackSink sink   = pendingSinks.remove(userId);
+            String         trackId = activeSinkByUser.remove(userId);
+            if (sink != null && trackId != null) {
+                VideoTrack track = remoteVideoTracks.get(trackId);
+                if (track != null) { try { track.removeSink(sink); } catch (Throwable ignored) {} }
+            }
         }
         // Stop playing this user's screen audio once we stop watching.
         setScreenAudioActiveForUser(userId, false);
+        syncVideoForwarding();
+    }
+
+    /**
+     * Tells the SFU to forward only the screen shares we are watching. Every participant is
+     * auto-subscribed to every track (auto_subscribe=1), so without this each person in the
+     * channel would receive — and decode, at full resolution — every share, watched or not.
+     * Disabling keeps the subscription (no renegotiation); re-enabling makes the SFU request a
+     * key frame, so the picture appears right away. Cheap and idempotent: only changes are sent.
+     */
+    private void syncVideoForwarding() {
+        LiveKitSignalingClient s = livekitSignaling;
+        if (s == null || !s.isConnected()) return;
+        List<String> enable = new ArrayList<>();
+        List<String> disable = new ArrayList<>();
+        synchronized (videoLock) {
+            Map<String, String> owners = s.getRemoteVideoTrackOwners();
+            videoForwarding.keySet().retainAll(owners.keySet());
+            owners.forEach((sid, owner) -> {
+                boolean forward = pendingSinks.containsKey(owner);
+                Boolean last = videoForwarding.put(sid, forward);
+                if (last == null || last != forward) (forward ? enable : disable).add(sid);
+            });
+        }
+        if (!disable.isEmpty()) s.sendTrackDisabled(disable, true);
+        if (!enable.isEmpty()) s.sendTrackDisabled(enable, false);
+        if (!disable.isEmpty() || !enable.isEmpty()) {
+            log.info("[RemoteVideo] Forwarding: on={} off={}", enable, disable);
+        }
+    }
+
+    /**
+     * Attaches every waiting sink to its streamer's current video track, matched by the
+     * publishing participant (never "first track that arrived", which mixed up streams when
+     * several people shared at once). Also moves a sink onto a streamer's re-published track
+     * (e.g. after they changed codec), since that arrives under a new track SID.
+     */
+    private void attachWaitingSinks() {
+        LiveKitSignalingClient s = livekitSignaling;
+        if (s == null) return;
+        synchronized (videoLock) {
+            Map<String, String> owners = s.getRemoteVideoTrackOwners();
+            for (Map.Entry<String, VideoTrackSink> e : pendingSinks.entrySet()) {
+                String userId = e.getKey();
+                String currentSid = null;
+                for (Map.Entry<String, String> o : owners.entrySet()) {
+                    if (userId.equals(o.getValue()) && remoteVideoTracks.containsKey(o.getKey())) {
+                        currentSid = o.getKey();
+                        break;
+                    }
+                }
+                if (currentSid == null) continue; // not published / not arrived yet
+                String attachedSid = activeSinkByUser.get(userId);
+                if (currentSid.equals(attachedSid)) continue;
+                if (attachedSid != null) {
+                    VideoTrack old = remoteVideoTracks.get(attachedSid);
+                    if (old != null) { try { old.removeSink(e.getValue()); } catch (Throwable ignored) {} }
+                }
+                attachSink(userId, currentSid, remoteVideoTracks.get(currentSid), e.getValue());
+            }
+        }
     }
 
     /** Activate/deactivate a remote user's screen-audio playback (independent of deafen). */
@@ -869,16 +959,15 @@ public class WebrtcRoomClient {
                 String sidForMid = livekitSignaling != null && mid != null
                         ? livekitSignaling.getTrackSidForMid(mid) : null;
                 String trackId = sidForMid != null ? sidForMid : videoTrack.getId();
-                remoteVideoTracks.put(trackId, videoTrack);
-                log.info("[Subscriber] Remote video track arrived: id={}", trackId);
-
-                for (Map.Entry<String, VideoTrackSink> entry : pendingSinks.entrySet()) {
-                    String userId = entry.getKey();
-                    if (!activeSinkByUser.containsKey(userId)) {
-                        attachSink(userId, trackId, videoTrack, entry.getValue());
-                        break;
-                    }
+                synchronized (videoLock) {
+                    remoteVideoTracks.put(trackId, videoTrack);
+                    // Re-send the forwarding state now that the subscription really exists.
+                    videoForwarding.remove(trackId);
                 }
+                log.info("[Subscriber] Remote video track arrived: id={} owner={}", trackId,
+                        livekitSignaling != null ? livekitSignaling.getTrackParticipantId(trackId) : null);
+                syncVideoForwarding();
+                attachWaitingSinks();
             }
         }
         @Override public void onIceConnectionChange(RTCIceConnectionState state) {
@@ -962,7 +1051,7 @@ public class WebrtcRoomClient {
                     UserSettings.getInstance().getSoundboardVolume(),
                     UserSettings.getInstance().getOutputDevice());
             if (speakerMuted) receiver.setActive(false);
-            remoteTrack.addSink(receiver);
+            remoteTrack.addSink(receiver, AudioDataAccess.REUSED);
             newSlot = new AudioSlot(remoteTrack, receiver, AudioSlotKind.SOUNDBOARD, participantId);
             log.info("[Subscriber] Remote soundboard track connected: mid={} sid={}", mid, trackSid);
         } else if ("screen_audio".equals(trackName)) {
@@ -977,7 +1066,7 @@ public class WebrtcRoomClient {
             UserVoiceReceiver receiver = new UserVoiceReceiver(
                     savedStreamVol, UserSettings.getInstance().getOutputDevice());
             receiver.setActive(watching && !streamMuted);
-            remoteTrack.addSink(receiver);
+            remoteTrack.addSink(receiver, AudioDataAccess.REUSED);
             if (participantId != null) {
                 UserVoiceReceiver old = userIdToScreenAudioReceiver.put(participantId, receiver);
                 closeReplacedUserReceiver(old, receiver);
@@ -991,7 +1080,7 @@ public class WebrtcRoomClient {
             UserVoiceReceiver receiver = new UserVoiceReceiver(
                     savedVol, UserSettings.getInstance().getOutputDevice());
             if (speakerMuted) receiver.setActive(false);
-            remoteTrack.addSink(receiver);
+            remoteTrack.addSink(receiver, AudioDataAccess.REUSED);
             UserVoiceReceiver old = userIdToMicReceiver.put(participantId, receiver);
             closeReplacedUserReceiver(old, receiver);
             newSlot = new AudioSlot(remoteTrack, receiver, AudioSlotKind.MIC, participantId);
@@ -1010,7 +1099,7 @@ public class WebrtcRoomClient {
             UserVoiceReceiver receiver = new UserVoiceReceiver(
                     1.0f, UserSettings.getInstance().getOutputDevice());
             if (speakerMuted) receiver.setActive(false);
-            remoteTrack.addSink(receiver);
+            remoteTrack.addSink(receiver, AudioDataAccess.REUSED);
             newSlot = new AudioSlot(remoteTrack, receiver, AudioSlotKind.MIC, null);
             log.warn("[Subscriber] Audio m-line {} has no participant mapping, playing anonymously: sid={}", mid, trackSid);
         }
@@ -1073,9 +1162,6 @@ public class WebrtcRoomClient {
         log.info("[RemoteVideo] Sink attached: userId={} trackId={}", userId, trackId);
     }
 
-    private boolean isScreenShareTrack(VideoTrack track, String userId) {
-        return !activeSinkByUser.containsKey(userId);
-    }
 
     // ── Audio controls ────────────────────────────────────────────────────────
 
@@ -1261,12 +1347,12 @@ public class WebrtcRoomClient {
         UserSettings.getInstance().setVadNoiseGateDb(db);
     }
 
-    /** Human-readable status of the Silero VAD model ("ready", "downloading…", "load failed", etc.) */
+    /** Human-readable status of the WebRTC VAD ("ready", "load failed", etc.) */
     public String getVadStatus() {
         return audioPipeline != null ? audioPipeline.getVadStatus() : "Pipeline not started";
     }
 
-    /** True once the Silero model has been loaded and VAD is functional. */
+    /** True once the WebRTC VAD is created and functional. */
     public boolean isVadModelReady() {
         return audioPipeline != null && audioPipeline.isVadModelReady();
     }
@@ -1302,7 +1388,7 @@ public class WebrtcRoomClient {
 
     /** Current mic level (post NS/AGC) as RMS in [0, 1] — what the VAD gate actually sees. */
     public float   getMicLevelRms() { return audioPipeline != null ? audioPipeline.postProcessRms : 0f; }
-    /** Latest Silero speech probability in [0, 1] — what the detection threshold compares against. */
+    /** Share of the last frame flagged as speech (0, 0.5 or 1). */
     public float   getVadProbability() { return audioPipeline != null ? audioPipeline.vadProbability : 0f; }
     /** True while the VAD gate is open, i.e. audio is currently being transmitted. */
     public boolean isVadSpeaking()  { return audioPipeline != null && audioPipeline.vadActive; }
@@ -1426,7 +1512,7 @@ public class WebrtcRoomClient {
             UserVoiceReceiver receiver = new UserVoiceReceiver(1.0f, UserSettings.getInstance().getOutputDevice());
             // Deliberately NOT tapped into the AEC reference: cancelling the very sound the
             // user is trying to hear would defeat the mic test.
-            remoteTrack.addSink(receiver);
+            remoteTrack.addSink(receiver, AudioDataAccess.REUSED);
             micTestRemoteTrack = remoteTrack;
             micTestReceiver    = receiver;
             log.info("[MicTest] Loopback track connected");

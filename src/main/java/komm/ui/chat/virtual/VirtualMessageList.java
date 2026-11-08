@@ -151,8 +151,6 @@ public class VirtualMessageList extends Region {
         int firstIdx = safeFirstVisible();
         MessageRow anchorRow = (firstIdx >= 0 && firstIdx < rows.size()) ? rows.get(firstIdx) : null;
         double anchorOffset = anchorRow != null ? cellTopOffset(firstIdx) : 0.0;
-        log.info("[anchor] prepend {} rows | reanchor idx={} off={}",
-                older.size(), firstIdx, fmt(anchorOffset));
 
         List<MessageRow> fresh = new ArrayList<>(older.size());
         for (MessageReceivedPayload p : older) {
@@ -260,14 +258,9 @@ public class VirtualMessageList extends Region {
             savedAnchorRow = rows.get(f);
             savedAnchorOffset = cellTopOffset(f);
         }
-        logAnchorState("save wasBottom=" + savedWasBottom
-                + " savedOff=" + fmt(savedAnchorOffset)
-                + " anchorId=" + shortId(savedAnchorRow == null ? null : savedAnchorRow.id()));
     }
 
     public void restoreAnchor() {
-        logAnchorState("restore.enter wasBottom=" + savedWasBottom
-                + " hasAnchor=" + (savedAnchorRow != null));
         if (savedWasBottom || savedAnchorRow == null) {
             pinBottomSoon();
             return;
@@ -276,43 +269,10 @@ public class VirtualMessageList extends Region {
         final double off = savedAnchorOffset;
         Runnable r = () -> {
             int i = rows.indexOf(a);
-            log.info("[anchor] restore.apply idx={} targetOff={} scrollY={} totalH={} viewH={}",
-                    i, fmt(off), fmt(flow.estimatedScrollYProperty().getValue()),
-                    fmt(flow.totalHeightEstimateProperty().getValue()), fmt(flow.getHeight()));
             if (i >= 0) safe(() -> flow.showAtOffset(i, off));
         };
         Platform.runLater(r);
         Platform.runLater(r);
-
-        // ── diagnostics: watch where the anchor row actually settles ──────────
-        for (int ms : new int[]{1, 60, 180, 360, 600, 1000}) {
-            final int t = ms;
-            Timeline tl = new Timeline(new KeyFrame(Duration.millis(ms), e -> {
-                int i = rows.indexOf(a);
-                logAnchorState("restore+" + t + "ms anchorIdx=" + i
-                        + " anchorOff=" + fmt(i >= 0 ? cellTopOffset(i) : Double.NaN)
-                        + " savedOff=" + fmt(off));
-            }));
-            tl.play();
-        }
-    }
-
-    private void logAnchorState(String tag) {
-        int f = safeFirstVisible();
-        UUID fid = (f >= 0 && f < rows.size()) ? rows.get(f).id() : null;
-        log.info("[anchor] {} | first={} id={} firstOff={} scrollY={} totalH={} viewH={} followBottom={} rows={}",
-                tag, f, shortId(fid), fmt(f >= 0 ? cellTopOffset(f) : Double.NaN),
-                fmt(flow.estimatedScrollYProperty().getValue()),
-                fmt(flow.totalHeightEstimateProperty().getValue()),
-                fmt(flow.getHeight()), followBottom, rows.size());
-    }
-
-    private static String fmt(Double v) {
-        return v == null ? "null" : String.format("%.1f", v);
-    }
-
-    private static String shortId(UUID id) {
-        return id == null ? "null" : id.toString().substring(0, 8);
     }
 
     // ── internals ─────────────────────────────────────────────────────────────
@@ -374,7 +334,6 @@ public class VirtualMessageList extends Region {
     private void fireNearTopDeferred() {
         if (!nearTopArmed || onNearTop == null) return;
         nearTopArmed = false;
-        log.info("[anchor] near-top fired | first={} rows={}", safeFirstVisible(), rows.size());
         Platform.runLater(() -> {
             if (onNearTop != null) onNearTop.run();
         });

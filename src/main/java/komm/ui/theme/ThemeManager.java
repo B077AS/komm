@@ -82,7 +82,24 @@ public class ThemeManager {
         themeProperty.set(theme);
     }
 
+    /**
+     * Mirrors the active accent into {@code config/accent} for the launcher, which shows its
+     * window before anyone is logged in (accent itself is a per-user setting). Best-effort.
+     */
+    private static void mirrorAccentForLauncher(AppTheme theme) {
+        Thread.ofVirtual().start(() -> {
+            try {
+                Path file = komm.Launcher.getConfigDirectory().resolve("accent");
+                if (Files.isRegularFile(file) && theme.name().equals(Files.readString(file).trim())) return;
+                Files.writeString(file, theme.name());
+            } catch (IOException e) {
+                log.debug("Could not mirror accent for the launcher: {}", e.toString());
+            }
+        });
+    }
+
     private void applyToAllWindows(AppTheme theme) {
+        mirrorAccentForLauncher(theme);
         Runnable apply = () -> {
             String oldUrl = currentThemeUrl;
             currentThemeUrl = themeUrls.get(theme);

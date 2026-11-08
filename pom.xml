@@ -13,7 +13,7 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.release>25</maven.compiler.release>
-        <javafx.version>25</javafx.version>
+        <javafx.version>27.0.1</javafx.version>
         <lombok.version>1.18.46</lombok.version>
         <!-- Dev-run hub override: mvn javafx:run -Dapi.url=... [-Dwebsocket.url=...]
              Empty by default. javafx:run forks the app JVM, so a bare -D on the mvn
@@ -95,7 +95,12 @@
         <dependency>
             <groupId>io.github.mkpaz</groupId>
             <artifactId>atlantafx-base</artifactId>
-            <version>2.1.0</version>
+            <version>3.0.0</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.mkpaz</groupId>
+            <artifactId>atlantafx-decorations</artifactId>
+            <version>3.0.0</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/net.java.dev.jna/jna -->
         <dependency>
@@ -143,7 +148,7 @@
         <dependency>
             <groupId>dev.onvoid.webrtc</groupId>
             <artifactId>webrtc-java</artifactId>
-            <version>0.20.0</version>
+            <version>1.0.0</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/org.bouncycastle/bcpkix-jdk18on -->
         <dependency>
@@ -186,12 +191,6 @@
             <groupId>io.livekit</groupId>
             <artifactId>livekit-server</artifactId>
             <version>0.15.1</version>
-        </dependency>
-        <!-- https://mvnrepository.com/artifact/com.microsoft.onnxruntime/onnxruntime -->
-        <dependency>
-            <groupId>com.microsoft.onnxruntime</groupId>
-            <artifactId>onnxruntime</artifactId>
-            <version>1.20.0</version>
         </dependency>
         <!-- https://github.com/henkelmax/rnnoise4j/releases/tag/2.1.3 -->
         <dependency>
@@ -306,13 +305,13 @@
                 <dependency>
                     <groupId>dev.onvoid.webrtc</groupId>
                     <artifactId>webrtc-java</artifactId>
-                    <version>0.20.0</version>
+                    <version>1.0.0</version>
                     <classifier>windows-x86_64</classifier>
                 </dependency>
                 <dependency>
                     <groupId>dev.onvoid.webrtc</groupId>
                     <artifactId>webrtc-java</artifactId>
-                    <version>0.20.0</version>
+                    <version>1.0.0</version>
                     <classifier>linux-x86_64</classifier>
                 </dependency>
             </dependencies>
@@ -358,9 +357,16 @@
                              javafx.graphics/javafx.media are real modules here (module path);
                              jnativehook, JNA and webrtc-java load as the unnamed module. -->
                         <option>--enable-native-access=javafx.graphics,javafx.media,ALL-UNNAMED</option>
+                        <!-- Same memory options the launcher starts the packaged client with
+                             (launcher/.../update/ClientJvmOptions.java) — keep in sync. -->
+                        <option>-Xms32m</option>
+                        <option>-Xmx2g</option>
                         <option>-XX:G1PeriodicGCInterval=30000</option>
                         <option>-XX:MinHeapFreeRatio=10</option>
                         <option>-XX:MaxHeapFreeRatio=20</option>
+                        <option>-XX:ParallelGCThreads=2</option>
+                        <option>-XX:ConcGCThreads=1</option>
+                        <option>-XX:MaxDirectMemorySize=1g</option>
                     </options>
                 </configuration>
             </plugin>
