@@ -37,6 +37,10 @@ public final class ClientJvmOptions {
             // Video frame buffers are direct memory: cap it so a burst of discarded buffers
             // triggers a GC long before it can balloon (default cap = max heap).
             "-XX:MaxDirectMemorySize=1g",
+            // JDK 25 (JEP 519): 8-byte instead of 12-byte object headers. Measured on the logged-in
+            // client: live heap 67 -> 64 MB (the heap is mostly array payloads, so ~5%, not the
+            // 20% seen on object-heavy servers) — free and safe, so on.
+            "-XX:+UseCompactObjectHeaders",
             // JEP 472: JNA / webrtc-java / JavaFX native access without warnings.
             "--enable-native-access=ALL-UNNAMED"
     );

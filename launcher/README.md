@@ -23,7 +23,7 @@ This folder is the thing users download from [kommvoice.com/download](https://ko
 - **Checks for updates on every start**: asks GitHub for this repo's latest release and swaps in the new client JAR automatically, with a live progress bar
 - **Works offline**: a bundled client seed makes the very first start work without internet; later, if GitHub is unreachable, the installed client launches as-is
 - **Never breaks your install**: downloads are verified before they replace anything, and the swap is atomic (see [The update rules](#the-update-rules))
-- **Starts the client lean**: passes the client's JVM memory options (small initial heap, periodic GC that returns memory, a couple of GC threads, capped direct memory) and on Linux `MALLOC_ARENA_MAX=2`, see `update/ClientJvmOptions`
+- **Starts the client lean**: passes the client's JVM memory options (small initial heap, periodic GC that returns memory, a couple of GC threads, capped direct memory, compact object headers) and on Linux `MALLOC_ARENA_MAX=2`, see `update/ClientJvmOptions`
 - **Handles invite links**: registers the `komm://` URI scheme so browser links like `komm://invite/CODE` open the launcher, which forwards them to the client
 - **Ships its own Java**: installer and AppImage carry a private jlink runtime shared by launcher and client, so users never install Java
 - **Looks exactly like Komm**: it uses the client's own theme (see [Styling](#styling)); on Windows the client process even shows as **"Komm"** in Task Manager, not "Java Platform SE binary"
