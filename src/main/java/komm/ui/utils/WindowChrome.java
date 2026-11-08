@@ -158,12 +158,14 @@ public final class WindowChrome {
             return;
         }
         if (ENABLED) {
-            // DWM cloak instead of opacity 0: a non-opaque stage becomes a layered window, and the first
-            // maximise/restore of such a window gets no system animation.
+            // Fully transparent BEFORE the window first appears, revealed once it has maximised and
+            // rendered. (A DWM cloak applied after show() was used before; it can only be set once
+            // the window exists, so the first frames escaped: the window popped up mid restore→maximise
+            // animation, vanished when the cloak landed, then reappeared — measured with a window-state
+            // poller.)
+            stage.setOpacity(0);
             stage.show();
-            boolean cloaked = isWindows() && WindowsThemeUtil.setCloaked(stage.getTitle(), true) > 0;
-            if (!cloaked) stage.setOpacity(0);
-            revealAfterFirstFrames(stage, cloaked);
+            revealAfterFirstFrames(stage, false);
             return;
         }
         stage.setOpacity(0);
