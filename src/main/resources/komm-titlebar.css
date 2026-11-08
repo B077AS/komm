@@ -98,3 +98,24 @@
 .header-button-group .header-button.close:pressed > .region {
 	-fx-background-color: white;
 }
+
+/* Released outside after pressing: JavaFX keeps :pressed, so show it as plain (or just hovered). See WindowChrome. */
+.header-button-group .header-button.stale:pressed {
+	-fx-background-color: transparent;
+}
+
+.header-button-group .header-button.stale:pressed > .region {
+	-fx-background-color: -color-fg-default;
+}
+
+.header-button-group .header-button.stale:hover:pressed {
+	-fx-background-color: -color-bg-subtle;
+}
+
+.header-button-group .header-button.close.stale:hover:pressed {
+	-fx-background-color: -color-accent-emphasis;
+}
+
+.header-button-group .header-button.close.stale:hover:pressed > .region {
+	-fx-background-color: white;
+}

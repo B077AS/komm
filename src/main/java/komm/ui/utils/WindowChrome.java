@@ -4,7 +4,9 @@ import atlantafx.decorations.HeaderButtonGroup;
 import javafx.animation.AnimationTimer;
 import javafx.application.ConditionalFeature;
 import javafx.application.Platform;
+import javafx.scene.Node;
 import javafx.scene.Parent;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.Scene;
 import javafx.scene.control.Label;
 import javafx.scene.image.Image;
@@ -97,6 +99,46 @@ public final class WindowChrome {
 
         HeaderButtonGroup buttons = closeOnly ? HeaderButtonGroup.utilityGroup() : HeaderButtonGroup.standardGroup();
         buttons.install(header, stage);
+        // Press a button, drag off it and release elsewhere: the release goes to whatever is under
+        // the pointer, never to the button, so it stays :pressed. Mark it "stale" (CSS neutralises
+        // hover/pressed) until JavaFX finally clears the pressed state.
+        for (Node b : buttons.getButtons()) {
+            b.pressedProperty().subscribe(pressed -> {
+                if (!pressed) b.getStyleClass().remove("stale");
+            });
+        }
+        stage.sceneProperty().subscribe(s -> {
+            if (s == null) return;
+            s.addEventFilter(MouseEvent.MOUSE_RELEASED, e -> {
+                for (Node b : buttons.getButtons()) {
+                    if (b.isPressed() && e.getTarget() != b && !b.getStyleClass().contains("stale")
+                            && !b.contains(b.sceneToLocal(e.getSceneX(), e.getSceneY()))) {
+                        b.getStyleClass().add("stale");
+                    }
+                }
+            });
+        });
+
+        stage.maximizedProperty().addListener((o, was, is) -> {
+            log.info("[ANIM-dbg] maximized {} -> {} size={}x{} pos={},{} opacity={}", was, is,
+                    (int) stage.getWidth(), (int) stage.getHeight(), (int) stage.getX(), (int) stage.getY(), stage.getOpacity());
+            new AnimationTimer() {
+                long t0 = -1, last = -1; int n = 0; long maxGap = 0;
+                @Override public void handle(long now) {
+                    if (t0 < 0) { t0 = now; last = now; }
+                    n++;
+                    long gap = now - last; last = now;
+                    if (gap > 40_000_000L) log.info("[ANIM-dbg] frame gap {} ms at +{} ms", gap / 1_000_000, (now - t0) / 1_000_000);
+                    maxGap = Math.max(maxGap, gap);
+                    if (now - t0 > 700_000_000L) {
+                        stop();
+                        log.info("[ANIM-dbg] done: {} frames in 700ms, max gap {} ms, size={}x{}", n, maxGap / 1_000_000,
+                                (int) stage.getWidth(), (int) stage.getHeight());
+                    }
+                }
+            }.start();
+        });
+        stage.widthProperty().addListener((o, a, b) -> log.info("[ANIM-dbg] width {} -> {}", a.intValue(), b.intValue()));
 
         // No title bar over a full-screen stream.
         header.visibleProperty().bind(stage.fullScreenProperty().not());
@@ -136,18 +178,22 @@ public final class WindowChrome {
             stage.show();
             return;
         }
-        stage.setOpacity(0);
-        stage.show();
-
         if (ENABLED) {
-            revealAfterFirstFrames(stage);
+            // DWM cloak instead of opacity 0: a non-opaque stage becomes a layered window, and the first
+            // maximise/restore of such a window gets no system animation.
+            stage.show();
+            boolean cloaked = isWindows() && WindowsThemeUtil.setCloaked(stage.getTitle(), true) > 0;
+            if (!cloaked) stage.setOpacity(0);
+            revealAfterFirstFrames(stage, cloaked);
             return;
         }
+        stage.setOpacity(0);
+        stage.show();
         // Native title bar: DWM only honours dark mode once the window exists (see WindowsThemeUtil).
         String title = stage.getTitle();
         Thread.ofVirtual().start(() -> {
             WindowsThemeUtil.enableDarkTitleBar(title);
-            Platform.runLater(() -> revealAfterFirstFrames(stage));
+            Platform.runLater(() -> revealAfterFirstFrames(stage, false));
         });
     }
 
@@ -156,7 +202,7 @@ public final class WindowChrome {
     private static final long REVEAL_MAX_NANOS = 900_000_000L;   // never leave the user without a window
 
     /** Sets opacity to 1 after a few rendered frames, bounded by a minimum settle time and a hard cap. */
-    private static void revealAfterFirstFrames(Stage stage) {
+    private static void revealAfterFirstFrames(Stage stage, boolean cloaked) {
         new AnimationTimer() {
             private long start = -1;
             private int frames = 0;
@@ -169,7 +215,8 @@ public final class WindowChrome {
                 boolean ready = frames >= REVEAL_MIN_FRAMES && elapsed >= REVEAL_MIN_NANOS;
                 if (ready || elapsed >= REVEAL_MAX_NANOS || !stage.isShowing()) {
                     stop();
-                    stage.setOpacity(1);
+                    if (cloaked) WindowsThemeUtil.setCloaked(stage.getTitle(), false);
+                    else stage.setOpacity(1);
                 }
             }
         }.start();

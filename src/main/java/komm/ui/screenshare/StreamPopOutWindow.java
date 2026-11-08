@@ -61,10 +61,8 @@ public class StreamPopOutWindow {
         stage.setMinWidth(480);
         stage.setMinHeight(320);
         stage.setScene(scene);
-        // Owning the pop-out to the main window groups them at the OS/window-manager
-        // level (e.g. closing together on some platforms, shared taskbar grouping) —
-        // App.stop()/setOnCloseRequest is still what guarantees the hard teardown.
-        stage.initOwner(App.getPrimaryStage());
+        // Deliberately NOT owned by the main window: owned windows minimize/restore with
+        // their owner. App.stop()/closeAll() guarantees teardown on app exit.
 
         stage.setOnHiding(e -> {
             OPEN_WINDOWS.remove(this);

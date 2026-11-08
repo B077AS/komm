@@ -221,7 +221,7 @@ public class App extends Application {
         // Custom dark title bar (StageStyle.EXTENDED) when the platform supports it; must precede show().
         WindowChrome.prepare(primaryStage);
         primaryStage.setTitle("Komm");
-        scene = new Scene(WindowChrome.wrap(primaryStage, mainStackPane, false), 1305, 500);
+        scene = new Scene(WindowChrome.wrap(primaryStage, mainStackPane, false), 1305, 780);
         Application.setUserAgentStylesheet(komm.ui.theme.KommStylesheet.userAgentUrl());
 
         primaryStage.setTitle("Komm");

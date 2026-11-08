@@ -61,6 +61,42 @@ public class WindowsThemeUtil {
         }
     }
 
+    public interface Kernel32Pid extends StdCallLibrary {
+        Kernel32Pid INSTANCE = Native.load("kernel32", Kernel32Pid.class, W32APIOptions.DEFAULT_OPTIONS);
+        int GetCurrentProcessId();
+    }
+
+    public interface User32Pid extends StdCallLibrary {
+        User32Pid INSTANCE = Native.load("user32", User32Pid.class, W32APIOptions.DEFAULT_OPTIONS);
+        int GetWindowThreadProcessId(HWND hwnd, int[] pid);
+    }
+
+    /**
+     * Cloaks or uncloaks this process's top-level windows titled windowTitle (DWM keeps them
+     * invisible without making them layered, unlike Stage.setOpacity). Returns how many were changed.
+     */
+    public static int setCloaked(String windowTitle, boolean cloaked) {
+        if (!Platform.isWindows() || windowTitle == null) return 0;
+        int changed = 0;
+        try {
+            int me = Kernel32Pid.INSTANCE.GetCurrentProcessId();
+            HWND hwnd = User32.INSTANCE.FindWindowEx(null, null, null, windowTitle);
+            while (hwnd != null) {
+                int[] pid = new int[1];
+                User32Pid.INSTANCE.GetWindowThreadProcessId(hwnd, pid);
+                if (pid[0] == me) {
+                    DwmApi.INSTANCE.DwmSetWindowAttribute(hwnd, DWMWA_CLOAK, new int[]{cloaked ? 1 : 0}, 4);
+                    changed++;
+                }
+                hwnd = User32.INSTANCE.FindWindowEx(null, hwnd, null, windowTitle);
+            }
+        } catch (Throwable t) {
+            System.err.println("Could not cloak window: " + t.getMessage());
+        }
+        return changed;
+    }
+
+
     private static void applyDarkMode(HWND hwnd) {
         // Cloak so DWM never composites a light frame — no animation possible.
         DwmApi.INSTANCE.DwmSetWindowAttribute(hwnd, DWMWA_CLOAK, new int[]{1}, 4);
