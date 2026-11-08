@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+    <defs>
+        <linearGradient id="kommGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#b8a4ff"/>
+            <stop offset="0.55" stop-color="#9580ff"/>
+            <stop offset="1" stop-color="#6b5bb3"/>
+        </linearGradient>
+    </defs>
+    <rect x="2" y="2" width="60" height="60" rx="15" fill="url(#kommGrad)"/>
+    <!-- voice waveform -->
+    <g fill="#0d0e12">
+        <rect x="9"  y="25" width="6" height="14" rx="3"/>
+        <rect x="19" y="19" width="6" height="26" rx="3"/>
+        <rect x="29" y="13" width="6" height="38" rx="3"/>
+        <rect x="39" y="19" width="6" height="26" rx="3"/>
+        <rect x="49" y="25" width="6" height="14" rx="3"/>
+    </g>
+</svg>

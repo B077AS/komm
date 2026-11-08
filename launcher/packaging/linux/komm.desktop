@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Komm
+Comment=Komm voice and text chat
+Exec=Komm %u
+Icon=komm
+Terminal=false
+Categories=Network;Chat;InstantMessaging;
+MimeType=x-scheme-handler/komm;
+StartupWMClass=Komm

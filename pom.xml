@@ -357,9 +357,16 @@
                              javafx.graphics/javafx.media are real modules here (module path);
                              jnativehook, JNA and webrtc-java load as the unnamed module. -->
                         <option>--enable-native-access=javafx.graphics,javafx.media,ALL-UNNAMED</option>
+                        <!-- Same memory options the launcher starts the packaged client with
+                             (launcher/.../update/ClientJvmOptions.java) — keep in sync. -->
+                        <option>-Xms32m</option>
+                        <option>-Xmx2g</option>
                         <option>-XX:G1PeriodicGCInterval=30000</option>
                         <option>-XX:MinHeapFreeRatio=10</option>
                         <option>-XX:MaxHeapFreeRatio=20</option>
+                        <option>-XX:ParallelGCThreads=2</option>
+                        <option>-XX:ConcGCThreads=1</option>
+                        <option>-XX:MaxDirectMemorySize=1g</option>
                     </options>
                 </configuration>
             </plugin>

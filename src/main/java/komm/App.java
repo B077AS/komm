@@ -389,7 +389,6 @@ public class App extends Application {
 
     public static void changePage(Node node) {
         Node current = stackPane.getChildren().isEmpty() ? null : stackPane.getChildren().getFirst();
-        log.debug("[scroll] changePage from={} to={}", current == null ? "null" : current.getClass().getSimpleName(), node.getClass().getSimpleName());
         if (current instanceof ServerPage sp) {
             sp.getChatSection().saveScrollPosition();
             if (!(node instanceof ServerPage)) {

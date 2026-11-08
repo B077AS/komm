@@ -217,7 +217,6 @@ public class UserAudioPipeline implements AutoCloseable {
                         preProcessRms);
                 vadProbability = vad.getSpeechProbability();
                 vadActive      = speech;
-                logVadDiagnostics(speech);
 
                 // 5. Gate with pre-roll flush + fade-in/out.
                 //
@@ -295,29 +294,6 @@ public class UserAudioPipeline implements AutoCloseable {
         }
 
         log.info("[AudioPipeline] Processing thread stopped");
-    }
-
-    // VAD diagnostics: one debug line per second so levels/thresholds can be tuned from a log.
-    // P = share of the frame's 10 ms chunks the detector flagged as speech.
-    private int   dbgFrames, dbgOpen;
-    private float dbgProbSum, dbgProbMax, dbgPreSum, dbgPostSum;
-
-    private void logVadDiagnostics(boolean open) {
-        dbgFrames++;
-        if (open) dbgOpen++;
-        dbgProbSum += vadProbability;
-        dbgProbMax  = Math.max(dbgProbMax, vadProbability);
-        dbgPreSum  += preProcessRms;
-        dbgPostSum += postProcessRms;
-        if (dbgFrames >= 50) {
-            log.debug("[VAD-dbg] mic={} dBFS postAGC={} dBFS | P avg={} max={} | gate open {}%",
-                    String.format("%.1f", 20 * Math.log10(Math.max(1e-6, dbgPreSum / dbgFrames))),
-                    String.format("%.1f", 20 * Math.log10(Math.max(1e-6, dbgPostSum / dbgFrames))),
-                    String.format("%.2f", dbgProbSum / dbgFrames), String.format("%.2f", dbgProbMax),
-                    100 * dbgOpen / dbgFrames);
-            dbgFrames = dbgOpen = 0;
-            dbgProbSum = dbgProbMax = dbgPreSum = dbgPostSum = 0;
-        }
     }
 
     // ── Hot-swap config ───────────────────────────────────────────────────────

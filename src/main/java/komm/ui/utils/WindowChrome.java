@@ -119,27 +119,6 @@ public final class WindowChrome {
             });
         });
 
-        stage.maximizedProperty().addListener((o, was, is) -> {
-            log.info("[ANIM-dbg] maximized {} -> {} size={}x{} pos={},{} opacity={}", was, is,
-                    (int) stage.getWidth(), (int) stage.getHeight(), (int) stage.getX(), (int) stage.getY(), stage.getOpacity());
-            new AnimationTimer() {
-                long t0 = -1, last = -1; int n = 0; long maxGap = 0;
-                @Override public void handle(long now) {
-                    if (t0 < 0) { t0 = now; last = now; }
-                    n++;
-                    long gap = now - last; last = now;
-                    if (gap > 40_000_000L) log.info("[ANIM-dbg] frame gap {} ms at +{} ms", gap / 1_000_000, (now - t0) / 1_000_000);
-                    maxGap = Math.max(maxGap, gap);
-                    if (now - t0 > 700_000_000L) {
-                        stop();
-                        log.info("[ANIM-dbg] done: {} frames in 700ms, max gap {} ms, size={}x{}", n, maxGap / 1_000_000,
-                                (int) stage.getWidth(), (int) stage.getHeight());
-                    }
-                }
-            }.start();
-        });
-        stage.widthProperty().addListener((o, a, b) -> log.info("[ANIM-dbg] width {} -> {}", a.intValue(), b.intValue()));
-
         // No title bar over a full-screen stream.
         header.visibleProperty().bind(stage.fullScreenProperty().not());
         header.managedProperty().bind(stage.fullScreenProperty().not());

@@ -14,4 +14,7 @@ public class SourceSelection {
     public boolean isWindow;
     public ScreenShareQuality quality;
     public boolean audioEnabled;
+    /** Requested codec; resolved against this machine's encoders when the share starts. */
+    @Builder.Default
+    public komm.webrtc.VideoCodecChoice codec = komm.webrtc.VideoCodecChoice.AUTO;
 }

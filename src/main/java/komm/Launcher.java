@@ -104,6 +104,10 @@ public class Launcher {
 
     static void tryRegisterWindowsProtocol() {
         if (!Platform.isWindows()) return;
+        // Started by the launcher: it registers komm:// to itself (Komm.exe), so links go through
+        // the update check and the client gets its JVM options. Overwriting that with a bare
+        // `javaw -jar` here would bypass both.
+        if (System.getProperty("launcher.version") != null) return;
         try {
             Path jarPath = Path.of(Launcher.class
                     .getProtectionDomain().getCodeSource().getLocation().toURI());

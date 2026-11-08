@@ -9,6 +9,9 @@ import komm.ui.screenshare.ScreenShareQuality;
 import livekit.LivekitModels;
 import lombok.extern.slf4j.Slf4j;
 
+import dev.onvoid.webrtc.media.MediaType;
+
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -56,7 +59,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Slf4j
 public class ScreenShareClient {
 
-    private static final String VIDEO_TRACK_CID = "screen0";
+    /** Track/AddTrackRequest cid prefix; a fresh cid is used whenever a new sender is published. */
+    private static final String VIDEO_TRACK_CID_PREFIX = "screen";
 
     // Absolute encoder ceiling regardless of the selected quality preset.
     private static final int MAX_BITRATE_CAP_BPS = 12_000_000;
@@ -89,6 +93,12 @@ public class ScreenShareClient {
     private RTCRtpSender sender;
     /** Quality preset of the share currently being sent; set before any encoding params are applied. */
     private volatile ScreenShareQuality quality;
+    /** Codec requested for the share being started (already resolved, never AUTO). */
+    private volatile VideoCodecChoice codec = VideoCodecChoice.VP8;
+    /** Codec the current {@link #sender} was published with; LiveKit can't change it in place. */
+    private VideoCodecChoice senderCodec;
+    /** Bumped for every newly published sender so each AddTrackRequest carries a fresh cid. */
+    private int publishSeq;
 
     private Runnable onSharingStateChanged;
     private final AtomicBoolean sharing = new AtomicBoolean(false);
@@ -105,8 +115,12 @@ public class ScreenShareClient {
 
     // ── Public API ─────────────────────────────────────────────────────────────
 
-    public void startSharing(long sourceId, boolean isWindow, ScreenShareQuality quality) {
+    /**
+     * @param codec resolved codec for this share ({@link VideoCodecChoice#resolve()}, never AUTO)
+     */
+    public void startSharing(long sourceId, boolean isWindow, ScreenShareQuality quality, VideoCodecChoice codec) {
         this.quality = quality;
+        this.codec = codec == null || codec == VideoCodecChoice.AUTO ? VideoCodecChoice.AUTO.resolve() : codec;
         VideoTrack oldTrack = null;
         boolean isReuse = sharing.getAndSet(true);
         if (isReuse) {
@@ -115,8 +129,8 @@ public class ScreenShareClient {
             releaseDesktopResources();
         }
 
-        log.info("[ScreenShare] Starting: sourceId={} isWindow={} quality={}",
-                sourceId, isWindow, quality);
+        log.info("[ScreenShare] Starting: sourceId={} isWindow={} quality={}x{}@{} codec={}",
+                sourceId, isWindow, quality.maxW, quality.maxH, quality.fps, this.codec.label());
 
         desktopSource = new VideoDesktopSource();
         desktopSource.setFrameRate(quality.fps);
@@ -124,11 +138,17 @@ public class ScreenShareClient {
         desktopSource.setSourceId(sourceId, isWindow);
         desktopSource.start();
 
-        videoTrack = factory.createVideoTrack(VIDEO_TRACK_CID, desktopSource);
+        // A new sender is needed for the first share and whenever the codec changes — LiveKit
+        // can't switch the codec of an already published track, so it gets re-published under a
+        // fresh cid instead of replaceTrack()'d.
+        final boolean newSender = (sender == null) || senderCodec != this.codec;
+        final String cid = newSender ? VIDEO_TRACK_CID_PREFIX + (publishSeq++) : VIDEO_TRACK_CID_PREFIX + "-reuse";
+        videoTrack = factory.createVideoTrack(cid, desktopSource);
         videoTrack.setEnabled(true);
 
         final VideoTrack trackToPublish = videoTrack;
         final VideoTrack trackToRetire = oldTrack;   // disposed after the sender moves off it
+        // Whether a previous share was live on a sender (decides what an aborted attempt winds down).
         final boolean firstShare = (sender == null);
 
         if (WAYLAND) {
@@ -154,12 +174,12 @@ public class ScreenShareClient {
             // should see "user is sharing" until a source was actually picked and the
             // first frame exists. Cancelling the picker aborts the attempt silently.
             log.info("[ScreenShare] Wayland: deferring publish and announcement until first captured frame");
-            deferPublishUntilFirstFrame(trackToPublish, firstShare, trackToRetire);
+            deferPublishUntilFirstFrame(trackToPublish, firstShare, newSender, cid, trackToRetire);
             // On reuse the share is already announced — refresh the state right away
             // so a changed audio flag still propagates while the picker is open.
             if (isReuse) notifySharingStateChanged();
         } else {
-            publishTrack(trackToPublish, firstShare, trackToRetire);
+            publishTrack(trackToPublish, newSender, cid, trackToRetire);
             notifySharingStateChanged();
         }
         log.info("[ScreenShare] Desktop source started");
@@ -170,7 +190,7 @@ public class ScreenShareClient {
      * Split out of {@link #startSharing} so the Wayland path can call it later,
      * once the portal has produced the first frame. Runs on the WebRTC thread.
      */
-    private void publishTrack(VideoTrack track, boolean firstShare, VideoTrack trackToRetire) {
+    private void publishTrack(VideoTrack track, boolean newSender, String cid, VideoTrack trackToRetire) {
         // A stale invocation (share already stopped, or the track was swapped out
         // by a newer startSharing) must not publish.
         if (!sharing.get() || track != this.videoTrack) {
@@ -178,30 +198,36 @@ public class ScreenShareClient {
             return;
         }
 
-        if (firstShare) {
-            // First time: addTrack creates the sender. We then immediately
-            // apply bitrate settings before the offer goes out, so the first
-            // negotiated encoding already has the correct min/max.
+        if (newSender) {
+            if (sender != null) {
+                // Codec changed since the last share: unpublish the old sender (its m-line goes
+                // inactive in the same offer that adds the new one).
+                log.info("[ScreenShare] Codec changed {} -> {} — re-publishing the track",
+                        senderCodec == null ? "?" : senderCodec.label(), codec.label());
+                try { publisherPc.removeTrack(sender); } catch (Throwable ignored) {}
+                try { sender.dispose(); } catch (Throwable ignored) {}
+                sender = null;
+            }
+            // addTrack creates the sender. Codec preference and bitrate settings are applied
+            // before the offer goes out, so the first negotiation already uses them.
             sender = publisherPc.addTrack(track, List.of("screen-stream"));
+            senderCodec = codec;
+            applyCodecPreferences();
             applyBitrateSettings();
 
             // FIX (ordering): send the offer first, THEN the AddTrackRequest
             // from inside the setLocalDescription callback. LiveKit processes
             // the renegotiation most reliably in that order.
-            triggerRenegotiationWithAddTrack();
+            triggerRenegotiationWithAddTrack(cid);
         } else {
             // Reuse: replace the track on the existing sender and restore
             // the transceiver direction. No new AddTrackRequest needed.
             sender.replaceTrack(track);
             applyBitrateSettings(); // re-apply: replaceTrack may reset encoding params
-            for (RTCRtpTransceiver t : publisherPc.getTransceivers()) {
-                if (t.getSender() == sender) {
-                    t.setDirection(RTCRtpTransceiverDirection.SEND_ONLY);
-                    break;
-                }
-            }
+            withTransceiverOf(sender, t -> t.setDirection(RTCRtpTransceiverDirection.SEND_ONLY));
             triggerRenegotiation();
         }
+        logEncoderInUseLater();
 
         // The sender has moved to the new track — the previous one can go.
         if (trackToRetire != null) {
@@ -217,7 +243,8 @@ public class ScreenShareClient {
      * nothing happened. The picker itself has no deadline; a generous hard timeout
      * only catches a portal that hangs without ending the source.
      */
-    private void deferPublishUntilFirstFrame(VideoTrack track, boolean firstShare, VideoTrack trackToRetire) {
+    private void deferPublishUntilFirstFrame(VideoTrack track, boolean firstShare, boolean newSender,
+                                             String cid, VideoTrack trackToRetire) {
         AtomicBoolean done = new AtomicBoolean(false);
         // Holder so the sink can remove itself from inside its own callback.
         VideoTrackSink[] sinkRef = new VideoTrackSink[1];
@@ -232,7 +259,7 @@ public class ScreenShareClient {
                     if (sinkRef[0] != null) track.removeSink(sinkRef[0]);
                 } catch (Throwable ignored) {
                 }
-                publishTrack(track, firstShare, trackToRetire);
+                publishTrack(track, newSender, cid, trackToRetire);
                 // Only now is the user really sharing — announce it. (On reuse this
                 // merely refreshes an already-announced state.)
                 notifySharingStateChanged();
@@ -314,12 +341,7 @@ public class ScreenShareClient {
         if (!firstShare && sender != null) {
             // A previous share was live on this sender; wind it down like stopSharing().
             // (The retired track itself is disposed in dispose(), same as a normal stop.)
-            for (RTCRtpTransceiver t : publisherPc.getTransceivers()) {
-                if (t.getSender() == sender) {
-                    t.setDirection(RTCRtpTransceiverDirection.INACTIVE);
-                    break;
-                }
-            }
+            withTransceiverOf(sender, t -> t.setDirection(RTCRtpTransceiverDirection.INACTIVE));
             triggerRenegotiation();
         }
 
@@ -334,12 +356,7 @@ public class ScreenShareClient {
         log.info("[ScreenShare] Stopping");
 
         if (sender != null) {
-            for (RTCRtpTransceiver t : publisherPc.getTransceivers()) {
-                if (t.getSender() == sender) {
-                    t.setDirection(RTCRtpTransceiverDirection.INACTIVE);
-                    break;
-                }
-            }
+            withTransceiverOf(sender, t -> t.setDirection(RTCRtpTransceiverDirection.INACTIVE));
         }
 
         releaseDesktopResources();
@@ -360,7 +377,12 @@ public class ScreenShareClient {
                 publisherPc.removeTrack(sender);
             } catch (Throwable ignored) {
             }
+            try {
+                sender.dispose(); // addTrack() senders are not owned by the PC
+            } catch (Throwable ignored) {
+            }
             sender = null;
+            senderCodec = null;
         }
         if (videoTrack != null) {
             videoTrack.dispose();
@@ -468,7 +490,8 @@ public class ScreenShareClient {
      * races against the offer and causes LiveKit to delay or drop the track,
      * contributing to the startup lag.</p>
      */
-    private void triggerRenegotiationWithAddTrack() {
+    private void triggerRenegotiationWithAddTrack(String cid) {
+        final VideoCodecChoice publishedCodec = codec;
         if (publisherPc == null) return;
 
         publisherPc.createOffer(new RTCOfferOptions(), new CreateSessionDescriptionObserver() {
@@ -492,10 +515,11 @@ public class ScreenShareClient {
                         // dips below it.
                         ScreenShareQuality q = quality;
                         livekitSignaling.sendAddVideoTrackRequest(
-                                VIDEO_TRACK_CID,
+                                cid,
                                 "screen_share",
                                 LivekitModels.TrackSource.SCREEN_SHARE,
-                                q.maxW, q.maxH, targetBitrateBps(q)
+                                q.maxW, q.maxH, targetBitrateBps(q),
+                                publishedCodec.getLivekitName()
                         );
                     }
 
@@ -542,6 +566,96 @@ public class ScreenShareClient {
                 log.error("[ScreenShare] createOffer failed: {}", e);
             }
         });
+    }
+
+    // ── Codec selection ────────────────────────────────────────────────────────
+
+    /**
+     * Puts the chosen codec first in the screen-share transceiver's codec list (the rest keep
+     * their order, so RTX/RED/FEC and a fallback codec still negotiate). The factory's encoder
+     * for that codec is GPU-first with a software fallback of the same codec, see
+     * {@link VideoCodecChoice}.
+     */
+    private void applyCodecPreferences() {
+        VideoCodecChoice c = codec;
+        if (sender == null || c == null || c.getSdpName() == null) return;
+        try {
+            List<RTCRtpCodecCapability> all = factory.getRtpSenderCapabilities(MediaType.VIDEO).getCodecs();
+            List<RTCRtpCodecCapability> ordered = new ArrayList<>(all.size());
+            for (RTCRtpCodecCapability cap : all) {
+                if (c.getSdpName().equalsIgnoreCase(cap.getName())) ordered.add(cap);
+            }
+            if (ordered.isEmpty()) {
+                log.warn("[ScreenShare] {} is not supported by this build — keeping the default codec order",
+                        c.getDisplayName());
+                return;
+            }
+            for (RTCRtpCodecCapability cap : all) {
+                if (!c.getSdpName().equalsIgnoreCase(cap.getName())) ordered.add(cap);
+            }
+            boolean applied = withTransceiverOf(sender, t -> t.setCodecPreferences(ordered));
+            if (!applied) log.warn("[ScreenShare] Screen-share transceiver not found — codec preference not applied");
+        } catch (Throwable t) {
+            log.warn("[ScreenShare] Failed to apply codec preference {}: {}", c.getDisplayName(), t.toString());
+        }
+    }
+
+    /**
+     * Logs the encoder implementation the share actually ended up with (e.g. "NVENC (…)",
+     * "libvpx", or a software fallback) a few seconds after publishing — once frames flow.
+     */
+    private void logEncoderInUseLater() {
+        final RTCRtpSender s = sender;
+        if (s == null) return;
+        Thread.ofVirtual().name("screenshare-encoder-log").start(() -> {
+            try {
+                Thread.sleep(5000);
+                if (!sharing.get() || s != sender) return;
+                publisherPc.getStats(s, report -> report.getStats().values().stream()
+                        .filter(st -> st.getType() == RTCStatsType.OUTBOUND_RTP)
+                        .findFirst()
+                        .ifPresent(st -> {
+                            var a = st.getAttributes();
+                            log.info("[ScreenShare] Encoder in use: {} (powerEfficient={}) {}x{} @{} fps, requested {}",
+                                    a.get("encoderImplementation"), a.get("powerEfficientEncoder"),
+                                    a.get("frameWidth"), a.get("frameHeight"), a.get("framesPerSecond"),
+                                    codec.label());
+                        }));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } catch (Throwable t) {
+                log.debug("[ScreenShare] Encoder stats unavailable: {}", t.toString());
+            }
+        });
+    }
+
+    /**
+     * Runs {@code action} on the transceiver that owns {@code target}. webrtc-java hands out a new
+     * Java wrapper on every {@code getTransceivers()} / {@code getSender()} call, so identity
+     * ({@code ==}) never matches — {@code equals()} compares the native sender. The temporary
+     * wrappers are disposed (that only drops their own native reference).
+     *
+     * @return true if the transceiver was found
+     */
+    private boolean withTransceiverOf(RTCRtpSender target, java.util.function.Consumer<RTCRtpTransceiver> action) {
+        if (target == null || publisherPc == null) return false;
+        boolean found = false;
+        for (RTCRtpTransceiver t : publisherPc.getTransceivers()) {
+            RTCRtpSender s = null;
+            try {
+                s = t.getSender();
+                if (!found && target.equals(s)) {
+                    action.accept(t);
+                    found = true;
+                }
+            } finally {
+                if (s != null && s != target) {
+                    try { s.dispose(); } catch (Throwable ignored) {}
+                }
+                try { t.dispose(); } catch (Throwable ignored) {}
+            }
+        }
+        return found;
     }
 
     // ── Internal helpers ───────────────────────────────────────────────────────

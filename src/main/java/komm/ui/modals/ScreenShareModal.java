@@ -25,6 +25,7 @@ import javafx.util.Duration;
 import komm.App;
 import komm.ui.customnodes.CustomNotification;
 import komm.utils.UserSettings;
+import komm.webrtc.VideoCodecChoice;
 import komm.ui.screenshare.SourceCard;
 import komm.ui.screenshare.WindowIconFetcher;
 import komm.ui.screenshare.ScreenShareQuality;
@@ -71,6 +72,7 @@ public class ScreenShareModal extends HBox {
 
     private int selectedResolution = UserSettings.getInstance().getScreenShareResolution();
     private int selectedFps = UserSettings.getInstance().getScreenShareFps();
+    private VideoCodecChoice selectedCodec = UserSettings.getInstance().getScreenShareCodec();
 
     /** Whether this OS/build can capture system audio excluding our own process. */
     private final boolean audioSupported = AudioLoopbackCapture.isSupported();
@@ -396,8 +398,55 @@ public class ScreenShareModal extends HBox {
             if (nv == null) old.setSelected(true);
         });
 
-        root.getChildren().addAll(resLabel, resRow, fpsLabel, fpsRow);
+        Label codecLabel = new Label("Encoder");
+        codecLabel.setStyle("-fx-font-size: 12px; -fx-font-weight: bold;");
+
+        // GPU entries only appear where this machine encodes that codec in hardware; a GPU
+        // encoder that fails mid-stream falls back to the software encoder on its own.
+        ToggleGroup codecGroup = new ToggleGroup();
+        javafx.scene.layout.FlowPane codecRow = new javafx.scene.layout.FlowPane(8, 8);
+        Label codecHint = new Label();
+        codecHint.getStyleClass().addAll(Styles.TEXT_MUTED, Styles.TEXT_SMALL);
+        codecHint.setWrapText(true);
+        codecHint.setMaxWidth(440);
+        for (VideoCodecChoice c : VideoCodecChoice.available()) {
+            ToggleButton btn = new ToggleButton(c.label());
+            btn.setToggleGroup(codecGroup);
+            btn.setFocusTraversable(false);
+            btn.getStyleClass().addAll(Styles.BUTTON_OUTLINED, Styles.SMALL);
+            if (c == selectedCodec) btn.setSelected(true);
+            btn.selectedProperty().addListener((obs, was, is) -> {
+                if (is) {
+                    selectedCodec = c;
+                    UserSettings.getInstance().setScreenShareCodec(c);
+                    codecHint.setText(codecHint(c));
+                }
+            });
+            codecRow.getChildren().add(btn);
+        }
+        if (codecGroup.getSelectedToggle() == null && !codecGroup.getToggles().isEmpty()) {
+            // Saved choice not available on this machine (e.g. GPU codec on another PC) → Auto.
+            selectedCodec = VideoCodecChoice.AUTO;
+            codecGroup.getToggles().get(0).setSelected(true);
+        }
+        codecGroup.selectedToggleProperty().addListener((obs, old, nv) -> {
+            if (nv == null) old.setSelected(true);
+        });
+        codecHint.setText(codecHint(selectedCodec));
+
+        root.getChildren().addAll(resLabel, resRow, fpsLabel, fpsRow, codecLabel, codecRow, codecHint);
         return root;
+    }
+
+    private static String codecHint(VideoCodecChoice choice) {
+        VideoCodecChoice c = choice.resolve();
+        String base = c.isHardwareEncoded()
+                ? "Encoded by your graphics card — lowest CPU usage. Falls back to the CPU if the GPU encoder fails."
+                : "Encoded on the CPU (" + c.getDisplayName() + "). Higher resolutions and frame rates cost noticeably more CPU.";
+        if (choice == VideoCodecChoice.AUTO) {
+            return (c.isHardwareEncoded() ? "Uses your GPU. " : "No supported GPU encoder found, uses the CPU. ") + base;
+        }
+        return base;
     }
 
     // ── Source loading ────────────────────────────────────────────────────────
@@ -700,6 +749,7 @@ public class ScreenShareModal extends HBox {
                     .sourceId(0)
                     .isWindow(false)
                     .quality(new ScreenShareQuality(selectedFps, resolutionToWidth(selectedResolution), selectedResolution))
+                    .codec(selectedCodec)
                     .audioEnabled(audioSupported && audioCheck.isSelected())
                     .build();
             App.closeModal();
@@ -763,6 +813,7 @@ public class ScreenShareModal extends HBox {
                 .sourceId(card.getSourceId())
                 .isWindow(card.isWindow())
                 .quality(new ScreenShareQuality(selectedFps, resolutionToWidth(selectedResolution), selectedResolution))
+                    .codec(selectedCodec)
                 .audioEnabled(audioSupported && !card.isWindow() && audioCheck.isSelected())
                 .build();
         App.closeModal();

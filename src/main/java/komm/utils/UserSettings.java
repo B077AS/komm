@@ -33,6 +33,7 @@ public class UserSettings {
     private static final String THEME_KEY               = "ui.theme";
     private static final String SCREENSHARE_RESOLUTION_KEY = "screenshare.quality.resolution";
     private static final String SCREENSHARE_FPS_KEY        = "screenshare.quality.fps";
+    private static final String SCREENSHARE_CODEC_KEY      = "screenshare.codec";
     
     /**
      * {@code null} path means "pre-login defaults only" — reads return defaults, saves are no-ops.
@@ -379,6 +380,15 @@ public class UserSettings {
 
     public void setScreenShareFps(int fps) {
         set(SCREENSHARE_FPS_KEY, String.valueOf(fps));
+    }
+
+    /** Requested screen-share codec/encoder (default AUTO = GPU H.264 if available, else CPU VP8). */
+    public komm.webrtc.VideoCodecChoice getScreenShareCodec() {
+        return komm.webrtc.VideoCodecChoice.fromSetting(properties.getProperty(SCREENSHARE_CODEC_KEY));
+    }
+
+    public void setScreenShareCodec(komm.webrtc.VideoCodecChoice codec) {
+        set(SCREENSHARE_CODEC_KEY, codec.name());
     }
 
     // Generic getters/setters

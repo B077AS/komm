@@ -1,0 +1,9 @@
+# Shell scripts and AppImage entry points run on Linux CI / user machines: always LF.
+*.sh text eol=lf
+launcher/packaging/linux/AppRun text eol=lf
+launcher/packaging/linux/*.desktop text eol=lf
+# Binary packaging assets
+*.ico binary
+*.bmp binary
+*.png binary
+*.ttf binary

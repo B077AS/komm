@@ -1,0 +1,98 @@
+/*
+ * Launcher-only layout on top of the client's theme. The user-agent stylesheet is the same one
+ * the client uses (AtlantaFX Dracula patched by komm-theme.css, see KommStylesheet), and the accent
+ * palette is the user's own (AppTheme, read from config/accent) — so every -color-* token below
+ * resolves exactly as it does in the client.
+ */
+
+.launcher-root {
+    -fx-background-color: transparent;
+}
+
+/* The Discord-style rounded card. */
+.launcher-card {
+    -fx-background-color: -color-bg-subtle;
+    -fx-background-radius: 6;
+    -fx-border-radius: 6;
+    -fx-border-color: -color-border-subtle;
+    -fx-border-width: 1;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.5), 36, 0.05, 0, 12);
+}
+
+.launcher-title {
+    -fx-font-size: 30px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -color-fg-default;
+}
+
+/* Animated status phrase ("Checking for updates…" etc.) */
+.launcher-status {
+    -fx-font-size: 13px;
+    -fx-text-fill: -color-fg-muted;
+}
+
+.launcher-status.is-error {
+    -fx-text-fill: -color-danger-fg;
+}
+
+/* Thin accent progress bar. */
+.launcher-progress {
+    -fx-pref-height: 6px;
+    -fx-min-height: 6px;
+    -fx-max-height: 6px;
+    -fx-indeterminate-bar-length: 60;
+    -fx-indeterminate-bar-escape: true;
+    -fx-indeterminate-bar-flip: true;
+    -fx-indeterminate-bar-animation-time: 2;
+}
+
+.launcher-progress > .track {
+    -fx-background-color: -color-bg-inset;
+    -fx-background-radius: 3;
+    -fx-background-insets: 0;
+}
+
+.launcher-progress > .bar {
+    -fx-background-color: -color-accent-emphasis;
+    -fx-background-radius: 3;
+    -fx-background-insets: 0;
+    -fx-padding: 0;
+}
+
+/* The client theme gives every .button its notched skin (a client-only class); the launcher
+   uses the plain JavaFX skin with no border. */
+.button {
+    -fx-skin: "javafx.scene.control.skin.ButtonSkin";
+}
+
+/* Frameless-window close button: flat like the client's title-bar buttons — none of the
+   theme's .button border/notch, just an accent wash on hover. */
+.button.launcher-window-button {
+    -fx-skin: "javafx.scene.control.skin.ButtonSkin";
+    -fx-background-color: transparent;
+    -fx-background-insets: 0;
+    -fx-background-radius: 3;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-border-insets: 0;
+    -fx-effect: null;
+    -fx-padding: 5 7 5 7;
+    -fx-cursor: hand;
+}
+
+.button.launcher-window-button .ikonli-font-icon {
+    -fx-icon-color: -color-fg-subtle;
+}
+
+.button.launcher-window-button:hover {
+    -fx-background-color: -color-accent-subtle;
+    -fx-border-color: transparent;
+}
+
+.button.launcher-window-button:hover .ikonli-font-icon {
+    -fx-icon-color: -color-accent-emphasis;
+}
+
+.button.launcher-window-button:armed {
+    -fx-background-color: -color-accent-muted;
+}
