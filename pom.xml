@@ -172,7 +172,7 @@
         <dependency>
             <groupId>io.github.b077as.emojifx</groupId>
             <artifactId>emoji</artifactId>
-            <version>1.0.2</version>
+            <version>1.0.3</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/org.fxmisc.richtext/richtextfx -->
         <dependency>
@@ -367,6 +367,7 @@
                         <option>-XX:ParallelGCThreads=2</option>
                         <option>-XX:ConcGCThreads=1</option>
                         <option>-XX:MaxDirectMemorySize=1g</option>
+                        <option>-XX:+UseCompactObjectHeaders</option>
                     </options>
                 </configuration>
             </plugin>
