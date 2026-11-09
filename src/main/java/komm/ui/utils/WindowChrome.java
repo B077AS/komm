@@ -21,6 +21,8 @@ import javafx.stage.StageStyle;
 import javafx.geometry.Pos;
 import lombok.extern.slf4j.Slf4j;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Objects;
 
 import static com.sun.jna.Platform.isWindows;
@@ -45,9 +47,42 @@ import static com.sun.jna.Platform.isWindows;
 @Slf4j
 public final class WindowChrome {
 
-    private static final boolean ENABLED =
-            !"native".equalsIgnoreCase(System.getProperty("komm.titlebar"))
-                    && Platform.isSupported(ConditionalFeature.EXTENDED_WINDOW);
+    private static final boolean ENABLED = readPreferCustom()
+            && Platform.isSupported(ConditionalFeature.EXTENDED_WINDOW);
+
+    /** Machine-wide choice (not per user: it is needed before anyone logs in), "native" or "custom". */
+    private static Path prefFile() {
+        return komm.Launcher.getConfigDirectory().resolve("titlebar");
+    }
+
+    /** {@code -Dkomm.titlebar=native|custom} wins; otherwise the saved Appearance setting; default custom. */
+    private static boolean readPreferCustom() {
+        String prop = System.getProperty("komm.titlebar");
+        if (prop != null) return !"native".equalsIgnoreCase(prop);
+        try {
+            Path f = prefFile();
+            if (Files.isRegularFile(f)) return !"native".equalsIgnoreCase(Files.readString(f).trim());
+        } catch (Exception e) {
+            // unreadable setting: fall through to the default
+        }
+        return true;
+    }
+
+    /** The saved preference (what the next launch will use), not necessarily what is active now. */
+    public static boolean isCustomPreferred() {
+        return readPreferCustom();
+    }
+
+    /** Persists the choice; takes effect on the next launch (a stage's style cannot change once created). */
+    public static void setCustomPreferred(boolean custom) {
+        try {
+            Path f = prefFile();
+            Files.createDirectories(f.getParent());
+            Files.writeString(f, custom ? "custom" : "native");
+        } catch (Exception e) {
+            log.warn("[Chrome] could not save title bar setting: {}", e.toString());
+        }
+    }
 
     static {
         log.info("[Chrome] custom title bar {}", ENABLED ? "enabled (StageStyle.EXTENDED)" : "disabled (native decorations)");

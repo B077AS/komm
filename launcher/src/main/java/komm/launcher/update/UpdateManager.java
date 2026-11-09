@@ -420,6 +420,19 @@ public class UpdateManager {
      */
     private static void guardAppImageMount(Process client) {
         if (System.getenv("APPIMAGE") == null) return;
+        // Started by the AppImage's small parent process (Launcher.relaunchIfNewerLauncherStaged):
+        // give it the client's PID and let this heavyweight JavaFX JVM exit; the parent keeps the
+        // mount alive instead.
+        String handoff = System.getenv("KOMM_MOUNT_HANDOFF");
+        if (handoff != null && !handoff.isBlank()) {
+            try {
+                Files.writeString(Path.of(handoff), Long.toString(client.pid()));
+                log.info("AppImage mount handed to the parent process (client pid {}); launcher will exit", client.pid());
+                return; // appImageMountGuarded stays false -> LauncherApp exits the JVM after the window closes
+            } catch (Exception e) {
+                log.warn("Mount handoff failed, keeping the mount alive in this process: {}", e.toString());
+            }
+        }
         appImageMountGuarded = true;
         Thread keeper = new Thread(() -> {
             try {

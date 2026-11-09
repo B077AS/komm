@@ -88,6 +88,14 @@ public class Launcher {
 
             List<String> command = new ArrayList<>();
             command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
+            // The relaunched JVM lingers for the whole session (it keeps the AppImage mount alive),
+            // so it must stay as lean as the packaged launcher (Komm.cfg). Without these it ran with
+            // default sizing — a heap up to 25% of RAM and G1 — and sat at ~375 MB doing nothing.
+            command.add("-XX:+UseSerialGC");
+            command.add("-Xms8m");
+            command.add("-Xmx128m");
+            command.add("-XX:TieredStopAtLevel=1");
+            command.add("--enable-native-access=ALL-UNNAMED");
             command.add("-cp");
             command.add(staged.toAbsolutePath().toString());
             command.add(Launcher.class.getName());
@@ -98,8 +106,27 @@ public class Launcher {
             // up until the relaunched process, and everything it later spawns
             // (up to and including the client), is fully done — same reasoning
             // as UpdateManager's own AppImage mount guard, just one hop earlier.
-            Process process = new ProcessBuilder(command).inheritIO().start();
+            //
+            // Handoff: the relaunched launcher (JavaFX + GTK + Mesa, ~275 MB resident) must not
+            // linger for the whole session just to hold the mount. It writes the client's PID to
+            // this file and exits; this small process then waits for the client instead.
+            Path handoff = Files.createTempFile("komm-handoff", ".pid");
+            ProcessBuilder pb = new ProcessBuilder(command).inheritIO();
+            pb.environment().put("KOMM_MOUNT_HANDOFF", handoff.toAbsolutePath().toString());
+            Process process = pb.start();
             int exitCode = process.waitFor();
+            long clientPid = -1;
+            try {
+                String txt = Files.readString(handoff).trim();
+                if (!txt.isEmpty()) clientPid = Long.parseLong(txt);
+            } catch (Exception ignored) {
+            }
+            try { Files.deleteIfExists(handoff); } catch (IOException ignored) { }
+            if (clientPid > 0) {
+                ProcessHandle.of(clientPid).ifPresent(h -> {
+                    try { h.onExit().join(); } catch (Throwable ignored) { }
+                });
+            }
             System.exit(exitCode);
             return true; // unreachable, but keeps the method's intent clear
         } catch (Exception e) {
