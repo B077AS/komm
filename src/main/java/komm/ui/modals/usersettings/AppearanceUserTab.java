@@ -1,17 +1,21 @@
 package komm.ui.modals.usersettings;
 
 import javafx.geometry.Insets;
+import javafx.geometry.Orientation;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.control.Separator;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
+import atlantafx.base.controls.ToggleSwitch;
 import komm.ui.theme.AppTheme;
 import komm.ui.theme.ThemeManager;
+import komm.ui.utils.WindowChrome;
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignP;
 
@@ -31,7 +35,7 @@ public class AppearanceUserTab implements UserSettingsTab {
 
     private VBox buildContent() {
         VBox root = new VBox(16);
-        root.setPadding(new Insets(24));
+        root.setPadding(new Insets(20, 28, 20, 28));
 
         root.getChildren().add(sectionLabel("Accent Colour"));
 
@@ -40,6 +44,25 @@ public class AppearanceUserTab implements UserSettingsTab {
         populateSwatches();
 
         root.getChildren().add(swatchGrid);
+
+        root.getChildren().add(new Separator(Orientation.HORIZONTAL));
+        root.getChildren().add(sectionLabel("Window"));
+
+        Label barTitle = new Label("Custom title bar");
+        Label hint = new Label("Turn off to use your system's title bar instead, e.g. if dragging the window "
+                + "misbehaves. Takes effect after restarting Komm.");
+        hint.setWrapText(true);
+        hint.setStyle("-fx-font-size: 11.5px; -fx-text-fill: -color-fg-subtle;");
+        VBox barText = new VBox(2, barTitle, hint);
+        HBox.setHgrow(barText, Priority.ALWAYS);
+
+        ToggleSwitch customBar = new ToggleSwitch();
+        customBar.setSelected(WindowChrome.isCustomPreferred());
+        customBar.selectedProperty().addListener((o, was, now) -> WindowChrome.setCustomPreferred(now));
+
+        HBox barRow = new HBox(16, barText, customBar);
+        barRow.setAlignment(Pos.CENTER_LEFT);
+        root.getChildren().add(barRow);
         return root;
     }
 
