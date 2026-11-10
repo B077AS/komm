@@ -7,9 +7,6 @@ import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
-import javafx.scene.image.Image;
-import javafx.scene.image.ImageView;
-import javafx.scene.input.MouseButton;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
@@ -21,8 +18,6 @@ import org.kordamp.ikonli.feather.Feather;
 import org.kordamp.ikonli.javafx.FontIcon;
 import atlantafx.base.theme.Styles;
 
-import java.io.ByteArrayInputStream;
-import java.util.Base64;
 
 @Slf4j
 public class AttachmentDisplayBuilder {
@@ -41,54 +36,23 @@ public class AttachmentDisplayBuilder {
     public static Node buildAttachmentDisplay(MessageReceivedPayload msg) {
         if (msg.getFileType() == null) return null;
 
-        String mime = msg.getFileType();
         String fileName = msg.getFileName() != null ? msg.getFileName() : "attachment";
 
-        if (mime.startsWith("image/") && msg.getFile64() != null && !msg.getFile64().isBlank()) {
-            try {
-                byte[] bytes = Base64.getDecoder().decode(msg.getFile64());
-                Image img = new Image(new ByteArrayInputStream(bytes),
-                        320, 240, true, true);
-                ImageView iv = new ImageView(img);
-                iv.setPreserveRatio(true);
-                iv.setFitWidth(320);
-                iv.setFitHeight(240);
-                iv.setStyle("-fx-cursor: hand;");
-                iv.setOnMouseClicked(e -> {
-                    if (e.getButton() == MouseButton.PRIMARY) {
-                        Image fullImage = new Image(new ByteArrayInputStream(bytes));
-                        ImageView modalImage = new ImageView(fullImage);
-                        modalImage.setPreserveRatio(true);
-                        modalImage.setFitWidth(800);
-                        modalImage.setFitHeight(600);
-
-                        javafx.scene.control.MenuItem miDownload = new javafx.scene.control.MenuItem("Download image…");
-                        miDownload.setOnAction(ev -> saveBytes(bytes, fileName, modalImage));
-                        javafx.scene.control.ContextMenu modalMenu = new javafx.scene.control.ContextMenu(miDownload);
-
-                        modalImage.setOnContextMenuRequested(ev ->
-                                modalMenu.show(modalImage, ev.getScreenX(), ev.getScreenY()));
-                        modalImage.setOnMousePressed(ev -> {
-                            if (ev.isPrimaryButtonDown() && modalMenu.isShowing()) modalMenu.hide();
-                        });
-
-                        App.getModalPane().show(modalImage);
-                        modalImage.requestFocus();
-                        e.consume();
-                    }
-                });
-
-                VBox wrapper = new VBox(iv);
-                wrapper.setAlignment(Pos.CENTER_LEFT);
-                VBox.setMargin(wrapper, new Insets(4, 0, 0, 0));
-                return wrapper;
-            } catch (Exception e) {
-                log.warn("Could not decode image attachment", e);
-                // fall through to generic chip
-            }
+        if (ImageAttachmentView.canShow(msg)) {
+            return ImageAttachmentView.build(msg, fileName, AttachmentDisplayBuilder::buildFileChip);
         }
 
         return buildFileChip(msg);
+    }
+
+    /**
+     * Call from the history-fetch thread for each message: if it carries an inline (base64)
+     * picture, that is moved to the on-disk media cache.
+     *
+     * @return true if the caller should now null the message's {@code file64}
+     */
+    public static boolean offloadInlineImage(java.util.UUID messageId, String fileType, String file64) {
+        return ImageAttachmentView.offload(messageId, fileType, file64);
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
@@ -245,20 +209,4 @@ public class AttachmentDisplayBuilder {
         return String.format("%.1f GB", bytes / (1024.0 * 1024 * 1024));
     }
 
-    private static void saveBytes(byte[] bytes, String fileName, javafx.scene.Node ownerNode) {
-        javafx.stage.FileChooser chooser = new javafx.stage.FileChooser();
-        chooser.setTitle("Save image");
-        chooser.setInitialFileName(fileName);
-        java.io.File dest = komm.ui.utils.FileChooserUtil.showSaveDialog(chooser, ownerNode.getScene().getWindow());
-        if (dest == null) return;
-
-        Thread.ofVirtual().start(() -> {
-            try {
-                java.nio.file.Files.write(dest.toPath(), bytes);
-                log.info("Image saved to {}", dest.getAbsolutePath());
-            } catch (Exception ex) {
-                log.error("Failed to save image", ex);
-            }
-        });
-    }
 }

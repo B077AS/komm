@@ -120,6 +120,13 @@ public class DmChatSection extends VBox {
                                 .collect(Collectors.toSet());
                         App.getAvatarCache().resolveAll(senderIds).join();
                         App.getAvatarCache().preloadImages(senderIds);
+                        // inline pictures go to the disk cache now, not onto the heap for the session
+                        for (DmReceivedPayload m : messages) {
+                            if (AttachmentDisplayBuilder.offloadInlineImage(
+                                    m.getMessageId(), m.getFileType(), m.getFile64())) {
+                                m.setFile64(null);
+                            }
+                        }
                     }
                     return new FetchResult(pid, initial,
                             messages != null ? messages : List.of());

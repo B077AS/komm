@@ -328,8 +328,12 @@ public class EmojiMessageItem extends HBox {
         if (bot.getAvatarUrl() != null && !bot.getAvatarUrl().isBlank()) {
             // Background-loaded straight from the URL; falls back to the initial-letter
             // circle in applyUser/applyMiniAvatar until (if ever) it finishes loading.
-            user.setChatImage(new Image(bot.getAvatarUrl(), AVATAR_SIZE, AVATAR_SIZE, true, true, true));
-            user.setMiniImage(new Image(bot.getAvatarUrl(), MINI_SIZE, MINI_SIZE, true, true, true));
+            // Shared through the image cache: one fetch per bot, not one per message row.
+            String url = bot.getAvatarUrl();
+            user.setChatImage(komm.media.MediaImages.cachedOrCreate("bot-avatar:" + url + "@chat",
+                    () -> new Image(url, AVATAR_SIZE, AVATAR_SIZE, true, true, true)));
+            user.setMiniImage(komm.media.MediaImages.cachedOrCreate("bot-avatar:" + url + "@mini",
+                    () -> new Image(url, MINI_SIZE, MINI_SIZE, true, true, true)));
         }
         return user;
     }
