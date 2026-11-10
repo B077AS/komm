@@ -17,6 +17,10 @@ import javafx.stage.Popup;
 import javafx.stage.Window;
 import javafx.util.Duration;
 import komm.App;
+import komm.media.GifDecoder;
+import komm.media.GifView;
+import komm.media.MediaImages;
+import komm.media.MediaStore;
 import komm.model.dto.summary.GifPage;
 import komm.model.dto.summary.GifResult;
 import komm.ui.utils.IconColorUtil;
@@ -107,6 +111,11 @@ public class GifPickerPopup {
                 favoriteGifs.clear();
                 loadFavoritesAsync();
                 loadTrending();
+            } else {
+                // a hidden popup keeps its scene: drop the previews instead of holding them
+                cancelCurrentTask();
+                currentGeneration++;
+                clearGrid();
             }
         });
     }
@@ -231,6 +240,7 @@ public class GifPickerPopup {
         VBox.setVgrow(gridScroll, Priority.ALWAYS);
 
         scrollListener = (obs, oldVal, newVal) -> {
+            updatePlayingPreviews();
             if (activeTab != Tab.SEARCH || !hasMore || loadingMore) return;
             if (newVal.doubleValue() >= PRELOAD_THRESHOLD) loadNextPage();
         };
@@ -485,13 +495,6 @@ public class GifPickerPopup {
             if (onGifSelected != null) onGifSelected.accept(gif);
         });
 
-        ImageView imageView = new ImageView();
-        imageView.setFitWidth(CELL_WIDTH);
-        imageView.setPreserveRatio(true);
-        imageView.setSmooth(true);
-        imageView.setMouseTransparent(true);
-        imageView.setVisible(false);
-
         ProgressIndicator spinner = new ProgressIndicator();
         spinner.setMaxSize(28, 28);
         spinner.setMouseTransparent(true);
@@ -503,7 +506,7 @@ public class GifPickerPopup {
         StackPane.setMargin(starBtn, new Insets(5));
         starBtn.setOpacity(0);
 
-        cell.getChildren().addAll(imageView, spinner, starBtn);
+        cell.getChildren().addAll(spinner, starBtn);
         cell.setAlignment(Pos.CENTER);
 
         cell.setOnMouseEntered(e -> starBtn.setOpacity(1));
@@ -514,17 +517,38 @@ public class GifPickerPopup {
             return cell;
         }
 
-        executor.submit(() -> {
+        // Previews go through the media pipeline: bytes from the disk cache (the trending page
+        // is the same every time the picker opens), GIFs played by a streaming GifView — one
+        // canvas each instead of every frame of every preview decoded up front.
+        MediaImages.LOADER.execute(() -> {
             try {
-                Image image = new Image(displayUrl, 0, 0, true, true, false);
+                java.nio.ByteBuffer data = MediaStore.openUrl(displayUrl);
+                Image still = null;
+                if (!GifDecoder.isGif(data)) {
+                    byte[] bytes = new byte[data.limit()];
+                    data.get(0, bytes);
+                    still = MediaImages.decodeToFit(bytes, CELL_WIDTH, cellHeight);
+                }
+                final Image fstill = still;
                 Platform.runLater(() -> {
-                    if (image.isError()) {
+                    if (cell.getScene() == null) return; // grid was cleared meanwhile
+                    try {
+                        ImageView view = fstill != null
+                                ? new ImageView(fstill)
+                                : new GifView(data, CELL_WIDTH, cellHeight);
+                        view.setFitWidth(CELL_WIDTH);
+                        view.setPreserveRatio(true);
+                        view.setSmooth(true);
+                        view.setMouseTransparent(true);
+                        cell.getChildren().remove(spinner);
+                        cell.getChildren().add(0, view);
+                        if (view instanceof GifView gv) {
+                            cell.setUserData(gv);
+                            gv.setPlaying(isInViewport(cell));
+                        }
+                    } catch (IllegalArgumentException bad) {
                         cell.getChildren().setAll(new Text("⚠"));
-                        return;
                     }
-                    imageView.setImage(image);
-                    imageView.setVisible(true);
-                    cell.getChildren().remove(spinner);
                 });
             } catch (Exception ex) {
                 Platform.runLater(() -> cell.getChildren().setAll(new Text("⚠")));
@@ -532,6 +556,23 @@ public class GifPickerPopup {
         });
 
         return cell;
+    }
+
+    // ── Only previews inside the scroll viewport animate ──────────────────────
+
+    private boolean isInViewport(javafx.scene.Node cell) {
+        if (cell.getScene() == null || gridScroll.getScene() == null) return false;
+        javafx.geometry.Bounds view = gridScroll.localToScene(gridScroll.getBoundsInLocal());
+        javafx.geometry.Bounds b = cell.localToScene(cell.getBoundsInLocal());
+        return b.getMaxY() >= view.getMinY() - 60 && b.getMinY() <= view.getMaxY() + 60;
+    }
+
+    private void updatePlayingPreviews() {
+        for (VBox column : columns) {
+            for (javafx.scene.Node cell : column.getChildren()) {
+                if (cell.getUserData() instanceof GifView gv) gv.setPlaying(isInViewport(cell));
+            }
+        }
     }
 
     private StackPane buildStarButton(GifResult gif, boolean[] isFavRef) {

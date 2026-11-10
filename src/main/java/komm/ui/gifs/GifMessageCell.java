@@ -1,33 +1,42 @@
 package komm.ui.gifs;
 
 import javafx.application.Platform;
-import javafx.beans.value.ChangeListener;
-import javafx.concurrent.Task;
 import javafx.geometry.Pos;
-import javafx.scene.Node;
-import javafx.scene.control.*;
+import javafx.scene.control.Button;
+import javafx.scene.control.ContextMenu;
+import javafx.scene.control.Label;
+import javafx.scene.control.MenuItem;
+import javafx.scene.control.ProgressIndicator;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
+import javafx.scene.input.MouseButton;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.shape.Rectangle;
 import javafx.stage.FileChooser;
+import komm.media.GifDecoder;
+import komm.media.GifView;
+import komm.media.ImageProbe;
+import komm.media.MediaImages;
+import komm.media.MediaStore;
 import komm.ui.utils.FileChooserUtil;
-import lombok.Getter;
-import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.net.URI;
-import java.net.URL;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.nio.file.Files;
 
+/**
+ * A chat bubble showing "whatever image is at this URL": an animated GIF or a still image.
+ *
+ * <p>Memory model (see {@code komm.media}): the file is downloaded once into the on-disk
+ * {@link MediaStore}; a GIF is played by a streaming {@link GifView} (one canvas, not one
+ * bitmap per frame), a still is decoded at display size and shared through
+ * {@link MediaImages}. Nothing but the remembered pixel size outlives the cell, so the
+ * bubble has its final height the next time it scrolls into view.
+ */
 @Slf4j
 public class GifMessageCell extends StackPane {
 
@@ -36,79 +45,56 @@ public class GifMessageCell extends StackPane {
     public static final double MIN_GIF_HEIGHT = 80.0;
 
     private static final double PLACEHOLDER_H = 225.0;
+    private static final double VIEWER_W = 800, VIEWER_H = 600;
 
-    private static final ExecutorService LOADER =
-            Executors.newFixedThreadPool(3, r -> {
-                Thread t = new Thread(r, "gif-loader");
-                t.setDaemon(true);
-                return t;
-            });
-
-    private final String gifUrl;
+    private final String url;
     private final String kindLabel;
+    private final String mediaKey;
 
     private double cellW = MAX_GIF_WIDTH;
     private double cellH = PLACEHOLDER_H;
-    private boolean sizeCommitted = false;
+    private boolean sizeCommitted;
 
-    private volatile boolean disposed = false;
-    private boolean loadStarted = false;
+    private volatile boolean disposed;
+    private volatile boolean attached;
+    private boolean loadStarted;
 
-    /**
-     * Called on the FX thread exactly once when the real GIF dimensions are
-     * committed (i.e. the cell's pref size changes from the placeholder to the
-     * real size).  The caller is responsible for deciding whether to scroll —
-     * this cell never touches the ScrollPane directly.
-     */
-    @Setter
-    @Getter
-    private Runnable onSizeCommitted;
+    /** The node currently showing the media: a {@link GifView} or a plain {@link ImageView}. */
+    private ImageView media;
+    /** Compressed GIF bytes while an animated bubble is alive (also held by its {@link GifView}). */
+    private java.nio.ByteBuffer gifBytes;
 
-    private final ImageView imageView;
     private final ProgressIndicator spinner;
     private final VBox errorBox;
-
-    // Scroll-pane hook — kept only to avoid memory leaks on dispose.
-    // The listeners are intentionally no-ops; the hook/unhook cycle just
-    // ensures we don't hold a stale reference after the scene changes.
-    private ScrollPane watchedScrollPane;
-    private ChangeListener<Number> vvalueListener;
-    private ChangeListener<Number> heightListener;
-
-    // ── Constructor ───────────────────────────────────────────────────────────
 
     public GifMessageCell(String gifUrl, int gifWidth, int gifHeight) {
         this(gifUrl, gifWidth, gifHeight, "GIF");
     }
 
     /**
-     * @param kindLabel what to call this in user-facing text ("GIF", "Image", ...) — this cell is
-     *                  really just "render whatever's at this URL", reused for anything that's
-     *                  displayed as an image bubble without being an uploaded attachment.
+     * @param kindLabel what to call this in user-facing text ("GIF", "Image", ...)
      */
-    public GifMessageCell(String gifUrl, int gifWidth, int gifHeight, String kindLabel) {
-        this.gifUrl = gifUrl;
+    public GifMessageCell(String url, int width, int height, String kindLabel) {
+        this.url = url;
         this.kindLabel = kindLabel;
+        this.mediaKey = "url:" + url;
+        MediaImages.renderScale(); // prime on the FX thread
 
-        if (gifWidth > 0 && gifHeight > 0) {
-            double[] wh = computeSize(gifWidth, gifHeight);
+        if (width <= 0 || height <= 0) {
+            int[] known = MediaImages.knownSize(mediaKey);
+            if (known != null) {
+                width = known[0];
+                height = known[1];
+            }
+        }
+        if (width > 0 && height > 0) {
+            double[] wh = computeSize(width, height);
             cellW = wh[0];
             cellH = wh[1];
             sizeCommitted = true;
-            setPrefSize(cellW, cellH);
-            setMaxSize(cellW, cellH);
-        } else {
-            setPrefSize(MAX_GIF_WIDTH, PLACEHOLDER_H);
-            setMaxSize(MAX_GIF_WIDTH, PLACEHOLDER_H);
         }
-
-        imageView = new ImageView();
-        imageView.setFitWidth(cellW);
-        imageView.setFitHeight(cellH);
-        imageView.setPreserveRatio(true);
-        imageView.setSmooth(true);
-        imageView.setMouseTransparent(true);
-        imageView.setVisible(false);
+        setPrefSize(cellW, cellH);
+        setMaxSize(cellW, cellH);
 
         spinner = new ProgressIndicator();
         spinner.setMaxSize(32, 32);
@@ -126,65 +112,34 @@ public class GifMessageCell extends StackPane {
         errorBox.setVisible(false);
         errorBox.setManaged(false);
 
-        getChildren().addAll(imageView, spinner, errorBox);
+        getChildren().addAll(spinner, errorBox);
         setAlignment(Pos.CENTER);
         setStyle("-fx-background-color: -color-bg-subtle; -fx-background-radius: 3px;");
         setCursor(javafx.scene.Cursor.HAND);
-        applyClip(cellW, cellH);
+        applyClip();
 
         setOnMouseClicked(e -> {
-            if (e.getButton() == javafx.scene.input.MouseButton.PRIMARY
-                    && imageView.getImage() != null && imageView.isVisible()) {
-
-                ImageView modalIv = new ImageView(imageView.getImage());
-                modalIv.setPreserveRatio(true);
-                modalIv.setSmooth(true);
-                modalIv.setFitWidth(800);
-                modalIv.setFitHeight(600);
-
-                // ── Context menu on the modal image ──────────────────────────
-                MenuItem miCopyUrl = new MenuItem("Copy " + kindLabel + " URL");
-                MenuItem miDownload = new MenuItem("Download " + kindLabel + "…");
-                ContextMenu modalMenu = new ContextMenu(miCopyUrl, miDownload);
-
-                miCopyUrl.setOnAction(ev -> {
-                    ClipboardContent cc = new ClipboardContent();
-                    cc.putString(gifUrl);
-                    Clipboard.getSystemClipboard().setContent(cc);
-                });
-
-                miDownload.setOnAction(ev -> downloadGif(gifUrl, modalIv));
-
-                modalIv.setOnContextMenuRequested(ev ->
-                        modalMenu.show(modalIv, ev.getScreenX(), ev.getScreenY()));
-
-                // Hide context menu on left-click
-                modalIv.setOnMousePressed(ev -> {
-                    if (ev.isPrimaryButtonDown() && modalMenu.isShowing()) {
-                        modalMenu.hide();
-                    }
-                });
-
-                komm.App.getModalPane().show(modalIv);
-                modalIv.requestFocus();
+            if (e.getButton() == MouseButton.PRIMARY && media != null && media.isVisible()) {
+                openViewer();
                 e.consume();
             }
         });
 
-        if (gifUrl == null || gifUrl.isBlank()) {
+        if (url == null || url.isBlank()) {
             showError();
             return;
         }
 
+        // A still that was decoded recently is shown straight away — no spinner, no reload.
+        Image ready = MediaImages.cached(mediaKey);
+        if (ready != null) {
+            showStill(ready);
+            loadStarted = true;
+        }
+
         sceneProperty().addListener((obs, oldScene, newScene) -> {
-            if (newScene != null) {
-                Platform.runLater(() -> {
-                    startLoad();
-                    hookScrollPane();
-                });
-            } else {
-                unhookScrollPane();
-            }
+            attached = newScene != null;
+            if (attached) startLoad();
         });
     }
 
@@ -193,50 +148,57 @@ public class GifMessageCell extends StackPane {
     public void dispose() {
         if (disposed) return;
         disposed = true;
-        unhookScrollPane();
-        onSizeCommitted = null;
-        Platform.runLater(() -> {
-            imageView.setImage(null);
-            imageView.setVisible(false);
-        });
-    }
-
-    public void rehookScrollPane() {
-        if (!disposed && getScene() != null) hookScrollPane();
+        gifBytes = null;
+        if (media instanceof GifView gv) gv.dispose();
+        if (media != null) media.setImage(null);
     }
 
     // ── Overlays ──────────────────────────────────────────────────────────────
 
     private void showSpinner() {
-        imageView.setVisible(false);
+        if (media != null) media.setVisible(false);
         spinner.setVisible(true);
         spinner.setManaged(true);
         errorBox.setVisible(false);
         errorBox.setManaged(false);
     }
 
-    private void showImage() {
-        imageView.setVisible(true);
+    private void showMedia(ImageView node) {
+        if (media != null && media != node) {
+            if (media instanceof GifView old) old.dispose();
+            getChildren().remove(media);
+        }
+        media = node;
+        node.setFitWidth(cellW);
+        node.setFitHeight(cellH);
+        node.setPreserveRatio(true);
+        node.setSmooth(true);
+        node.setMouseTransparent(true);
+        node.setVisible(true);
+        if (!getChildren().contains(node)) getChildren().add(0, node);
+        applyClip();
         spinner.setVisible(false);
         spinner.setManaged(false);
         errorBox.setVisible(false);
         errorBox.setManaged(false);
     }
 
+    private void showStill(Image image) {
+        if (!sizeCommitted) commitSize((int) image.getWidth(), (int) image.getHeight());
+        showMedia(new ImageView(image));
+    }
+
     private void showError() {
-        imageView.setVisible(false);
+        if (media != null) media.setVisible(false);
         spinner.setVisible(false);
         spinner.setManaged(false);
         errorBox.setVisible(true);
         errorBox.setManaged(true);
     }
 
-    // ── Retry ─────────────────────────────────────────────────────────────────
-
     private void retry() {
         if (disposed) return;
         loadStarted = false;
-        showSpinner();
         startLoad();
     }
 
@@ -247,46 +209,67 @@ public class GifMessageCell extends StackPane {
         loadStarted = true;
         showSpinner();
 
-        LOADER.submit(() -> {
+        MediaImages.LOADER.execute(() -> {
             if (disposed) return;
+            if (!attached) {
+                // scrolled away before its turn came: don't download for nobody
+                Platform.runLater(() -> loadStarted = false);
+                return;
+            }
             try {
-                Image image = new Image(gifUrl, 0, 0, true, true, false);
+                // GIFs are played straight from the memory-mapped cache file (nothing on the heap);
+                // stills are small enough to read, and are decoded once into the shared cache.
+                java.nio.ByteBuffer data = MediaStore.openUrl(url);
+                final java.nio.ByteBuffer gifData = GifDecoder.isGif(data) ? data : null;
+                final byte[] bytes;
+                int[] probed;
+                if (gifData != null) {
+                    bytes = null;
+                    probed = new int[]{(gifData.get(6) & 0xFF) | (gifData.get(7) & 0xFF) << 8,
+                            (gifData.get(8) & 0xFF) | (gifData.get(9) & 0xFF) << 8};
+                } else {
+                    bytes = new byte[data.limit()];
+                    data.get(0, bytes);
+                    probed = ImageProbe.size(bytes);
+                }
+                final int[] size = (probed != null && probed[0] > 0 && probed[1] > 0) ? probed : null;
+                if (size != null) MediaImages.rememberSize(mediaKey, size[0], size[1]);
 
-                if (image.isError()) {
-                    Throwable ex = image.getException();
-                    log.warn("{} failed to load [url={}]: {}", kindLabel, gifUrl, ex != null ? ex.getMessage() : "unknown error", ex.getMessage());
+                if (gifData != null && size != null) {
                     Platform.runLater(() -> {
-                        if (!disposed) showError();
+                        if (disposed) return;
+                        try {
+                            if (!sizeCommitted) commitSize(size[0], size[1]);
+                            GifView gv = new GifView(gifData, cellW, cellH);
+                            gv.setOnError(t -> {
+                                log.warn("{} failed to decode [url={}]: {}", kindLabel, url, t.toString());
+                                if (!disposed) showError();
+                            });
+                            gifBytes = gifData;
+                            showMedia(gv);
+                        } catch (IllegalArgumentException bad) {
+                            log.warn("{} unusable [url={}]: {}", kindLabel, url, bad.getMessage());
+                            showError();
+                        }
                     });
                     return;
                 }
 
+                Image image = MediaImages.decodeToFit(bytes, MAX_GIF_WIDTH, MAX_GIF_HEIGHT);
+                if (size == null) {
+                    MediaImages.rememberSize(mediaKey, (int) image.getWidth(), (int) image.getHeight());
+                }
+                MediaImages.cache(mediaKey, image);
                 Platform.runLater(() -> {
                     if (disposed) return;
-
                     if (!sizeCommitted) {
-                        int w = (int) image.getWidth();
-                        int h = (int) image.getHeight();
-                        if (w > 0 && h > 0) {
-                            double[] wh = computeSize(w, h);
-                            cellW = wh[0];
-                            cellH = wh[1];
-                            commitSize(cellW, cellH);
-                            applyClip(cellW, cellH);
-                            imageView.setFitWidth(cellW);
-                            imageView.setFitHeight(cellH);
-                        } else {
-                            log.warn("{} reported 0×0 dimensions [url={}], skipping size commit", kindLabel, gifUrl);
-                            sizeCommitted = true;
-                        }
+                        if (size != null) commitSize(size[0], size[1]);
+                        else commitSize((int) image.getWidth(), (int) image.getHeight());
                     }
-
-                    imageView.setImage(image);
-                    showImage();
+                    showMedia(new ImageView(image));
                 });
-
             } catch (Exception e) {
-                log.error("Unexpected error loading {} [url={}]", kindLabel, gifUrl, e);
+                log.warn("{} failed to load [url={}]: {}", kindLabel, url, e.toString());
                 Platform.runLater(() -> {
                     if (!disposed) showError();
                 });
@@ -294,88 +277,87 @@ public class GifMessageCell extends StackPane {
         });
     }
 
-    // ── Scroll-pane hook ──────────────────────────────────────────────────────
+    // ── Full-size viewer ──────────────────────────────────────────────────────
 
-    private void hookScrollPane() {
-        unhookScrollPane();
-        ScrollPane sp = findAncestorScrollPane();
-        if (sp == null) return;
-        watchedScrollPane = sp;
-        // No-op listeners — only here to keep the reference alive so we can
-        // cleanly remove them on dispose / scene detach.
-        vvalueListener = (obs, o, n) -> {
-        };
-        heightListener = (obs, o, n) -> {
-        };
-        sp.vvalueProperty().addListener(vvalueListener);
-        sp.heightProperty().addListener(heightListener);
-    }
-
-    private void unhookScrollPane() {
-        if (watchedScrollPane != null && vvalueListener != null) {
-            watchedScrollPane.vvalueProperty().removeListener(vvalueListener);
-            watchedScrollPane.heightProperty().removeListener(heightListener);
+    private void openViewer() {
+        ImageView viewer;
+        if (gifBytes != null) {
+            viewer = new GifView(gifBytes, VIEWER_W, VIEWER_H);
+        } else {
+            // show what we have, then swap in a sharper decode
+            ImageView iv = new ImageView(media.getImage());
+            viewer = iv;
+            MediaImages.LOADER.execute(() -> {
+                try {
+                    Image big = MediaImages.decodeToFit(MediaStore.fetchUrl(url), VIEWER_W, VIEWER_H);
+                    Platform.runLater(() -> {
+                        if (iv.getScene() != null) iv.setImage(big);
+                    });
+                } catch (Exception ex) {
+                    log.debug("{} viewer decode failed [url={}]: {}", kindLabel, url, ex.toString());
+                }
+            });
         }
-        watchedScrollPane = null;
-        vvalueListener = null;
-        heightListener = null;
-    }
+        viewer.setPreserveRatio(true);
+        viewer.setSmooth(true);
+        viewer.setFitWidth(VIEWER_W);
+        viewer.setFitHeight(VIEWER_H);
 
-    private ScrollPane findAncestorScrollPane() {
-        Node n = getParent();
-        while (n != null) {
-            if (n instanceof ScrollPane sp) return sp;
-            n = n.getParent();
-        }
-        return null;
+        MenuItem miCopyUrl = new MenuItem("Copy " + kindLabel + " URL");
+        MenuItem miDownload = new MenuItem("Download " + kindLabel + "…");
+        ContextMenu menu = new ContextMenu(miCopyUrl, miDownload);
+
+        miCopyUrl.setOnAction(ev -> {
+            ClipboardContent cc = new ClipboardContent();
+            cc.putString(url);
+            Clipboard.getSystemClipboard().setContent(cc);
+        });
+        miDownload.setOnAction(ev -> download(viewer));
+
+        viewer.setOnContextMenuRequested(ev -> menu.show(viewer, ev.getScreenX(), ev.getScreenY()));
+        viewer.setOnMousePressed(ev -> {
+            if (ev.isPrimaryButtonDown() && menu.isShowing()) menu.hide();
+        });
+
+        komm.App.getModalPane().show(viewer);
+        viewer.requestFocus();
     }
 
     // ── Sizing ────────────────────────────────────────────────────────────────
 
-    private double[] computeSize(int gifW, int gifH) {
-        double scale = MAX_GIF_WIDTH / (double) gifW;
+    private static double[] computeSize(int srcW, int srcH) {
+        double scale = MAX_GIF_WIDTH / (double) srcW;
         double w = MAX_GIF_WIDTH;
-        double h = Math.round(gifH * scale);
+        double h = Math.round(srcH * scale);
         if (h > MAX_GIF_HEIGHT) {
-            scale = MAX_GIF_HEIGHT / (double) gifH;
+            scale = MAX_GIF_HEIGHT / (double) srcH;
             h = MAX_GIF_HEIGHT;
-            w = Math.round(gifW * scale);
+            w = Math.round(srcW * scale);
         }
         h = Math.max(h, MIN_GIF_HEIGHT);
         return new double[]{w, h};
     }
 
-    /**
-     * Apply real pixel dimensions to this node and fire {@link #onSizeCommitted}.
-     * <p>
-     * This method deliberately does NOT touch the ScrollPane. The owner
-     * ({@code ChatSection}) decides whether scrolling is appropriate based on
-     * its own {@code isAtBottom} flag and the current channel context.
-     */
-    private void commitSize(double w, double h) {
+    private void commitSize(int srcW, int srcH) {
         sizeCommitted = true;
-        cellW = w;
-        cellH = h;
-        setPrefSize(w, h);
+        if (srcW <= 0 || srcH <= 0) return;
+        double[] wh = computeSize(srcW, srcH);
+        cellW = wh[0];
+        cellH = wh[1];
+        setPrefSize(cellW, cellH);
         setMinSize(Region.USE_COMPUTED_SIZE, Region.USE_COMPUTED_SIZE);
         setMaxSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
-
-        Runnable cb = onSizeCommitted;
-        if (cb != null) cb.run();
+        applyClip();
     }
 
-    private void applyClip(double w, double h) {
-        Rectangle r = new Rectangle(w, h);
+    private void applyClip() {
+        Rectangle r = new Rectangle(cellW, cellH);
         r.setArcWidth(10);
         r.setArcHeight(10);
         setClip(r);
-        Rectangle rv = new Rectangle(w, h);
-        rv.setArcWidth(10);
-        rv.setArcHeight(10);
-        imageView.setClip(rv);
     }
 
-    private void downloadGif(String url, javafx.scene.Node ownerNode) {
+    private void download(javafx.scene.Node ownerNode) {
         boolean isGif = "GIF".equals(kindLabel);
         String fallbackName = isGif ? "animation.gif" : "image.jpg";
 
@@ -385,9 +367,7 @@ public class GifMessageCell extends StackPane {
                 ? new FileChooser.ExtensionFilter("GIF / MP4 files", "*.gif", "*.mp4")
                 : new FileChooser.ExtensionFilter("Image files", "*.jpg", "*.jpeg", "*.png", "*.webp", "*.gif"));
 
-        String suggested = url.contains("/")
-                ? url.substring(url.lastIndexOf('/') + 1)
-                : fallbackName;
+        String suggested = url.contains("/") ? url.substring(url.lastIndexOf('/') + 1) : fallbackName;
         if (suggested.contains("?")) suggested = suggested.substring(0, suggested.indexOf('?'));
         if (suggested.isBlank()) suggested = fallbackName;
         chooser.setInitialFileName(suggested);
@@ -395,23 +375,13 @@ public class GifMessageCell extends StackPane {
         File file = FileChooserUtil.showSaveDialog(chooser, ownerNode.getScene().getWindow());
         if (file == null) return;
 
-        Task<Void> task = new Task<>() {
-            @Override
-            protected Void call() throws Exception {
-                URL src = URI.create(url).toURL();
-                try (InputStream in = src.openStream();
-                     FileOutputStream out = new FileOutputStream(file)) {
-                    in.transferTo(out);
-                }
-                return null;
+        Thread.ofVirtual().name("gif-download").start(() -> {
+            try {
+                Files.write(file.toPath(), MediaStore.fetchUrl(url));
+                log.info("{} saved to {}", kindLabel, file.getAbsolutePath());
+            } catch (Exception ex) {
+                log.warn("{} download failed", kindLabel, ex);
             }
-        };
-
-        task.setOnSucceeded(e -> log.info("{} saved to {}", kindLabel, file.getAbsolutePath()));
-        task.setOnFailed(e -> log.warn("{} download failed", kindLabel, task.getException()));
-
-        Thread dl = new Thread(task, "gif-download");
-        dl.setDaemon(true);
-        dl.start();
+        });
     }
 }

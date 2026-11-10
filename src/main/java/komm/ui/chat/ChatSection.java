@@ -159,6 +159,13 @@ public class ChatSection extends VBox {
                                 .collect(Collectors.toSet());
                         App.getAvatarCache().resolveAll(senderIds).join();
                         App.getAvatarCache().preloadImages(senderIds);
+                        // inline pictures go to the disk cache now, not onto the heap for the session
+                        for (MessageReceivedPayload m : page) {
+                            if (AttachmentDisplayBuilder.offloadInlineImage(
+                                    m.getMessageId(), m.getFileType(), m.getFile64())) {
+                                m.setFile64(null);
+                            }
+                        }
                     }
                     return new FetchResult(cid, initial,
                             page != null ? page : List.of());
