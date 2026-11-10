@@ -53,6 +53,10 @@ public final class MediaStore {
     /** Bytes on disk; -1 until the first scan. */
     private static final AtomicLong TOTAL = new AtomicLong(-1);
 
+    /** Live read-only mappings of cache files, shared between the views playing them. */
+    private static final ConcurrentHashMap<Path, java.lang.ref.WeakReference<ByteBuffer>> MAPPED =
+            new ConcurrentHashMap<>();
+
     private static volatile HttpClient http;
 
     private MediaStore() {
@@ -130,9 +134,19 @@ public final class MediaStore {
     public static ByteBuffer openUrl(String url) throws IOException {
         Path f = ensureUrlFile(url);
         if (f != null) {
+            // One live mapping per file: views of the same GIF (and a view that scrolls back
+            // before the old mapping was collected) share it instead of mapping it again.
+            java.lang.ref.WeakReference<ByteBuffer> ref = MAPPED.get(f);
+            ByteBuffer live = ref == null ? null : ref.get();
+            if (live != null) return live;
             try (FileChannel ch = FileChannel.open(f, StandardOpenOption.READ)) {
                 long size = ch.size();
-                if (size > 0 && size <= MAX_ITEM_BYTES) return ch.map(FileChannel.MapMode.READ_ONLY, 0, size);
+                if (size > 0 && size <= MAX_ITEM_BYTES) {
+                    ByteBuffer mapped = ch.map(FileChannel.MapMode.READ_ONLY, 0, size);
+                    if (MAPPED.size() > 256) MAPPED.values().removeIf(r -> r.get() == null);
+                    MAPPED.put(f, new java.lang.ref.WeakReference<>(mapped));
+                    return mapped;
+                }
             } catch (IOException | RuntimeException unmappable) {
                 // fall through to the heap
             }

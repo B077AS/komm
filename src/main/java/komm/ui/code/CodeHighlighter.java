@@ -238,6 +238,52 @@ public class CodeHighlighter {
         };
     }
 
+    /** Highlighting for the whole text plus the same thing cut up per line. */
+    public record Highlighting(StyleSpans<Collection<String>> whole,
+                               List<StyleSpans<Collection<String>>> perLine) {}
+
+    /**
+     * Like {@link #computeHighlighting} but also split per line (one entry per paragraph
+     * of a RichTextFX area holding {@code text}), so the caller can restyle only the lines
+     * that changed — see {@link CodeAreaSupport#applyHighlighting}.
+     */
+    public static Highlighting computeLineHighlighting(String text, CodeLanguage language) {
+        String src = text == null ? "" : text;
+        List<StyleSpans<Collection<String>>> lines = new ArrayList<>();
+        StyleSpansBuilder<Collection<String>> whole = new StyleSpansBuilder<>();
+        StyleSpansBuilder<Collection<String>> line = new StyleSpansBuilder<>();
+        boolean lineHasSpan = false;
+        boolean any = false;
+        for (Token t : tokens(src, language)) {
+            Collection<String> style = t.styleClass() == null
+                    ? Collections.emptyList() : Collections.singleton(t.styleClass());
+            whole.add(style, t.end() - t.start());
+            any = true;
+            // a token may contain line breaks (plain text is one big token): cut it at each
+            int from = t.start();
+            for (int i = t.start(); i < t.end(); i++) {
+                if (src.charAt(i) != '\n') continue;
+                if (i > from) {
+                    line.add(style, i - from);
+                    lineHasSpan = true;
+                }
+                if (!lineHasSpan) line.add(Collections.emptyList(), 0);
+                lines.add(line.create());
+                line = new StyleSpansBuilder<>();
+                lineHasSpan = false;
+                from = i + 1;
+            }
+            if (t.end() > from) {
+                line.add(style, t.end() - from);
+                lineHasSpan = true;
+            }
+        }
+        if (!any) whole.add(Collections.emptyList(), 0);
+        if (!lineHasSpan) line.add(Collections.emptyList(), 0);
+        lines.add(line.create());
+        return new Highlighting(whole.create(), lines);
+    }
+
     public static StyleSpans<Collection<String>> computeHighlighting(String text, CodeLanguage language) {
         StyleSpansBuilder<Collection<String>> spansBuilder = new StyleSpansBuilder<>();
         List<Token> toks = tokens(text, language);

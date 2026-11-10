@@ -59,6 +59,10 @@ public class CodeBlockView extends VBox {
     private final boolean expandable;
     private final boolean hasLongLine;
 
+    /** What the area holds while collapsed: the whole code, or just its first lines. */
+    private final String previewText;
+    private boolean disposed;
+
     private boolean expanded = false;
     private FontIcon toggleIcon;
     private Label toggleLabel;
@@ -93,7 +97,12 @@ public class CodeBlockView extends VBox {
                 + "-fx-border-radius: 3px;"
                 + "-fx-border-width: 1px;");
 
-        codeArea = new CodeArea(this.code);
+        // Collapsed, the editor only holds the lines it can show: a RichTextFX document
+        // costs memory and layout work per line, and a 3000-line paste previewed at
+        // 8 lines should not cost more than an 8-line snippet. The full text is loaded
+        // when the block is expanded (Copy always copies the full code).
+        this.previewText = expandable ? firstLines(this.code, COLLAPSED_LINES) : this.code;
+        codeArea = new CodeArea(previewText);
         codeArea.getStyleClass().add("code-area");
         // Inline background reliably overrides RichTextFX's default white surface
         // (a stylesheet rule loses to the control's own author stylesheet).
@@ -104,18 +113,9 @@ public class CodeBlockView extends VBox {
         codeArea.setShowCaret(Caret.CaretVisibility.OFF);
         codeArea.setPadding(new Insets(6, 10, 6, 0));
         codeArea.setParagraphGraphicFactory(CodeAreaSupport.lineNumberFactory(codeArea));
-        // Compute highlighting off the FX thread so large snippets don't freeze
-        // the chat while the message list is being populated.
-        String codeSnap = this.code;
-        CodeLanguage langSnap = this.language;
-        Thread.ofVirtual().start(() -> {
-            var spans = CodeHighlighter.computeHighlighting(codeSnap, langSnap);
-            Platform.runLater(() -> {
-                codeArea.setStyleSpans(0, spans);
-                CodeAreaSupport.applyRowStripes(codeArea);
-            });
-        });
+        highlight(previewText);
 
+        ALL_CODE_AREAS.removeIf(ref -> ref.get() == null);
         ALL_CODE_AREAS.add(new WeakReference<>(codeArea));
         codeArea.selectionProperty().addListener((obs, ov, nv) -> {
             if (nv.getLength() > 0) {
@@ -147,7 +147,8 @@ public class CodeBlockView extends VBox {
             }
         });
 
-        getChildren().addAll(buildHeader(), codeArea);
+        getChildren().addAll(buildHeader(),
+                new javafx.scene.layout.StackPane(CodeAreaSupport.rowStripes(codeArea), codeArea));
         applyHeight();
 
         // Catches RichTextFX's deferred height settle after the block is added.
@@ -163,6 +164,7 @@ public class CodeBlockView extends VBox {
      */
     public void dispose() {
         onResize = null;
+        disposed = true;
         try {
             codeArea.dispose();
         } catch (Exception ignored) {
@@ -220,8 +222,36 @@ public class CodeBlockView extends VBox {
             toggleIcon.setIconCode(expanded ? MaterialDesignC.CHEVRON_UP : MaterialDesignC.CHEVRON_DOWN);
         if (toggleLabel != null)
             toggleLabel.setText(expanded ? "Show less" : "Show more");
+        String shown = expanded ? code : previewText;
+        codeArea.replaceText(shown);
+        codeArea.moveTo(0);
+        codeArea.scrollToPixel(0, 0);
+        highlight(shown);
         applyHeight();
         if (onResize != null) onResize.run();
+    }
+
+    /** Highlights {@code text} (what the area currently holds) off the FX thread. */
+    private void highlight(String text) {
+        CodeLanguage lang = language;
+        Thread.ofVirtual().start(() -> {
+            var spans = CodeHighlighter.computeHighlighting(text, lang);
+            Platform.runLater(() -> {
+                // dropped if the block was retired or toggled meanwhile
+                if (!disposed && spans.length() == codeArea.getLength() && text.equals(codeArea.getText())) {
+                    codeArea.setStyleSpans(0, spans);
+                }
+            });
+        });
+    }
+
+    private static String firstLines(String s, int n) {
+        int idx = -1;
+        for (int i = 0; i < n; i++) {
+            idx = s.indexOf('\n', idx + 1);
+            if (idx < 0) return s;
+        }
+        return s.substring(0, idx);
     }
 
     private void applyHeight() {

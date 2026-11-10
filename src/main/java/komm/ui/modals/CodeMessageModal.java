@@ -68,7 +68,6 @@ public class CodeMessageModal extends VBox {
             codeArea.replaceText(initialCode);
         }
         reHighlight();
-        CodeAreaSupport.applyRowStripes(codeArea);
         updateCounter();
         Platform.runLater(() -> {
             codeArea.requestFocus();
@@ -150,13 +149,12 @@ public class CodeMessageModal extends VBox {
         codeArea.setWrapText(false);
         // updateCounter is cheap — fire immediately on every change
         codeArea.multiPlainChanges().subscribe(c -> updateCounter());
-        // highlighting + stripes are O(chars) / O(lines) — debounce so they only
-        // run 250 ms after the user pauses, never on every individual keystroke
+        // tokenizing is O(chars) (off-thread) — debounce so it only
+        // runs 250 ms after the user pauses; only the lines that changed are restyled
         codeArea.multiPlainChanges()
                 .successionEnds(java.time.Duration.ofMillis(250))
                 .subscribe(c -> {
                     reHighlight();
-                    CodeAreaSupport.applyRowStripes(codeArea);
                 });
         codeArea.textProperty().addListener((obs, ov, nv) -> {
             if (emojiGuard) return;
@@ -181,7 +179,7 @@ public class CodeMessageModal extends VBox {
 
         VirtualizedScrollPane<CodeArea> scroll = new VirtualizedScrollPane<>(codeArea);
         scroll.setPrefHeight(EDITOR_HEIGHT);
-        StackPane editorWrap = new StackPane(scroll);
+        StackPane editorWrap = new StackPane(CodeAreaSupport.rowStripes(codeArea), scroll);
         editorWrap.setStyle("-fx-background-color: -color-bg-inset;"
                 + "-fx-background-radius: 3px;"
                 + "-fx-border-color: -color-border-default;"
@@ -225,11 +223,11 @@ public class CodeMessageModal extends VBox {
         String snapshot = codeArea.getText();
         CodeLanguage lang = language;
         Thread.ofVirtual().start(() -> {
-            var spans = CodeHighlighter.computeHighlighting(snapshot, lang);
+            var highlighting = CodeHighlighter.computeLineHighlighting(snapshot, lang);
             Platform.runLater(() -> {
                 // drop result if user has already typed more since we started
                 if (snapshot.equals(codeArea.getText())) {
-                    codeArea.setStyleSpans(0, spans);
+                    CodeAreaSupport.applyHighlighting(codeArea, highlighting);
                 }
             });
         });

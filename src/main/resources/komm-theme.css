@@ -1195,11 +1195,6 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 }
 
 /*@after .ring-progress-indicator:indeterminate>.container>.track #0*/
-.code-area .paragraph-box.code-row-odd, .code-area .paragraph-text.code-row-odd {
-	-fx-background-color: rgba(127, 127, 127, 0.06);
-}
-
-/*@after .ring-progress-indicator:indeterminate>.container>.track #0*/
 .code-area .text.cm-keyword {
 	-fx-fill: #c678dd;
 }
