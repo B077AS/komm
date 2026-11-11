@@ -34,6 +34,8 @@
         <!-- <hub.dev.ws.url>wss://kommvoice.com/ws</hub.dev.ws.url> -->
         <hub.url>${hub.dev.url}</hub.url>
         <hub.ws.url>${hub.dev.ws.url}</hub.ws.url>
+        <!-- jpack (self-updating install: stub + launcher + jlink runtime) - plugin version -->
+        <jpack.plugin.version>0.1.0</jpack.plugin.version>
     </properties>
 
     <dependencies>
@@ -226,8 +228,41 @@
     </repositories>
 
     <!-- mvn clean package -Ppackage        (fat jar pointed at localhost, for dev)
-         mvn clean package -Ppackage,prod   (production fat jar pointed at the official hub) -->
+         mvn clean package -Ppackage,prod   (production fat jar pointed at the official hub)
+
+         Release image (needs the launcher jar built first, see launcher/pom.xml):
+           mvn -f launcher/pom.xml clean package -Pwin-natives     (or -Plinux-natives)
+           mvn clean package -Ppackage,prod,jpack
+         -> target/jpack/image/<platform>/   install folder (Komm.exe / jpack.json / runtime / app / launcher)
+            target/jpack/release/            everything an update is served from (upload ALL of it to the release),
+                                             plus Komm-<v>-x86_64.AppImage(+.blocks) on Linux with appimagetool
+         Settings: src/jpack/jpack.json (JVM options, branding, launcher). -Djpack.updateUrl=... points a
+         build at another release location (a fork), -Djpack.platform=... is only needed for cross builds. -->
     <profiles>
+        <profile>
+            <!-- Packages the client + the launcher into a self-updating install (the jpack stub
+                 starts the launcher, which updates and then starts the client): a jlink runtime
+                 shared by both, the install folder, the release files and, on Linux, the AppImage.
+                 Runs after the shade plugin in the package phase, so combine it with the package
+                 profile (the fat jar) - and with prod for a distributable. -->
+            <id>jpack</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>io.github.b077as</groupId>
+                        <artifactId>jpack-maven-plugin</artifactId>
+                        <version>${jpack.plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <goals>
+                                    <goal>package</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
         <profile>
             <!-- Bakes the official hub into app.properties. Combine with the
                  package profile for the distributable jar: -Ppackage,prod -->
@@ -357,8 +392,8 @@
                              javafx.graphics/javafx.media are real modules here (module path);
                              jnativehook, JNA and webrtc-java load as the unnamed module. -->
                         <option>--enable-native-access=javafx.graphics,javafx.media,ALL-UNNAMED</option>
-                        <!-- Same memory options the launcher starts the packaged client with
-                             (launcher/.../update/ClientJvmOptions.java) — keep in sync. -->
+                        <!-- Same memory options the installed client is started with
+                             (src/jpack/jpack.json "jvmArgs") — keep in sync. -->
                         <option>-Xms32m</option>
                         <option>-Xmx2g</option>
                         <option>-XX:G1PeriodicGCInterval=30000</option>

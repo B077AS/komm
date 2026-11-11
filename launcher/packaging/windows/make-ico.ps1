@@ -1,4 +1,6 @@
-# Regenerates komm.ico from the client's src/main/resources/icon.png (repo root).
+# Regenerates src/jpack/icon.ico (the Windows icon jpack puts on Komm.exe and the installer)
+# from the client's src/main/resources/icon.png. Copy that png to src/jpack/icon.png too
+# (jpack's AppImage icon) when the logo changes.
 # Run from launcher/:  powershell -File packaging\windows\make-ico.ps1
 # The ICO embeds PNG-compressed images (supported since Vista) at the standard
 # shell sizes, so the exe/installer icon stays crisp at every DPI.
@@ -8,7 +10,7 @@ Add-Type -AssemblyName System.Drawing
 
 $root    = Resolve-Path "$PSScriptRoot\..\..\.."
 $srcPng  = Join-Path $root 'src\main\resources\icon.png'
-$outIco  = Join-Path $PSScriptRoot 'komm.ico'
+$outIco  = Join-Path $root 'src\jpack\icon.ico'
 $sizes   = 16, 24, 32, 48, 64, 128
 
 $source = [System.Drawing.Image]::FromFile($srcPng)

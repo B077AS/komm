@@ -253,7 +253,7 @@ public class LauncherApp extends Application implements UpdateManager.Listener {
     // ── Worker wiring ─────────────────────────────────────────────────────────
 
     private void startUpdateWorker() {
-        UpdateManager manager = new UpdateManager(this, launchArgs);
+        UpdateManager manager = new UpdateManager(this);
         Thread worker = new Thread(demoMode ? manager::runDemo : manager::run, "launcher-update-worker");
         worker.setDaemon(true);
         worker.start();
@@ -305,11 +305,8 @@ public class LauncherApp extends Application implements UpdateManager.Listener {
 
     private void closeLauncher() {
         Platform.exit();
-        // Under an AppImage the JVM must outlive the window: exiting now would
-        // unmount the FUSE image holding the runtime the client is using.
-        // UpdateManager's mount keeper calls System.exit once the client is done.
-        if (UpdateManager.isAppImageMountGuarded()) return;
-        // Ensure the JVM exits even if a non-daemon thread is lingering.
+        // The stub waits for this process to exit before it swaps the downloaded files in and
+        // starts the client, so make sure the JVM really goes even if a non-daemon thread lingers.
         Thread.ofVirtual().start(() -> System.exit(0));
     }
 

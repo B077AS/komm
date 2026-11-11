@@ -84,6 +84,7 @@ public class Launcher {
                         .error("Uncaught exception on thread {}", t.getName(), e));
         parseDeepLink(args);
         tryRegisterWindowsProtocol();
+        Thread.ofVirtual().start(komm.update.AppsFeaturesVersionUpdater::updateIfInstalled);
         App.appStart(args);
     }
 
@@ -104,10 +105,10 @@ public class Launcher {
 
     static void tryRegisterWindowsProtocol() {
         if (!Platform.isWindows()) return;
-        // Started by the launcher: it registers komm:// to itself (Komm.exe), so links go through
-        // the update check and the client gets its JVM options. Overwriting that with a bare
-        // `javaw -jar` here would bypass both.
-        if (System.getProperty("launcher.version") != null) return;
+        // Started by the jpack stub: the launcher registers komm:// to the stub itself (JPACK_EXE), so
+        // links go through the update check and the client gets its JVM options. Overwriting that with
+        // a bare `javaw -jar` here would bypass both.
+        if (System.getenv("JPACK_EXE") != null) return;
         try {
             Path jarPath = Path.of(Launcher.class
                     .getProtectionDomain().getCodeSource().getLocation().toURI());
@@ -140,9 +141,42 @@ public class Launcher {
         createDirectory(getSoundsDirectory());
         createDirectory(getConfigDirectory());
         createDirectory(getLogsDirectory());
+        createDirectory(getNativesDirectory());
+        deleteStaleNatives();
+    }
+
+    /**
+     * Where JNativeHook unpacks its native library. By default it unpacks next to the jar, which is
+     * read-only inside an AppImage's mount (and would be wiped by every update swap anywhere else),
+     * so it is pointed at the app data directory instead ({@code jnativehook.lib.path}).
+     */
+    public static Path getNativesDirectory() {
+        return getDataDirectory().resolve("natives");
+    }
+
+    /**
+     * JNativeHook names its library after the jar's Implementation-Version, so every update strands
+     * the previous version's copy. Best-effort sweep of everything but the current one; a file still
+     * loaded by another running Komm just stays.
+     */
+    private static void deleteStaleNatives() {
+        String version = Launcher.class.getPackage().getImplementationVersion();
+        if (version == null || version.isBlank()) return; // IDE run: no versioned jar, nothing is extracted
+        try (var files = Files.list(getNativesDirectory())) {
+            files.filter(f -> f.getFileName().toString().startsWith("JNativeHook-")
+                            && !f.getFileName().toString().startsWith("JNativeHook-" + version + "."))
+                    .forEach(f -> {
+                        try {
+                            Files.deleteIfExists(f);
+                        } catch (IOException ignored) {
+                        }
+                    });
+        } catch (IOException ignored) {
+        }
     }
 
     private static void initializeSystemProperties() {
+        System.setProperty("jnativehook.lib.path", getNativesDirectory().toAbsolutePath().toString());
         System.setProperty("slf4j.provider", "ch.qos.logback.classic.spi.LogbackServiceProvider");
         System.setProperty("komm.logDir", getLogsDirectory().toAbsolutePath().toString());
         System.setProperty("komm.hsErrFile", getLogsDirectory().resolve("hs_err_pid%p.log").toAbsolutePath().toString());
