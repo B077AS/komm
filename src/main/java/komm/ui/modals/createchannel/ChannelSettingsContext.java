@@ -1,8 +1,20 @@
 package komm.ui.modals.createchannel;
 
+import javafx.beans.binding.Bindings;
+import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.ObjectProperty;
+import javafx.beans.property.SimpleBooleanProperty;
+import javafx.beans.property.SimpleObjectProperty;
+import javafx.beans.property.SimpleStringProperty;
+import javafx.beans.property.StringProperty;
+import javafx.beans.value.ObservableValue;
 import komm.model.dto.summary.ChannelSummary;
 import komm.model.dto.summary.ServerSummary;
 import komm.model.permissions.Permission;
+import org.kordamp.ikonli.Ikon;
+import org.kordamp.ikonli.feather.Feather;
+import org.kordamp.ikonli.javafx.FontIcon;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignM;
 
 import java.util.List;
 import java.util.Set;
@@ -37,9 +49,16 @@ public final class ChannelSettingsContext {
     private final boolean editMode;
     private final ChannelSummary editChannel;
 
-    // Owned by GeneralChannelTab, read by the Permissions/UserExceptions tabs to know which
-    // permissions apply (voice-only perms are hidden for text channels).
-    private boolean voice = true;
+    // Owned by DetailsChannelTab. Observable so the modal's sidebar block can mirror them live;
+    // voice is also read by the Permissions/UserExceptions tabs to know which permissions apply
+    // (voice-only perms are hidden for text channels).
+    private final BooleanProperty voice = new SimpleBooleanProperty(true);
+    private final StringProperty draftName = new SimpleStringProperty("");
+    private final ObjectProperty<Ikon> draftIcon = new SimpleObjectProperty<>();
+    private final ObservableValue<Ikon> shownIcon = Bindings.createObjectBinding(
+            () -> draftIcon.get() != null ? draftIcon.get()
+                    : voice.get() ? MaterialDesignM.MICROPHONE : Feather.HASH,
+            draftIcon, voice);
 
     // Edit-mode "last saved" values — each tab needs the OTHER tab's original value when it
     // saves, since a channel update always sends the full name+icon pair.
@@ -56,6 +75,10 @@ public final class ChannelSettingsContext {
         if (editChannel != null) {
             this.origName = editChannel.getChannelName();
             this.origIcon = editChannel.getIcon();
+            this.draftName.set(origName == null ? "" : origName);
+            if (origIcon != null && !origIcon.isBlank()) {
+                try { this.draftIcon.set(new FontIcon(origIcon).getIconCode()); } catch (Exception ignored) { }
+            }
         }
     }
 
@@ -64,8 +87,21 @@ public final class ChannelSettingsContext {
     public boolean isEditMode()         { return editMode; }
     public ChannelSummary editChannel() { return editChannel; }
 
-    public boolean isVoice()            { return voice; }
-    public void setVoice(boolean voice) { this.voice = voice; }
+    public boolean isVoice()            { return voice.get(); }
+    public void setVoice(boolean v)     { this.voice.set(v); }
+    public BooleanProperty voiceProperty() { return voice; }
+
+    public String getDraftName()        { return draftName.get(); }
+    public void setDraftName(String n)  { draftName.set(n); }
+    public StringProperty draftNameProperty() { return draftName; }
+
+    /** The icon picked by the user, or null for the type's default glyph. */
+    public Ikon getDraftIcon()          { return draftIcon.get(); }
+    public void setDraftIcon(Ikon i)    { draftIcon.set(i); }
+    public ObjectProperty<Ikon> draftIconProperty() { return draftIcon; }
+
+    /** The icon to display right now: the picked one, else the voice/text default. */
+    public ObservableValue<Ikon> shownIcon() { return shownIcon; }
 
     public String getOrigName()         { return origName; }
     public void setOrigName(String n)   { this.origName = n; }
@@ -77,7 +113,7 @@ public final class ChannelSettingsContext {
     public List<Permission> getActiveChannelPerms() {
         boolean isTextChannel = editChannel != null
                 ? editChannel.getChannelType() == ChannelSummary.ChannelType.TEXT
-                : !voice;
+                : !voice.get();
         if (isTextChannel) {
             return ALL_CHANNEL_PERMS.stream()
                     .filter(p -> !VOICE_ONLY_PERMS.contains(p))

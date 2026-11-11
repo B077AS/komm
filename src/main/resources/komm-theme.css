@@ -529,6 +529,12 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 
 }
 
+/* Menu icons keep their colour on hover (stock turns them to -color-fg-emphasis, which is dark in this theme). */
+/*@replace .menu-button .menu-item:hover .font-icon, .menu-button .menu-item:hover .ikonli-font-icon, .split-menu-button .menu-item:hover .font-icon, .split-menu-button .menu-item:hover .ikonli-font-icon #0*/
+.menu-button .menu-item:hover .font-icon, .menu-button .menu-item:hover .ikonli-font-icon, .split-menu-button .menu-item:hover .font-icon, .split-menu-button .menu-item:hover .ikonli-font-icon {
+
+}
+
 /*@replace .context-menu #0*/
 .context-menu {
 	-fx-background-color: -color-border-muted, -color-bg-default;
@@ -2557,3 +2563,23 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 /*@remove .selectable-text #0*/
 
 /*@remove .selectable-text .context-menu .menu-item #0*/
+
+/* Channel icon tile (create/edit channel modal: identity row + sidebar block) */
+.channel-tile {
+	-fx-background-color: -color-accent-subtle;
+	-fx-background-radius: 8px;
+	-fx-border-color: -color-accent-muted;
+	-fx-border-radius: 8px;
+	-fx-border-width: 1px;
+	-fx-alignment: center;
+}
+
+.channel-tile .ikonli-font-icon {
+	-fx-icon-color: -color-accent-fg;
+	-fx-fill: -color-accent-fg;
+}
+
+.channel-tile.large .ikonli-font-icon {
+	-fx-icon-size: 30px;
+}
+

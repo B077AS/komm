@@ -71,11 +71,11 @@ jobs:
       VERSION: ${{ needs.version.outputs.version }}
       TAG: ${{ needs.version.outputs.tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ needs.version.outputs.tag }}
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "25"
@@ -123,19 +123,17 @@ jobs:
   linux:
     name: Linux (AppImage + update files)
     needs: version
-    # Ubuntu 22.04 on purpose: the runtime that ships in the AppImage links against that glibc, so it
-    # runs there and on newer systems (jpack's own Linux stub is built the same way).
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
       VERSION: ${{ needs.version.outputs.version }}
       TAG: ${{ needs.version.outputs.tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ needs.version.outputs.tag }}
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "25"
