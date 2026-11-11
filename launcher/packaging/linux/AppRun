@@ -1,4 +1,0 @@
-#!/bin/sh
-# AppImage entry point: hand off to the jpackage-built launcher binary.
-HERE="$(dirname "$(readlink -f "$0")")"
-exec "$HERE/bin/Komm" "$@"

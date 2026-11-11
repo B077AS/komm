@@ -6,20 +6,15 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
 
 /**
- * Entry point for the Komm launcher.
+ * Entry point for the Komm launcher: the small window that runs before the client.
  *
- * <p>Mirrors the komm client's {@code Launcher}: it resolves the same per-OS app
- * data directory ({@code %APPDATA%/Komm} on Windows), sets the logging system
- * properties logback.xml reads, then hands control to the JavaFX application.
- *
- * <p>The launcher owns the installed client jar under {@link #getBinDirectory()}.
- * On startup it checks the hub for a newer version, downloads/replaces the jar if
- * needed, and finally launches it.
+ * <p>The jpack stub that started it (Komm.exe / the AppImage) owns the installation. The launcher asks
+ * the stub for updates, shows the download, and hands over to the client entry; see
+ * {@code update.UpdateManager}. It resolves the same per-OS app data directory as the client
+ * ({@code %APPDATA%/Komm} on Windows) so logs and the accent colour are shared, and sets the logging
+ * system properties logback.xml reads.
  */
 public class Launcher {
 
@@ -38,113 +33,20 @@ public class Launcher {
         }
     }
 
-    /** Where the launcher stores the installed client jar. */
-    public static Path getBinDirectory() {
-        return getAppDataDirectory().resolve("bin");
-    }
-
-    public static Path getClientJar() {
-        return getBinDirectory().resolve("komm.jar");
-    }
-
     public static Path getLogsDirectory() {
         return getAppDataDirectory().resolve("logs");
     }
 
     public static void main(String[] args) {
-        // macOS is not a supported target (no packaging, no protocol registration) — bail out immediately.
+        // macOS is not a supported target (no packaging, no protocol registration) - bail out immediately.
         if (Platform.isMac()) {
             System.exit(1);
-        }
-        if (relaunchIfNewerLauncherStaged(args)) {
-            return; // this process's job is done; the relaunched one takes over
         }
         initializeSystemProperties();
         initializeDirectories();
         // Off the critical path: the UI shouldn't wait on reg.exe.
         Thread.ofVirtual().start(ProtocolRegistrar::registerIfPossible);
         LauncherApp.appStart(args);
-    }
-
-    /**
-     * Linux/AppImage only: {@code UpdateManager} stages a newer launcher jar
-     * directly at {@code bin/komm-launcher.jar} when one's available (safe to
-     * overwrite even while a process has the old one open — see its javadoc).
-     * If that file exists and isn't the jar this process is already running
-     * from, relaunch into it — on the same bundled runtime, just newer code —
-     * before doing anything else, so the update takes effect this run instead
-     * of waiting for the next one.
-     *
-     * @return true if a relaunch was spawned (the caller should return immediately)
-     */
-    private static boolean relaunchIfNewerLauncherStaged(String[] args) {
-        if (System.getenv("APPIMAGE") == null) return false; // only meaningful inside a mounted AppImage
-        try {
-            Path staged = getBinDirectory().resolve("komm-launcher.jar");
-            if (!Files.exists(staged)) return false;
-
-            Path running = currentJarPath();
-            if (running == null || running.equals(staged)) return false; // dev run, or already running from it
-
-            List<String> command = new ArrayList<>();
-            command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
-            // The relaunched JVM lingers for the whole session (it keeps the AppImage mount alive),
-            // so it must stay as lean as the packaged launcher (Komm.cfg). Without these it ran with
-            // default sizing — a heap up to 25% of RAM and G1 — and sat at ~375 MB doing nothing.
-            command.add("-XX:+UseSerialGC");
-            command.add("-Xms8m");
-            command.add("-Xmx128m");
-            command.add("-XX:TieredStopAtLevel=1");
-            command.add("--enable-native-access=ALL-UNNAMED");
-            command.add("-cp");
-            command.add(staged.toAbsolutePath().toString());
-            command.add(Launcher.class.getName());
-            command.addAll(Arrays.asList(args));
-
-            // Blocking here is fine — this runs before any UI exists. The mount
-            // this process (and the runtime it's using) lives inside must stay
-            // up until the relaunched process, and everything it later spawns
-            // (up to and including the client), is fully done — same reasoning
-            // as UpdateManager's own AppImage mount guard, just one hop earlier.
-            //
-            // Handoff: the relaunched launcher (JavaFX + GTK + Mesa, ~275 MB resident) must not
-            // linger for the whole session just to hold the mount. It writes the client's PID to
-            // this file and exits; this small process then waits for the client instead.
-            Path handoff = Files.createTempFile("komm-handoff", ".pid");
-            ProcessBuilder pb = new ProcessBuilder(command).inheritIO();
-            pb.environment().put("KOMM_MOUNT_HANDOFF", handoff.toAbsolutePath().toString());
-            Process process = pb.start();
-            int exitCode = process.waitFor();
-            long clientPid = -1;
-            try {
-                String txt = Files.readString(handoff).trim();
-                if (!txt.isEmpty()) clientPid = Long.parseLong(txt);
-            } catch (Exception ignored) {
-            }
-            try { Files.deleteIfExists(handoff); } catch (IOException ignored) { }
-            if (clientPid > 0) {
-                ProcessHandle.of(clientPid).ifPresent(h -> {
-                    try { h.onExit().join(); } catch (Throwable ignored) { }
-                });
-            }
-            System.exit(exitCode);
-            return true; // unreachable, but keeps the method's intent clear
-        } catch (Exception e) {
-            return false; // fall through and run this (older) jar as normal
-        }
-    }
-
-    /** The jar this process is currently running from, or null in a dev run
-     *  (classes directory instead of a jar) or if it can't be determined. */
-    private static Path currentJarPath() {
-        try {
-            var source = Launcher.class.getProtectionDomain().getCodeSource();
-            if (source == null || source.getLocation() == null) return null;
-            Path location = Path.of(source.getLocation().toURI());
-            return Files.isRegularFile(location) ? location : null;
-        } catch (Exception e) {
-            return null;
-        }
     }
 
     private static void initializeSystemProperties() {
@@ -154,7 +56,6 @@ public class Launcher {
 
     private static void initializeDirectories() {
         createDirectory(getAppDataDirectory());
-        createDirectory(getBinDirectory());
         createDirectory(getLogsDirectory());
     }
 

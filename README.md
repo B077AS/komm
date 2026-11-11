@@ -133,8 +133,8 @@ mic ─► capture ─► AEC3 ─► RNNoise / WebRTC-NS ─► AGC2 ─► Web
 | `ui/modals/` | Everything modal: user/server/channel/installation settings, invites, screen share picker, profiles |
 | `ui/code/`, `ui/emojis/`, `ui/gifs/` | Code blocks (RSyntaxTextArea tokenizers + RichTextFX), emoji rendering & pickers, GIF search |
 | `utils/` | App config, global hotkeys, audio device discovery, ping/packet-loss history, user settings |
-| `update/` | `LauncherUpdateService` - applies staged launcher updates and catches up launchers that can't update themselves (see below) |
-| `launcher/` (separate Maven project) | The auto-updating launcher: installer/AppImage packaging, client update + launch, shares the client's theme sources - see [launcher/README.md](launcher/README.md) |
+| `update/` | `AppsFeaturesVersionUpdater` - keeps the Windows "Apps & Features" version in step with the installed release |
+| `launcher/` (separate Maven project) | The launcher window (update progress, then hands over to the client) and the installer script; shares the client's theme sources - see [launcher/README.md](launcher/README.md) |
 
 A few rules keep the client sane:
 
@@ -142,19 +142,21 @@ A few rules keep the client sane:
 - UI mutations happen on the FX thread (`Platform.runLater`); HTTP calls happen off it (virtual threads).
 - `PermissionManager` mirrors the server's role/channel permission model with bitmask checks, updated in real time over WebSocket.
 
-### Keeping the launcher up to date
+### How updates work (jpack)
 
-Client and launcher are released together from this repo and share one version: every release attaches the client JAR and the launcher's self-update JARs. The launcher checks this repo's latest release for its own update on every start; the client's `update/LauncherUpdateService` backs that up:
+Komm ships as a [jpack](https://github.com/B077AS/jpack) install: a tiny native program (`Komm.exe`, or the AppImage itself) next to a private Java runtime, the client jar and the launcher jar. The native *stub* is the only thing that starts processes:
 
-- **Windows**: the launcher can't overwrite its own locked `app/komm-launcher.jar`, so it stages updates at `bin/komm-launcher.jar.pending`; the client moves that into place once it runs (the launcher has exited by then).
-- **Catch-up**: the launcher forwards its version as `-Dlauncher.version`. If it differs from the client's own version - e.g. a launcher installed before the move from the old `komm-launcher` repo, which still polls that deleted repo - the client downloads the launcher JAR from its own release here (verified against GitHub's SHA-256 digest) and installs it: `app/komm-launcher.jar` on Windows, `bin/komm-launcher.jar` inside an AppImage (the launcher relaunches into it on its next start).
-- Entirely best-effort and silent: any failure is logged and swallowed, since a launcher update must never interfere with the client running.
+1. The stub starts the **launcher** (the small window) on the bundled runtime.
+2. The launcher asks the stub whether the latest GitHub release differs from what is installed, shows the download, and then asks the stub to start the client once the launcher has exited.
+3. When the launcher exits, the stub swaps the downloaded files in (nothing is running, so nothing is locked) and starts the **client**.
 
-See [launcher/README.md](launcher/README.md#how-the-launcher-updates-itself) for the full mechanics.
+A release is a set of *parts* (Java runtime, client, launcher, stub), each a zip named by its hash, so an update downloads only what changed - usually just the client jar. The runtime, the launcher and the stub update like any other part. Updates are verified (SHA-256), atomic, and rolled back automatically if the new version can't start. On Linux the AppImage replaces its own file, fetching only the changed blocks. Every update is mandatory: if a newer release exists and can't be downloaded, the launcher shows an error instead of starting the stale install; if GitHub can't be reached at all, the installed version starts.
+
+See [launcher/README.md](launcher/README.md) for the mechanics and the release pipeline.
 
 ## Getting the app (users)
 
-Download the **launcher** from [kommvoice.com/download](https://kommvoice.com/download) - a Windows installer or Linux AppImage. It installs the client into your app data directory and updates it automatically on every start. Create an account, join a community via an invite link, done.
+Download Komm from [kommvoice.com/download](https://kommvoice.com/download) - a Windows installer or a Linux AppImage. It brings its own Java and updates itself automatically on every start. Create an account, join a community via an invite link, done.
 
 > Komm is currently in **closed beta** - registration on the official hub needs an invite key. [Request access](https://kommvoice.com/#beta-access) from the website.
 
@@ -205,13 +207,15 @@ mvn clean package -Ppackage,prod
 
 # The launcher (separate Maven project in launcher/, see launcher/README.md)
 mvn -f launcher/pom.xml javafx:run -Dlauncher.demo=true       # visual demo, no network
-mvn -f launcher/pom.xml clean package -Pinstaller             # Windows installer (needs the client jar above)
-mvn -f launcher/pom.xml clean package -Pappimage              # Linux AppImage (needs the client jar above)
+
+# The self-updating install (jpack): Komm.exe + runtime + client + launcher, and the files updates are served from
+mvn -f launcher/pom.xml clean package -Pwin-natives           # (or -Plinux-natives) the launcher jar jpack packages
+mvn clean package -Ppackage,prod,jpack                        # -> target/jpack/image/<platform>/ and target/jpack/release/
 ```
 
-`mvn javafx:run` starts the client with the same memory options the launcher uses for the packaged client (`launcher/.../update/ClientJvmOptions.java`): small initial heap with a 2 GB ceiling, periodic G1 GC with tight heap free ratios so idle memory goes back to the OS, two GC threads and capped direct memory.
+`mvn javafx:run` starts the client with the same memory options the installed client is started with (`jvmArgs` in `src/jpack/jpack.json`): small initial heap with a 2 GB ceiling, periodic G1 GC with tight heap free ratios so idle memory goes back to the OS, two GC threads and capped direct memory.
 
-Releases are built by `.github/workflows/release.yml`: publishing a GitHub release builds the client jar, the launcher's self-update jars, the Windows installer and the AppImage, all versioned from the tag, and attaches them to that release.
+Releases are built by `.github/workflows/release.yml`: publishing a GitHub release builds, on a Windows and a Linux runner, the jpack install and update files, the Windows installer (`Komm-Setup-<v>.exe`) and the AppImage, all versioned from the tag, and attaches them to that release.
 
 By default the client points at a hub on `localhost` - the pom's `hub.url` / `hub.ws.url` properties are baked into `app.properties` at build time, and the `prod` profile switches them to the official hub. To bake any other hub: `-Dhub.url=https://my-hub -Dhub.ws.url=wss://my-hub/ws`. The production URLs end up **only inside the jar**: after packaging, the prod profile restores the localhost values in `target/classes`, so running the main class straight from your IDE after a prod build still targets your local hub.
 
@@ -233,7 +237,7 @@ On first launch the client creates its app data directory - `%APPDATA%\Komm` on 
 | Networking | Java `HttpClient`, Tyrus WebSocket client, Spring WebSocket/messaging (client-side) |
 | Code highlighting | RSyntaxTextArea's `TokenMaker` parsers, used headlessly (Java, JavaScript, Python, Go, HTML, CSS) |
 | Serialization / crypto | Gson, BouncyCastle (CSR generation for hosting installations in-app), hub-CA TLS trust for community-server connections |
-| Build | Maven - `javafx-maven-plugin` for dev, `maven-shade-plugin` for the distributable fat JAR; the launcher adds jpackage + jlink, Inno Setup 6 and appimagetool |
+| Build | Maven - `javafx-maven-plugin` for dev, `maven-shade-plugin` for the distributable fat JAR; the self-updating install is built with the [jpack](https://github.com/B077AS/jpack) Maven plugin (jlink runtime, update files, AppImage via appimagetool) and wrapped by Inno Setup 6 on Windows |
 
 ## Related repositories
 
@@ -253,7 +257,7 @@ On first launch the client creates its app data directory - `%APPDATA%\Komm` on 
 
 **Can the hub read my community's messages?** No. After a one-time 60-second ticket exchange, the client talks directly to the community's server - messages, voice and files never pass through the hub.
 
-**How do updates work?** The launcher checks this repo's GitHub releases on every start and swaps in the new client JAR automatically; it updates itself from the same releases, and the client backs that up (see [Keeping the launcher up to date](#keeping-the-launcher-up-to-date)). No hub involved in either direction - install once, forget about it.
+**How do updates work?** On every start the launcher checks this repo's latest GitHub release and downloads only the parts that changed (client, launcher, Java runtime), then the jpack stub swaps them in and starts the new version (see [How updates work](#how-updates-work-jpack)). No hub involved in either direction - install once, forget about it.
 
 **Does screen sharing use my GPU?** Yes, by default: *Auto* encodes with your graphics card's H.264 encoder where there is one and falls back to the CPU (VP8) otherwise. You can pick the encoder yourself in the share dialog's *Quality* tab.
 

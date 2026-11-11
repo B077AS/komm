@@ -1,23 +1,22 @@
 ; Inno Setup script for the Komm installer.
-; Compiled by the launcher's `installer` Maven profile, which first builds the
-; jpackage app-image (launcher exe + private runtime, no client jar inside it)
-; and then passes these defines:
-;   /DAppVersion=...    client version bundled as the seed (drives the setup filename)
-;   /DAppImageDir=...   the jpackage app-image directory to package
+;
+; The installer is a thin wrapper around the install folder the jpack Maven plugin builds
+; (target/jpack/image/windows-x64: Komm.exe = the jpack stub, jpack.json, runtime/, app/,
+; launcher/). Everything else - updating the client, the launcher, the Java runtime and the stub
+; itself - is done by the stub from then on, so this installer never has to run again.
+; Called by the release workflow (or by hand, see launcher/README.md) with:
+;   /DAppVersion=...    release version (drives the setup filename and the Apps & Features entry)
+;   /DImageDir=...      the jpack install folder to package
 ;   /DOutputDir=...     where to write the setup exe
-;   /DClientJar=...     the client fat jar to seed into %APPDATA%/Komm/bin/komm.jar
 
 #ifndef AppVersion
   #define AppVersion "0.0.0"
 #endif
-#ifndef AppImageDir
-  #define AppImageDir "..\..\target\jpackage\Komm"
+#ifndef ImageDir
+  #define ImageDir "..\..\..\target\jpack\image\windows-x64"
 #endif
 #ifndef OutputDir
-  #define OutputDir "..\..\target\installer"
-#endif
-#ifndef ClientJar
-  #define ClientJar "..\..\..\komm\target\komm-0.0.1.jar"
+  #define OutputDir "..\..\..\target\installer"
 #endif
 
 [Setup]
@@ -28,7 +27,7 @@ AppVersion={#AppVersion}
 AppVerName=Komm {#AppVersion}
 AppPublisher=Komm
 VersionInfoVersion={#AppVersion}
-; Per-user install: no admin prompt, matches the HKCU komm:// registration.
+; Per-user install: no admin prompt, and the folder stays writable for the stub's updates.
 PrivilegesRequired=lowest
 DefaultDirName={autopf}\Komm
 DefaultGroupName=Komm
@@ -39,7 +38,7 @@ DisableWelcomePage=no
 WizardStyle=modern
 WizardImageFile=wizard-large.bmp
 WizardSmallImageFile=wizard-small.bmp
-SetupIconFile=komm.ico
+SetupIconFile=..\..\..\src\jpack\icon.ico
 UninstallDisplayIcon={app}\Komm.exe
 UninstallDisplayName=Komm
 OutputDir={#OutputDir}
@@ -56,37 +55,35 @@ Name: "italian"; MessagesFile: "compiler:Languages\Italian.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [InstallDelete]
-; The client jar itself is handled below (Files, ignoreversion — always
-; overwritten, not deleted-then-reseeded). These are leftovers the jar swap
-; itself can't clean up: a partial download, the legacy version.txt, and
-; extracted JNativeHook natives (re-extracted by the client on next start).
-Type: files; Name: "{userappdata}\Komm\bin\komm.jar.download"
-Type: files; Name: "{userappdata}\Komm\bin\version.txt"
-Type: files; Name: "{userappdata}\Komm\bin\JNativeHook-*.dll"
+; Re-running the installer over an existing (possibly self-updated) install starts from a clean
+; slate: the parts below are replaced as a whole, and a half-downloaded update or the folder a
+; swap set aside must not outlive the files they belong to. Per-user data (%APPDATA%\Komm) is untouched.
+Type: filesandordirs; Name: "{app}\runtime"
+Type: filesandordirs; Name: "{app}\app"
+Type: filesandordirs; Name: "{app}\launcher"
+Type: filesandordirs; Name: "{app}\update"
+Type: filesandordirs; Name: "{app}\old"
 
 [Files]
-Source: "{#AppImageDir}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
-; Seeds the client straight into the user-data bin dir so the first start
-; works offline — no komm-client-seed.jar detour through the app-image and no
-; BundledClientSeeder copy-on-first-launch step (Windows only; the AppImage
-; still needs that, since it has no separate install phase to hook into).
-; Unconditionally overwritten on every (re)install — same repair-a-corrupt-jar
-; behavior the old delete-then-reseed dance had, just in one step now. The
-; normal GitHub-update flow takes over from the first launch either way.
-Source: "{#ClientJar}"; DestDir: "{userappdata}\Komm\bin"; DestName: "komm.jar"; Flags: ignoreversion
+Source: "{#ImageDir}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Icons]
 Name: "{group}\Komm"; Filename: "{app}\Komm.exe"
 Name: "{autodesktop}\Komm"; Filename: "{app}\Komm.exe"; Tasks: desktopicon
 
 [Registry]
-; komm:// URL protocol so browser invite links ("Open in Komm app") start the
-; launcher. The launcher also re-registers itself on every start, so this mainly
-; guarantees the handler exists before the first run.
+; komm:// URL protocol so browser invite links ("Open in Komm app") start Komm.exe (the stub, which
+; runs the launcher's update check and hands the link to the client). The launcher also re-registers
+; itself on every start, so this mainly guarantees the handler exists before the first run.
 Root: HKA; Subkey: "Software\Classes\komm"; ValueType: string; ValueData: "URL:Komm Protocol"; Flags: uninsdeletekey
 Root: HKA; Subkey: "Software\Classes\komm"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""
 Root: HKA; Subkey: "Software\Classes\komm\DefaultIcon"; ValueType: string; ValueData: """{app}\Komm.exe"",0"
 Root: HKA; Subkey: "Software\Classes\komm\shell\open\command"; ValueType: string; ValueData: """{app}\Komm.exe"" ""%1"""
+
+[UninstallDelete]
+; Updates add and replace files the installer never saw (new runtime, jpack.log, the update/old
+; folders, a stub that was renamed aside): remove the whole install folder, not just what Setup copied.
+Type: filesandordirs; Name: "{app}"
 
 [Run]
 Filename: "{app}\Komm.exe"; Description: "{cm:LaunchProgram,Komm}"; Flags: nowait postinstall skipifsilent
