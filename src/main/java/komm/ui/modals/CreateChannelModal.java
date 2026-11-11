@@ -24,8 +24,7 @@ import komm.model.dto.summary.ServerSummary;
 import komm.model.permissions.Permission;
 import komm.ui.modals.createchannel.ChannelSettingsContext;
 import komm.ui.modals.createchannel.ChannelSettingsTab;
-import komm.ui.modals.createchannel.GeneralChannelTab;
-import komm.ui.modals.createchannel.IconChannelTab;
+import komm.ui.modals.createchannel.DetailsChannelTab;
 import komm.ui.modals.createchannel.PermissionsChannelTab;
 import komm.ui.modals.createchannel.UserExceptionsChannelTab;
 import komm.ui.customnodes.CustomNotification;
@@ -60,8 +59,7 @@ public class CreateChannelModal extends HBox {
     private ChannelSettingsContext ctx;
 
     // ── Tabs ──────────────────────────────────────────────────────────────────
-    private GeneralChannelTab generalTab;
-    private IconChannelTab iconTab;
+    private DetailsChannelTab detailsTab;
     private PermissionsChannelTab permissionsTab;
     private UserExceptionsChannelTab userExceptionsTab;
 
@@ -124,8 +122,7 @@ public class CreateChannelModal extends HBox {
         ctx.setSaveButtonRefresher(this::updateSaveButton);
         ctx.setSavingStateHandler(this::setSaving);
 
-        generalTab = new GeneralChannelTab(ctx);
-        iconTab = new IconChannelTab(ctx);
+        detailsTab = new DetailsChannelTab(ctx);
         permissionsTab = new PermissionsChannelTab(ctx);
         userExceptionsTab = new UserExceptionsChannelTab(ctx);
 
@@ -147,7 +144,7 @@ public class CreateChannelModal extends HBox {
             progressIndicator.visibleProperty().bind(createChannelService.runningProperty());
         }
 
-        switchTo(generalTab);
+        switchTo(detailsTab);
     }
 
     // ── Left nav panel ────────────────────────────────────────────────────────
@@ -169,8 +166,7 @@ public class CreateChannelModal extends HBox {
                         "-fx-text-fill: -color-fg-subtle; -fx-padding: 0 0 4px 10px;");
         nav.getChildren().add(navLabel);
 
-        addNavItem(generalTab);
-        addNavItem(iconTab);
+        addNavItem(detailsTab);
         VBox permissionsNavItem = addNavItem(permissionsTab);
         VBox userExceptionsNavItem = addNavItem(userExceptionsTab);
 
@@ -299,7 +295,7 @@ public class CreateChannelModal extends HBox {
         cancelButton.setOnAction(e -> App.closeModal());
 
         if (isEditMode) {
-            saveButton = new Button("Save General");
+            saveButton = new Button("Save Details");
             saveButton.setFocusTraversable(false);
             saveButton.getStyleClass().addAll(Styles.ACCENT, Styles.SMALL);
             saveButton.setDisable(true);
@@ -342,17 +338,19 @@ public class CreateChannelModal extends HBox {
     // ── Create ────────────────────────────────────────────────────────────────
 
     private void handleCreate() {
-        String name = generalTab.getChannelName();
+        String name = detailsTab.getChannelName();
         if (name.isEmpty()) {
             new CustomNotification("Validation Error", "Channel name is required.", new FontIcon(MaterialDesignP.POUND))
                     .showNotification();
-            generalTab.focusNameField();
+            switchTo(detailsTab);
+            detailsTab.focusNameField();
             return;
         }
         if (name.length() > 100) {
             new CustomNotification("Validation Error", "Channel name must be 100 characters or fewer.", new FontIcon(MaterialDesignP.POUND))
                     .showNotification();
-            generalTab.focusNameField();
+            switchTo(detailsTab);
+            detailsTab.focusNameField();
             return;
         }
 
@@ -360,7 +358,7 @@ public class CreateChannelModal extends HBox {
                 .serverId(server.getServerId())
                 .channelName(name)
                 .channelType(ctx.isVoice() ? ChannelType.VOICE : ChannelType.TEXT)
-                .icon(iconTab.getSelectedIconDescription())
+                .icon(ctx.getDraftIcon() != null ? ctx.getDraftIcon().getDescription() : null)
                 .build();
 
         createChannelService.setOnSucceeded(e -> {
