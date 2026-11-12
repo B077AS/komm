@@ -35,7 +35,7 @@
         <hub.url>${hub.dev.url}</hub.url>
         <hub.ws.url>${hub.dev.ws.url}</hub.ws.url>
         <!-- jpack (self-updating install: stub + launcher + jlink runtime) - plugin version -->
-        <jpack.plugin.version>0.1.0</jpack.plugin.version>
+        <jpack.plugin.version>0.1.2</jpack.plugin.version>
     </properties>
 
     <dependencies>
