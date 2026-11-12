@@ -1,5 +1,6 @@
 package komm.launcher;
 
+import javafx.animation.AnimationTimer;
 import javafx.animation.FadeTransition;
 import javafx.animation.Interpolator;
 import javafx.animation.ParallelTransition;
@@ -56,6 +57,9 @@ public class LauncherApp extends Application implements UpdateManager.Listener {
     private Stage stage;
     private Label statusLabel;
     private ProgressBar progressBar;
+    /** Latest progress reported by the update worker, and what the bar currently shows (both 0..1, FX thread). */
+    private double targetProgress;
+    private double shownProgress;
 
     private double dragOffsetX;
     private double dragOffsetY;
@@ -265,7 +269,10 @@ public class LauncherApp extends Application implements UpdateManager.Listener {
     public void onPhase(Phase phase) {
         Platform.runLater(() -> {
             setStatusText(phase.getPhrase(), false);
+            progressSmoother.stop();
             if (phase.isDeterminate()) {
+                targetProgress = 0;
+                shownProgress = 0;
                 progressBar.setProgress(0);
             } else if (phase == Phase.DONE || phase == Phase.UP_TO_DATE) {
                 progressBar.setProgress(1);
@@ -277,8 +284,40 @@ public class LauncherApp extends Application implements UpdateManager.Listener {
 
     @Override
     public void onProgress(double fraction) {
-        Platform.runLater(() -> progressBar.setProgress(fraction));
+        Platform.runLater(() -> {
+            // The stub reports a few times a second; drawing each report as it arrives makes the bar
+            // advance in steps, so the bar eases toward the latest value on every frame instead.
+            targetProgress = Math.max(targetProgress, Math.min(1.0, fraction));
+            progressSmoother.start();
+        });
     }
+
+    /** Frame-rate independent exponential easing of the shown progress toward {@link #targetProgress}. */
+    private final AnimationTimer progressSmoother = new AnimationTimer() {
+        private static final double TIME_CONSTANT_SECONDS = 0.18;
+        private long last;
+
+        @Override
+        public void start() {
+            last = 0;
+            super.start();
+        }
+
+        @Override
+        public void handle(long now) {
+            double dt = last == 0 ? 1.0 / 60 : Math.min((now - last) / 1e9, 0.1);
+            last = now;
+            double remaining = targetProgress - shownProgress;
+            if (Math.abs(remaining) < 0.0005) {
+                shownProgress = targetProgress;
+                progressBar.setProgress(shownProgress);
+                stop();
+                return;
+            }
+            shownProgress += remaining * (1 - Math.exp(-dt / TIME_CONSTANT_SECONDS));
+            progressBar.setProgress(shownProgress);
+        }
+    };
 
     @Override
     public void onError(String message) {

@@ -6,12 +6,14 @@
 #   machine's jlink, and the stub it ships is native). Each job
 #     1. sets the Maven version from the tag (the tag is the single source of truth; app.properties'
 #        client.version is filtered from it and jpack versions the release with it),
-#     2. builds the launcher's fat jar for its OS (launcher/, version deliberately NOT bumped: the
+#     2. takes the launcher jar built once by the `client` job (launcher/, one jar with both natives; version deliberately NOT bumped: the
 #        launcher part is then byte-identical between releases until the launcher changes, so
 #        installed copies don't download it again),
-#     3. builds the client fat jar and runs `jpack:package` over both (-Ppackage,prod,jpack): a jlink
+#     3. runs `jpack:package` over the launcher jar and the client jar (-Ppackage,prod,jpack -Djpack.jar=...). The
+#        client jar is NOT built here: the `client` job builds it once and every platform job packages that same
+#        file, so the "app" part is one file on the release. The package step builds: a jlink
 #        runtime shared by launcher and client, the install folder, and the release files,
-#     4. wraps the install folder into the user-facing download - Komm-Setup-<v>.exe (Inno Setup) on
+#     4. wraps the install folder into the user-facing download - Komm-Setup.exe (Inno Setup) on
 #        Windows, Komm-<v>-x86_64.AppImage (built by jpack itself, with its block index) on Linux,
 #     5. attaches everything to the release.
 #
@@ -20,7 +22,7 @@
 #   hash changed. So EVERY release must carry ALL files of target/jpack/release/, changed or not (a user
 #   who skipped a version needs whichever parts changed since theirs). The manifest is uploaded LAST: the
 #   parts it names must exist before anyone can see it.
-#   Stable-named aliases (Komm-Setup.exe, Komm.AppImage) are uploaded too, so
+#   The downloads carry no version in their name (Komm-Setup.exe, Komm.AppImage), so
 #   `releases/latest/download/...` links on the hub site stay stable across versions.
 #
 # Manual flow (Actions tab -> Run workflow, tag = existing release e.g. 0.0.3):
@@ -59,17 +61,16 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
-  windows:
-    name: Windows (installer + update files)
+  # The client jar is platform-independent (it carries the Windows and the Linux natives side by side), so it is
+  # built ONCE here and both platform jobs package this same file. Building it in each job gave two jars that were
+  # not byte-identical (Windows checkouts have CRLF line endings, JavaFX ships per-OS stylesheet files, ...), and with
+  # them two different "app" parts on the release.
+  client:
+    name: Client jar (built once)
     needs: version
-    runs-on: windows-latest
-    defaults:
-      run:
-        shell: bash
+    runs-on: ubuntu-latest
     env:
-      GH_TOKEN: ${{ github.token }}
       VERSION: ${{ needs.version.outputs.version }}
-      TAG: ${{ needs.version.outputs.tag }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -84,17 +85,76 @@ jobs:
       - name: Set version from the tag
         run: mvn -B -ntp versions:set -DnewVersion="$VERSION" -DgenerateBackupPoms=false
 
-      - name: Build the launcher (Windows natives)
-        run: mvn -B -ntp -f launcher/pom.xml clean package -Pwin-natives
+      - name: Build the client jar
+        run: mvn -B -ntp clean package -Ppackage,prod
 
-      - name: Build the client and the jpack release
-        run: mvn -B -ntp clean package -Ppackage,prod,jpack
+      - uses: actions/upload-artifact@v5
+        with:
+          name: client-jar
+          path: target/komm-${{ needs.version.outputs.version }}.jar
+          if-no-files-found: error
+
+      # The launcher is a JavaFX fat jar like the client: one jar with the Windows and the Linux natives side by
+      # side. Its version is deliberately NOT bumped (the root versions:set above does not touch launcher/), so the
+      # launcher part keeps its hash, and installed copies don't download it again, until the launcher changes.
+      - name: Build the launcher jar (Windows and Linux natives)
+        run: mvn -B -ntp -f launcher/pom.xml clean package -Pall-natives
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: launcher-jar
+          path: launcher/target/komm-launcher.jar
+          if-no-files-found: error
+
+  windows:
+    name: Windows (installer + update files)
+    needs: [version, client]
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    env:
+      GH_TOKEN: ${{ github.token }}
+      # A manual run rebuilds a release and replaces what is on it; a normal run only skips identical files.
+      REPLACE_EXISTING: ${{ github.event_name == 'workflow_dispatch' }}
+      VERSION: ${{ needs.version.outputs.version }}
+      TAG: ${{ needs.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+
+      - uses: actions/download-artifact@v5
+        with:
+          name: client-jar
+          path: prebuilt
+
+      - name: Set version from the tag
+        run: mvn -B -ntp versions:set -DnewVersion="$VERSION" -DgenerateBackupPoms=false
+
+      - uses: actions/download-artifact@v5
+        with:
+          name: launcher-jar
+          path: launcher/target
+
+      - name: Build the jpack release (packages the client jar built above)
+        run: mvn -B -ntp package -Ppackage,prod,jpack -Djpack.jar=prebuilt/komm-$VERSION.jar
 
       - name: Check the release files
         run: |
           ls -l target/jpack/release
           test -s target/jpack/release/jpack-windows-x64.json
           test -d target/jpack/image/windows-x64
+          # The two jars are published as they are (rawParts in jpack.json), not as zips.
+          test -s "target/jpack/release/komm-$VERSION.jar"
+          test -s target/jpack/release/komm-launcher.jar
+          grep -q '"packed": false' target/jpack/release/jpack-windows-x64.json
 
       - name: Build the installer
         shell: pwsh
@@ -109,23 +169,20 @@ jobs:
 
       - name: Upload to the release
         run: |
-          # Stable alias so the hub site's releases/latest/download link never changes.
-          cp "target/installer/Komm-Setup-$VERSION.exe" target/installer/Komm-Setup.exe
           # Parts first, the manifest last (see the header).
-          find target/jpack/release -type f ! -name 'jpack-*.json' -print0 \
-            | xargs -0 gh release upload "$TAG" --clobber -R "$GITHUB_REPOSITORY"
-          gh release upload "$TAG" \
-            "target/installer/Komm-Setup-$VERSION.exe" \
-            target/installer/Komm-Setup.exe \
-            --clobber -R "$GITHUB_REPOSITORY"
+          bash .github/scripts/upload-parts.sh target/jpack/release
+          # The installer has no version in its name, so releases/latest/download/Komm-Setup.exe never changes.
+          gh release upload "$TAG" target/installer/Komm-Setup.exe --clobber -R "$GITHUB_REPOSITORY"
           gh release upload "$TAG" target/jpack/release/jpack-windows-x64.json --clobber -R "$GITHUB_REPOSITORY"
 
   linux:
     name: Linux (AppImage + update files)
-    needs: version
+    needs: [version, client]
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
+      # A manual run rebuilds a release and replaces what is on it; a normal run only skips identical files.
+      REPLACE_EXISTING: ${{ github.event_name == 'workflow_dispatch' }}
       VERSION: ${{ needs.version.outputs.version }}
       TAG: ${{ needs.version.outputs.tag }}
     steps:
@@ -149,28 +206,37 @@ jobs:
           chmod +x appimagetool
           echo "APPIMAGETOOL=$PWD/appimagetool" >> "$GITHUB_ENV"
 
+      - uses: actions/download-artifact@v5
+        with:
+          name: client-jar
+          path: prebuilt
+
       - name: Set version from the tag
         run: mvn -B -ntp versions:set -DnewVersion="$VERSION" -DgenerateBackupPoms=false
 
-      - name: Build the launcher (Linux natives)
-        run: mvn -B -ntp -f launcher/pom.xml clean package -Plinux-natives
+      - uses: actions/download-artifact@v5
+        with:
+          name: launcher-jar
+          path: launcher/target
 
-      - name: Build the client and the jpack release
-        run: mvn -B -ntp clean package -Ppackage,prod,jpack
+      - name: Build the jpack release (packages the client jar built above)
+        run: mvn -B -ntp package -Ppackage,prod,jpack -Djpack.jar=prebuilt/komm-$VERSION.jar
 
       - name: Check the release files
         run: |
           ls -l target/jpack/release
           test -s target/jpack/release/jpack-linux-x64.json
-          test -s "target/jpack/release/Komm-$VERSION-x86_64.AppImage"
-          test -s "target/jpack/release/Komm-$VERSION-x86_64.AppImage.blocks"
+          # The two jars are published as they are (rawParts in jpack.json), not as zips.
+          test -s "target/jpack/release/komm-$VERSION.jar"
+          test -s target/jpack/release/komm-launcher.jar
+          grep -q '"packed": false' target/jpack/release/jpack-linux-x64.json
+          test -s target/jpack/release/Komm.AppImage
+          test -s target/jpack/release/Komm.AppImage.blocks
 
       - name: Upload to the release
         run: |
-          # Stable alias so the hub site's releases/latest/download link never changes.
-          cp "target/jpack/release/Komm-$VERSION-x86_64.AppImage" target/Komm.AppImage
-          # Parts first, the manifest last (see the header).
-          find target/jpack/release -type f ! -name 'jpack-*.json' -print0 \
-            | xargs -0 gh release upload "$TAG" --clobber -R "$GITHUB_REPOSITORY"
-          gh release upload "$TAG" target/Komm.AppImage --clobber -R "$GITHUB_REPOSITORY"
+          # Parts first, the manifest last (see the header). The AppImage has no version in its name (appImageName in
+          # jpack.json), so it is both what the manifest names for in-place AppImage updates and the stable
+          # releases/latest/download/Komm.AppImage link; its block index goes with it.
+          bash .github/scripts/upload-parts.sh target/jpack/release
           gh release upload "$TAG" target/jpack/release/jpack-linux-x64.json --clobber -R "$GITHUB_REPOSITORY"

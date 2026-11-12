@@ -18,7 +18,7 @@
         <lombok.version>1.18.46</lombok.version>
         <!-- override with -Dlauncher.demo=true to run the scripted demo -->
         <launcher.demo>false</launcher.demo>
-        <jpack.api.version>0.1.0</jpack.api.version>
+        <jpack.api.version>0.1.2</jpack.api.version>
         <!-- Fixed jar entry timestamps: the same sources give the same bytes, so the launcher part
              of a release keeps its hash (and is not downloaded again) until the launcher changes. -->
         <project.build.outputTimestamp>2026-01-01T00:00:00Z</project.build.outputTimestamp>
@@ -93,13 +93,32 @@
 
     <!-- mvn javafx:run                          (dev run - no jpack stub, so it only previews the UI)
          mvn javafx:run -Dlauncher.demo=true     (scripted demo of every phase)
-         mvn clean package -Pwin-natives         (target/komm-launcher.jar with Windows JavaFX natives)
-         mvn clean package -Plinux-natives       (target/komm-launcher.jar with Linux JavaFX natives)
+         mvn clean package -Pall-natives         (target/komm-launcher.jar with Windows AND Linux JavaFX natives: the release)
+         mvn clean package -Pwin-natives         (target/komm-launcher.jar with Windows JavaFX natives only, smaller)
+         mvn clean package -Plinux-natives       (target/komm-launcher.jar with Linux JavaFX natives only, smaller)
 
-         The two single-platform fat jars are what the client's `jpack` profile packages as the
-         launcher part of a release (see ../src/jpack/jpack.json); the installer and the AppImage
-         are produced from there, not from this project. -->
+         The fat jar is what the client's `jpack` profile packages as the launcher part of a release
+         (see ../src/jpack/jpack.json); the installer and the AppImage are produced from there, not from
+         this project. -->
+
     <profiles>
+        <profile>
+            <id>all-natives</id>
+            <dependencies>
+                <dependency>
+                    <groupId>org.openjfx</groupId>
+                    <artifactId>javafx-graphics</artifactId>
+                    <version>${javafx.version}</version>
+                    <classifier>win</classifier>
+                </dependency>
+                <dependency>
+                    <groupId>org.openjfx</groupId>
+                    <artifactId>javafx-graphics</artifactId>
+                    <version>${javafx.version}</version>
+                    <classifier>linux</classifier>
+                </dependency>
+            </dependencies>
+        </profile>
         <profile>
             <id>win-natives</id>
             <dependencies>
