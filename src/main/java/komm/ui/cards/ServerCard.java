@@ -199,7 +199,8 @@ public class ServerCard extends HBox {
         String letter = !name.isEmpty() ? name.substring(0, 1).toUpperCase() : "?";
         Text t = new Text(letter);
         t.setFill(Color.WHITE);
-        t.setFont(Font.font("System", FontWeight.BOLD, 22));
+        // Scales with the avatar: 14px in the home list rows (38px), 22px on big cards (62px).
+        t.setFont(Font.font("System", FontWeight.BOLD, Math.round(avatarSize * 0.36)));
         pane.getChildren().add(t);
         return pane;
     }

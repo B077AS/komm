@@ -24,6 +24,8 @@ import komm.ui.code.CodeBlockView;
 import komm.ui.code.CodeLanguage;
 import komm.ui.gifs.GifMessageCell;
 import komm.ui.modals.ConfirmationModal;
+import komm.ui.poll.PollMessageView;
+import komm.websocket.messages.payloads.MessageReceivedPayload;
 import komm.ui.utils.IconColorUtil;
 import lombok.Getter;
 import lombok.Setter;
@@ -111,6 +113,7 @@ public class EmojiMessageContent extends VBox {
     private double lastContextMenuScreenX;
     private double lastContextMenuScreenY;
     private CodeBlockView codeBlock = null;
+    private PollMessageView pollView = null;
 
     private final ContextMenu contextMenu;
     private BooleanSupplier deleteVisibleSupplier;
@@ -776,6 +779,38 @@ public class EmojiMessageContent extends VBox {
 
         content.markAsUrlImage(imageUrl);
         return content;
+    }
+
+    /**
+     * A poll message: the {@link PollMessageView} card is the first child (same layout trick as
+     * {@link #ofGif}), the context menu gets "Copy Question" instead of Copy / Copy All.
+     */
+    public static EmojiMessageContent ofPoll(MessageReceivedPayload message) {
+        EmojiMessageContent content = new EmojiMessageContent("");
+        PollMessageView view = new PollMessageView(message);
+        VBox.setMargin(view, new Insets(4, 0, 4, H_PAD));
+        content.getChildren().add(0, view);
+        content.pollView = view;
+
+        content.contextMenu.getItems().removeIf(mi ->
+                "Copy".equals(mi.getText()) || "Copy All".equals(mi.getText()));
+        var items = content.contextMenu.getItems();
+        for (int i = items.size() - 1; i > 0; i--) {
+            if (items.get(i) instanceof SeparatorMenuItem && items.get(i - 1) instanceof SeparatorMenuItem) {
+                items.remove(i);
+                break;
+            }
+        }
+        String question = message.getContent() == null ? "" : message.getContent();
+        MenuItem miCopyQuestion = new MenuItem("Copy Question", new FontIcon(MaterialDesignC.CONTENT_COPY));
+        miCopyQuestion.setOnAction(e -> toClipboard(question));
+        items.add(2, miCopyQuestion);
+        return content;
+    }
+
+    /** The poll card when this bubble is a poll message, else null. */
+    public PollMessageView getPollView() {
+        return pollView;
     }
 
     public EmojiReactionBar detachReactionBar() {

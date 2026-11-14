@@ -25,6 +25,8 @@ import komm.ui.code.CodeLanguage;
 import komm.ui.utils.IconColorUtil;
 import komm.ui.customnodes.CustomNotification;
 import komm.ui.modals.CodeMessageModal;
+import komm.ui.modals.PollComposerModal;
+import komm.model.permissions.Permission;
 import komm.model.dto.summary.ServerSummary;
 import komm.ui.emojis.EmojiMessageContent;
 import komm.ui.emojis.EmojiMessageItem;
@@ -858,7 +860,8 @@ public class ChatSection extends VBox {
         item.getBubble().setOnReply(bubble -> openReplyBar(msg));
         item.getBubble().setOnAllPopupsClosed(item::onAllPopupsClosed);
         boolean canEdit = isOwn && msg.getMessageType() != MessageReceivedPayload.MessageType.GIF
-                && msg.getMessageType() != MessageReceivedPayload.MessageType.URL_IMAGE;
+                && msg.getMessageType() != MessageReceivedPayload.MessageType.URL_IMAGE
+                && msg.getMessageType() != MessageReceivedPayload.MessageType.POLL;
         if (canEdit) {
             item.getBubble().setEditVisible(true);
             item.getBubble().setOnEdit(() -> startEditMode(msg, item));
@@ -1049,6 +1052,9 @@ public class ChatSection extends VBox {
             preview = "Image";
         } else if (target.getMessageType() == MessageReceivedPayload.MessageType.CODE) {
             preview = "Code snippet";
+        } else if (target.getMessageType() == MessageReceivedPayload.MessageType.POLL) {
+            preview = truncate("Poll: " + (target.getContent() == null ? "" : target.getContent())
+                    .replaceAll("\\R", " ").strip(), 100);
         } else {
             preview = target.getContent();
             if ((preview == null || preview.isBlank()) && target.isHasAttachments())
@@ -1152,6 +1158,55 @@ public class ChatSection extends VBox {
         });
     }
 
+    // ── Polls ───────────────────────────────────────────────────────────────
+
+    private boolean canCreatePoll() {
+        return activeTextChannelId != null
+                && App.getPermissionManager().hasInChannel(activeTextChannelId, Permission.SEND_MESSAGES);
+    }
+
+    /** Opens the poll composer; the poll goes to the channel that was active when it opened. */
+    private void openPollComposer() {
+        if (!canCreatePoll()) return;
+        UUID channelId = activeTextChannelId;
+        MessageReceivedPayload reply = currentReplyTarget;
+        App.showModal(new PollComposerModal((question, spec) -> {
+            MessageSentPayload.MessageSentPayloadBuilder builder = MessageSentPayload.builder()
+                    .channelId(channelId)
+                    .content(question)
+                    .messageType(MessageReceivedPayload.MessageType.POLL)
+                    .poll(spec);
+            if (reply != null) builder.repliedToId(reply.getMessageId());
+            App.getServices().installation().getWsClient()
+                    .send(WsMessageType.CHANNEL_MESSAGE_SENT, builder.build());
+            if (currentReplyTarget != null) {
+                currentReplyTarget = null;
+                collapseReplyBar();
+            }
+        }));
+    }
+
+    /**
+     * Applies a {@code CHANNEL_POLL_UPDATED}: stores the new state in the message payload (so a
+     * cell built later is current) and updates the on-screen card, if any. A broadcast carries no
+     * {@code myOptionIds}, so the user's own choices are kept from the previous state.
+     */
+    public void updatePoll(PollUpdatedPayload p) {
+        Platform.runLater(() -> {
+            MessageReceivedPayload target = virtualList.payload(p.getMessageId());
+            if (target == null || target.getMessageType() != MessageReceivedPayload.MessageType.POLL) return;
+            PollSummary next = p.getPoll();
+            if (next.getMyOptionIds() == null && target.getPoll() != null) {
+                next.setMyOptionIds(target.getPoll().getMyOptionIds());
+            }
+            target.setPoll(next);
+            EmojiMessageItem live = messageItemMap.get(p.getMessageId());
+            if (live != null && live.getBubble().getPollView() != null) {
+                live.getBubble().getPollView().update(next);
+            }
+        });
+    }
+
     // ── Code messages ───────────────────────────────────────────────────────
 
     /** Opens the code editor to compose a new code message. */
@@ -1239,6 +1294,7 @@ public class ChatSection extends VBox {
     private void startEditMode(MessageReceivedPayload msg, EmojiMessageItem item) {
         if (msg.getMessageType() == MessageReceivedPayload.MessageType.GIF) return;
         if (msg.getMessageType() == MessageReceivedPayload.MessageType.URL_IMAGE) return;
+        if (msg.getMessageType() == MessageReceivedPayload.MessageType.POLL) return;
         if (msg.getMessageType() == MessageReceivedPayload.MessageType.CODE) {
             openCodeEditor(msg);
             return;
@@ -1275,7 +1331,8 @@ public class ChatSection extends VBox {
             MessageReceivedPayload target = virtualList.payload(p.getMessageId());
             if (target == null) return;
             if (target.getMessageType() == MessageReceivedPayload.MessageType.GIF
-                    || target.getMessageType() == MessageReceivedPayload.MessageType.URL_IMAGE) return;
+                    || target.getMessageType() == MessageReceivedPayload.MessageType.URL_IMAGE
+                    || target.getMessageType() == MessageReceivedPayload.MessageType.POLL) return;
 
             target.setContent(p.getContent());
             target.setEdited(true);
@@ -1404,6 +1461,16 @@ public class ChatSection extends VBox {
             @Override
             public void onCodeRequested(String prefill) {
                 openCodeComposer(prefill);
+            }
+
+            @Override
+            public void onPollRequested() {
+                openPollComposer();
+            }
+
+            @Override
+            public boolean supportsPolls() {
+                return canCreatePoll();
             }
         });
         messageInputBox.setAttachmentBarSlot(attachmentBarSlot);

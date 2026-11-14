@@ -54,6 +54,7 @@ public class InstallationWsClient extends Endpoint {
                 new ChannelMessageReactionRemoveHandler(),
                 new ChannelTypingHandler(),
                 new ChannelMessageEditedHandler(),
+                new ChannelPollUpdatedHandler(),
                 new PongHandler(),
                 new ChannelCreatedHandler(),
                 new ChannelUpdatedHandler(),
