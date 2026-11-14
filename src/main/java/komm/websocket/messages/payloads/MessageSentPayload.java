@@ -20,4 +20,6 @@ public class MessageSentPayload {
     private UUID attachmentId;
     private MessageReceivedPayload.MessageType messageType;
     private String codeLanguage;
+    /** Required when {@code messageType == POLL}. */
+    private PollCreatePayload poll;
 }

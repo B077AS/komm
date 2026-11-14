@@ -4,8 +4,11 @@ import javafx.animation.*;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.geometry.Side;
 import javafx.scene.control.Button;
+import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;
+import javafx.scene.control.MenuItem;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.*;
 import javafx.scene.shape.Circle;
@@ -55,6 +58,15 @@ public class MessageInputBox extends VBox {
          * opened via the code button with an empty editor.
          */
         void onCodeRequested(String prefill);
+
+        /** "Poll" picked from the + menu. Only offered when {@link #supportsPolls()} is true. */
+        default void onPollRequested() {
+        }
+
+        /** Whether this chat can hold polls (channels yes, DMs no); re-checked each time the + menu opens. */
+        default boolean supportsPolls() {
+            return false;
+        }
     }
 
     private static final long TYPING_DEBOUNCE_MS = 1500;
@@ -259,18 +271,34 @@ public class MessageInputBox extends VBox {
         attachButton.getStyleClass().addAll(Styles.BUTTON_ICON, Styles.FLAT);
         attachButton.setOnAction(e -> openFileChooser(attachButton));
 
-        // ── Code button ───────────────────────────────────────────────────────
-        Button codeButton = new Button(null, new FontIcon(MaterialDesignC.CODE_BRACES));
-        codeButton.setFocusTraversable(false);
-        codeButton.getStyleClass().addAll(Styles.BUTTON_ICON, Styles.FLAT);
-        codeButton.setTooltip(new Tooltip("Send code"));
-        codeButton.setOnAction(e -> listener.onCodeRequested(null));
+        // ── "+" button: menu with code message / poll ─────────────────────────
+        Button plusButton = new Button(null, new FontIcon(MaterialDesignP.PLUS_CIRCLE_OUTLINE));
+        plusButton.setFocusTraversable(false);
+        plusButton.getStyleClass().addAll(Styles.BUTTON_ICON, Styles.FLAT);
+        plusButton.setTooltip(new Tooltip("More"));
+
+        MenuItem codeItem = new MenuItem("Code snippet", new FontIcon(MaterialDesignC.CODE_BRACES));
+        codeItem.setOnAction(e -> listener.onCodeRequested(null));
+        MenuItem pollItem = new MenuItem("Poll", new FontIcon(MaterialDesignP.POLL));
+        pollItem.setOnAction(e -> listener.onPollRequested());
+        ContextMenu plusMenu = new ContextMenu(codeItem, pollItem);
+        plusMenu.setOnShowing(e -> {
+            boolean polls = listener.supportsPolls();
+            pollItem.setVisible(polls);
+        });
+        plusButton.setOnAction(e -> {
+            if (plusMenu.isShowing()) {
+                plusMenu.hide();
+            } else {
+                plusMenu.show(plusButton, Side.TOP, 0, -4);
+            }
+        });
 
         HBox row = new HBox(8);
         row.setAlignment(Pos.BOTTOM_LEFT);
         row.setPadding(new Insets(8, 8, 8, 16));
         row.setStyle("-fx-background-color: -color-bg-subtle; -fx-background-radius: 3px;");
-        row.getChildren().addAll(emojiArea, gifButton, attachButton, codeButton, sendButton);
+        row.getChildren().addAll(emojiArea, gifButton, attachButton, plusButton, sendButton);
         return row;
     }
 

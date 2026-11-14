@@ -220,6 +220,8 @@ public class EmojiMessageItem extends HBox {
             // content holds the image URL directly — today only ever from a bot (e.g. the anime
             // waifu spawner), which posts a URL rather than uploading a real attachment.
             bubble = EmojiMessageContent.ofUrlImage(payload.getContent(), 0, 0);
+        } else if (payload.getMessageType() == MessageReceivedPayload.MessageType.POLL) {
+            bubble = EmojiMessageContent.ofPoll(payload);
         } else if (payload.getMessageType() == MessageReceivedPayload.MessageType.CODE) {
             bubble = EmojiMessageContent.ofCode(
                     payload.getContent() == null ? "" : payload.getContent(),
@@ -404,6 +406,9 @@ public class EmojiMessageItem extends HBox {
             preview = replyPreviewPlaceholder(payload);
         } else {
             preview = preview.replaceAll("\\R", " ").strip();
+            if (payload.getReplyToMessageType() == MessageReceivedPayload.MessageType.POLL) {
+                preview = "Poll: " + preview;
+            }
             preview = truncate(preview, 80);
         }
 

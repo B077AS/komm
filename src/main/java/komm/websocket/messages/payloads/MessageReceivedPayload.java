@@ -36,8 +36,10 @@ public class MessageReceivedPayload {
     private boolean replyToHasAttachments;
     private String replyToFileName;
     private String replyToFileType;
+    /** Set when {@code messageType == POLL}; {@code content} is then the question. */
+    private PollSummary poll;
 
     public enum MessageType {
-        TEXT, GIF, CODE, URL_IMAGE
+        TEXT, GIF, CODE, URL_IMAGE, POLL
     }
 }
