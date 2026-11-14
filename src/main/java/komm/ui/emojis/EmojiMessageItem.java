@@ -402,7 +402,12 @@ public class EmojiMessageItem extends HBox {
         }
 
         String preview = payload.getReplyToContent();
-        if (preview == null || preview.isBlank()) {
+        MessageReceivedPayload.MessageType replyType = payload.getReplyToMessageType();
+        // GIF / image / code content is a URL or source text: show the kind label instead.
+        boolean labelOnly = replyType == MessageReceivedPayload.MessageType.GIF
+                || replyType == MessageReceivedPayload.MessageType.URL_IMAGE
+                || replyType == MessageReceivedPayload.MessageType.CODE;
+        if (labelOnly || preview == null || preview.isBlank()) {
             preview = replyPreviewPlaceholder(payload);
         } else {
             preview = preview.replaceAll("\\R", " ").strip();

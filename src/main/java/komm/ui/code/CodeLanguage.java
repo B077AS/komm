@@ -12,6 +12,7 @@ public enum CodeLanguage {
     CSS("CSS"),
     HTML("HTML"),
     GO("Go"),
+    SQL("SQL"),
     PLAIN_TEXT("Plain text");
 
     private final String displayName;
@@ -46,6 +47,7 @@ public enum CodeLanguage {
                 case "css" -> CSS;
                 case "html" -> HTML;
                 case "go", "golang" -> GO;
+                case "sql", "postgresql", "postgres", "mysql", "sqlite", "plsql", "tsql" -> SQL;
                 default -> PLAIN_TEXT;
             };
         }

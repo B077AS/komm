@@ -65,7 +65,7 @@ public class InfoUserTab implements UserSettingsTab {
     private HBox buildHero() {
         double r = LOGO_SIZE / 2.0;
 
-        // Same badge-circle + waveform-bars geometry the komm-launcher draws
+        // Same badge-circle + waveform-bars geometry the launcher (launcher/) draws
         // (from icon.svg's 64x64 viewBox) rather than clipping the raster
         // rounded-square icon.png to a circle — that left visible corner
         // artifacts since the square art doesn't fill an inscribed circle.

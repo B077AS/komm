@@ -23,6 +23,12 @@ public final class CodeDetector {
     private static final Pattern PYTHON_SIGNAL = Pattern.compile(
             "(^|\\n)\\s*(def\\s+\\w+\\s*\\(|class\\s+\\w+\\s*[:(]|import\\s+\\w+|from\\s+\\w+\\s+import|print\\s*\\()");
 
+    /** Statement shapes, not lone words: "select" / "update" alone show up in prose all the time. */
+    private static final Pattern SQL_SIGNAL = Pattern.compile(
+            "\\bselect\\b[\\s\\S]+?\\bfrom\\b|\\binsert\\s+into\\b|\\bupdate\\s+[\\w.\"`]+\\s+set\\b"
+                    + "|\\bdelete\\s+from\\b|\\b(create|alter|drop)\\s+(table|view|index|schema|database)\\b",
+            Pattern.CASE_INSENSITIVE);
+
     /**
      * Returns {@code true} if {@code text} is reasonably likely to be code.
      */
@@ -37,6 +43,7 @@ public final class CodeDetector {
         int score = 0;
         if (JAVA_SIGNAL.matcher(t).find()) score += 2;
         if (PYTHON_SIGNAL.matcher(t).find()) score += 2;
+        if (SQL_SIGNAL.matcher(t).find()) score += 2;
 
         long braces = t.chars().filter(c -> c == '{' || c == '}').count();
         long semis = t.chars().filter(c -> c == ';').count();
@@ -59,6 +66,8 @@ public final class CodeDetector {
         if (text == null) return CodeLanguage.PLAIN_TEXT;
         boolean python = PYTHON_SIGNAL.matcher(text).find();
         boolean java = JAVA_SIGNAL.matcher(text).find();
+        // SQL before the brace/semicolon rule below, which would otherwise call it Java.
+        if (!java && !python && SQL_SIGNAL.matcher(text).find()) return CodeLanguage.SQL;
 
         // Braces/semicolons strongly imply a C-family (Java here) snippet.
         if (java || text.contains("{") || text.contains(";")) {

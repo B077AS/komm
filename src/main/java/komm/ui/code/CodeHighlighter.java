@@ -56,6 +56,7 @@ public class CodeHighlighter {
 
     public static List<Token> tokens(String text, CodeLanguage language) {
         if (text == null || text.isEmpty()) return List.of();
+        if (language == CodeLanguage.SQL) return SqlHighlighter.tokens(text);
         TokenMaker tokenMaker = tokenMakerFor(language);
         if (tokenMaker == null) return List.of(new Token(0, text.length(), null));
 
