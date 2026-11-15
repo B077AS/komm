@@ -45,7 +45,6 @@ import komm.model.dto.summary.FriendSummary;
 import komm.ui.pages.HomePage;
 import komm.ui.profile.UserProfilePopup;
 import komm.ui.sections.FriendsSection;
-import komm.ui.theme.AppTheme;
 import komm.ui.theme.ThemeManager;
 import komm.websocket.messages.WsMessageType;
 import org.kordamp.ikonli.feather.Feather;
@@ -79,7 +78,7 @@ public class ConnectedUserCard extends HBox {
     private StackPane avatarPane;
     private Label avatarInitial;
     private ChangeListener<Number> selfAvatarListener;
-    private ChangeListener<AppTheme> themeChangeListener;
+    private ChangeListener<ThemeManager.Appearance> themeChangeListener;
 
     private final ChannelUserSummary user;
     private final ChannelSummary channel;
@@ -126,15 +125,15 @@ public class ConnectedUserCard extends HBox {
         // Re-resolve the accent color on live theme switches — the scene-property
         // listener above only fires on attach/detach, so it misses in-place theme
         // changes while this card stays mounted (e.g. switching theme on the server page).
-        themeChangeListener = (obs, oldTheme, newTheme) -> Platform.runLater(() -> {
+        themeChangeListener = (obs, oldAppearance, newAppearance) -> Platform.runLater(() -> {
             colorAccent4 = loadColorFromCSS("-color-accent-4");
             if (speaking) speakingRing.setStroke(colorAccent4);
         });
-        ThemeManager.get().themeProperty().addListener(new WeakChangeListener<>(themeChangeListener));
+        ThemeManager.get().appearanceProperty().addListener(new WeakChangeListener<>(themeChangeListener));
 
         // ── Name ─────────────────────────────────────────────────────────
         Label nameLabel = new Label(user.getUsername());
-        nameLabel.setStyle("-fx-font-size: 13px; -fx-text-fill: #b5bac1;");
+        nameLabel.setStyle("-fx-font-size: 13px; -fx-text-fill: -color-fg-muted;");
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
@@ -391,10 +390,10 @@ public class ConnectedUserCard extends HBox {
             int savedPct = Math.round(savedVolume * 100);
 
             Label titleLabel = new Label("User Volume");
-            titleLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #b5bac1; -fx-font-weight: bold;");
+            titleLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: -color-fg-muted; -fx-font-weight: bold;");
 
             Label valueLabel = new Label(savedPct + "%");
-            valueLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #b5bac1; -fx-min-width: 38px;");
+            valueLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: -color-fg-muted; -fx-min-width: 38px;");
             valueLabel.setAlignment(Pos.CENTER_RIGHT);
 
             Region spacerH = new Region();

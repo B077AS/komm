@@ -154,7 +154,7 @@ public class CreateChannelModal extends HBox {
         panel.setPrefWidth(NAV_WIDTH);
         panel.setMinWidth(NAV_WIDTH);
         panel.setMaxWidth(NAV_WIDTH);
-        panel.setStyle("-fx-background-color: rgba(255,255,255,0.03); -fx-background-radius: 4px 0 0 4px;");
+        panel.setStyle("-fx-background-color: -color-overlay-1; -fx-background-radius: 4px 0 0 4px;");
 
         VBox nav = new VBox(2);
         nav.setPadding(new Insets(12, 8, 12, 8));

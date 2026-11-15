@@ -100,7 +100,7 @@ public class UserProfileModal extends HBox {
         panel.setPrefWidth(210);
         panel.setMinWidth(210);
         panel.setMaxWidth(210);
-        panel.setStyle("-fx-background-color: rgba(255,255,255,0.03); -fx-background-radius: 4px 0 0 4px;");
+        panel.setStyle("-fx-background-color: -color-overlay-1; -fx-background-radius: 4px 0 0 4px;");
 
         // Avatar slot — styled as accent ring from the start
         avatarSlot = new StackPane();
@@ -485,7 +485,7 @@ public class UserProfileModal extends HBox {
         HBox pill = new HBox(6, icon, lbl);
         pill.setAlignment(Pos.CENTER_LEFT);
         pill.setPadding(new Insets(4, 10, 4, 8));
-        pill.setStyle("-fx-background-color: rgba(255,255,255,0.07); -fx-background-radius: 3;");
+        pill.setStyle("-fx-background-color: -color-overlay-4; -fx-background-radius: 3;");
         return pill;
     }
 

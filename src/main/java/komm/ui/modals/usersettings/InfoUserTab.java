@@ -106,7 +106,7 @@ public class InfoUserTab implements UserSettingsTab {
         hero.setAlignment(Pos.CENTER_LEFT);
         hero.setPadding(new Insets(20));
         hero.setStyle(
-                "-fx-background-color: linear-gradient(to bottom right, -color-accent-muted, rgba(255,255,255,0.03));" +
+                "-fx-background-color: linear-gradient(to bottom right, -color-accent-muted, -color-overlay-1);" +
                 "-fx-background-radius: 4px;" +
                 "-fx-border-color: -color-accent-emphasis;" +
                 "-fx-border-radius: 4px;" +
@@ -225,7 +225,7 @@ public class InfoUserTab implements UserSettingsTab {
 
     private static void applyTileStyle(VBox tile, boolean hover) {
         tile.setStyle(
-                "-fx-background-color: rgba(255,255,255," + (hover ? "0.06" : "0.03") + ");" +
+                "-fx-background-color: " + (hover ? "-color-overlay-3" : "-color-overlay-1") + ";" +
                 "-fx-background-radius: 4px;" +
                 "-fx-border-color: " + (hover ? "-color-accent-emphasis" : "-color-border-default") + ";" +
                 "-fx-border-radius: 4px;" +

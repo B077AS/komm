@@ -74,7 +74,7 @@ public class InstallationSettingsModal extends HBox {
         pane.setPrefWidth(230);
         pane.setMinWidth(230);
         pane.setMaxWidth(230);
-        pane.setStyle("-fx-background-color: rgba(255,255,255,0.03); -fx-background-radius: 4px 0 0 4px;");
+        pane.setStyle("-fx-background-color: -color-overlay-1; -fx-background-radius: 4px 0 0 4px;");
 
         VBox iconSection = new VBox(0);
         iconSection.setPadding(new Insets(24, 20, 18, 20));

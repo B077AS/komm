@@ -133,7 +133,7 @@ public class ScreenShareModal extends HBox {
         pane.setPrefWidth(190);
         pane.setMinWidth(190);
         pane.setMaxWidth(190);
-        pane.setStyle("-fx-background-color: rgba(255,255,255,0.03); -fx-background-radius: 4px 0 0 4px;");
+        pane.setStyle("-fx-background-color: -color-overlay-1; -fx-background-radius: 4px 0 0 4px;");
 
         VBox nav = new VBox(2);
         nav.setPadding(new Insets(16, 8, 12, 8));

@@ -84,6 +84,28 @@
 	-color-bg-elevated: #1e1e1e;
 	-color-bg-panel: #161616;
 	-color-bg-popup: #161616;
+	/* Komm tokens that flip with light/dark mode (light values: komm-light.css) */
+	-color-overlay-1: rgba(255, 255, 255, 0.03);
+	-color-overlay-2: rgba(255, 255, 255, 0.04);
+	-color-overlay-3: rgba(255, 255, 255, 0.06);
+	-color-overlay-4: rgba(255, 255, 255, 0.07);
+	-color-overlay-5: rgba(255, 255, 255, 0.10);
+	-color-overlay-6: rgba(255, 255, 255, 0.14);
+	-color-overlay-sheen: rgba(255, 255, 255, 0.08);
+	-color-modal-overlay: rgba(10, 8, 8, 0.75);
+	-color-modal-border: -color-accent-8;
+	-color-card-shadow: rgba(0, 0, 0, 0.40);
+	-color-danger-icon: rgb(225, 90, 90);
+	-color-danger-icon-hover: rgb(255, 110, 110);
+	-color-icon-soft: #cdd0d5;
+	-color-syntax-keyword: #c678dd;
+	-color-syntax-string: #98c379;
+	-color-syntax-comment: #5c6370;
+	-color-syntax-number: #d19a66;
+	-color-syntax-type: #e5c07b;
+	-color-syntax-method: #61afef;
+	-color-syntax-variable: #abb2bf;
+	-color-syntax-final: #e06c75;
 	-color-border-default: rgb(72, 72, 74);
 	-color-border-muted: rgb(58, 58, 60);
 	-color-border-subtle: rgb(49, 49, 52);
@@ -857,7 +879,7 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 /*@replace .toggle-switch>.thumb-area #0*/
 .toggle-switch>.thumb-area {
 	-fx-background-radius: 1em;
-	-fx-background-color: rgb(225, 90, 90), -color-bg-default;
+	-fx-background-color: -color-danger-icon, -color-bg-default;
 	-fx-background-insets: 0, 2px;
 	-fx-padding: 0.85em 1.4em 0.85em 1.4em;
 }
@@ -1065,7 +1087,7 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 
 /*@replace .modal-pane #0*/
 .modal-pane {
-	-color-modal-pane-overlay: rgba(10, 8, 8, 0.75);
+	-color-modal-pane-overlay: -color-modal-overlay;
 }
 
 /*@replace .modal-box>.close-button #0*/
@@ -1202,48 +1224,48 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 
 /*@after .ring-progress-indicator:indeterminate>.container>.track #0*/
 .code-area .text.cm-keyword {
-	-fx-fill: #c678dd;
+	-fx-fill: -color-syntax-keyword;
 }
 
 /*@after .ring-progress-indicator:indeterminate>.container>.track #0*/
 .code-area .text.cm-string {
-	-fx-fill: #98c379;
+	-fx-fill: -color-syntax-string;
 }
 
 /*@after .ring-progress-indicator:indeterminate>.container>.track #0*/
 .code-area .text.cm-comment {
-	-fx-fill: #5c6370;
+	-fx-fill: -color-syntax-comment;
 	-fx-font-style: italic;
 }
 
 /*@after .ring-progress-indicator:indeterminate>.container>.track #0*/
 .code-area .text.cm-number {
-	-fx-fill: #d19a66;
+	-fx-fill: -color-syntax-number;
 }
 
 /*@after .ring-progress-indicator:indeterminate>.container>.track #0*/
 .code-area .text.cm-annotation {
-	-fx-fill: #e5c07b;
+	-fx-fill: -color-syntax-type;
 }
 
 /*@after .ring-progress-indicator:indeterminate>.container>.track #0*/
 .code-area .text.cm-type {
-	-fx-fill: #e5c07b;
+	-fx-fill: -color-syntax-type;
 }
 
 /*@after .ring-progress-indicator:indeterminate>.container>.track #0*/
 .code-area .text.cm-method {
-	-fx-fill: #61afef;
+	-fx-fill: -color-syntax-method;
 }
 
 /*@after .ring-progress-indicator:indeterminate>.container>.track #0*/
 .code-area .text.cm-variable {
-	-fx-fill: #abb2bf;
+	-fx-fill: -color-syntax-variable;
 }
 
 /*@after .ring-progress-indicator:indeterminate>.container>.track #0*/
 .code-area .text.cm-final {
-	-fx-fill: #e06c75;
+	-fx-fill: -color-syntax-final;
 }
 
 /*@replace .scroll-bar>.thumb #0*/
@@ -1323,7 +1345,7 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 
 /*@after .tooltip #0*/
 .server-list-row:hover {
-	-fx-background-color: rgba(124, 92, 255, 0.07);
+	-fx-background-color: -color-accent-subtle;
 	-fx-background-radius: 3px;
 }
 
@@ -1444,7 +1466,7 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 	-fx-min-width: 1px;
 	-fx-max-width: 1px;
 	-fx-pref-height: 20px;
-	-fx-background-color: linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0) 100%);
+	-fx-background-color: linear-gradient(to bottom, transparent 0%, -color-overlay-sheen 50%, transparent 100%);
 }
 
 /*@after .tooltip #0*/
@@ -1544,8 +1566,8 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 
 /*@after .tooltip #0*/
 .button.toolbar-chip-muted .ikonli-font-icon {
-	-fx-icon-color: rgb(225, 90, 90);
-	-fx-fill: rgb(225, 90, 90);
+	-fx-icon-color: -color-danger-icon;
+	-fx-fill: -color-danger-icon;
 	-fx-icon-size: 17px;
 }
 
@@ -1566,8 +1588,8 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 
 /*@after .tooltip #0*/
 .button.toolbar-chip-active .ikonli-font-icon {
-	-fx-icon-color: rgb(225, 90, 90);
-	-fx-fill: rgb(225, 90, 90);
+	-fx-icon-color: -color-danger-icon;
+	-fx-fill: -color-danger-icon;
 	-fx-icon-size: 17px;
 }
 
@@ -1646,8 +1668,8 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 
 /*@after .tooltip #0*/
 .button.toolbar-chevron-muted .ikonli-font-icon {
-	-fx-icon-color: rgb(225, 90, 90);
-	-fx-fill: rgb(225, 90, 90);
+	-fx-icon-color: -color-danger-icon;
+	-fx-fill: -color-danger-icon;
 }
 
 /*@after .tooltip #0*/
@@ -1844,8 +1866,8 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 
 /*@after .tooltip #0*/
 .button.custom-toolbar-button-active .ikonli-font-icon {
-	-fx-icon-color: rgb(225, 90, 90);
-	-fx-fill: rgb(225, 90, 90);
+	-fx-icon-color: -color-danger-icon;
+	-fx-fill: -color-danger-icon;
 }
 
 /*@after .tooltip #0*/
@@ -1889,31 +1911,31 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 /*@after .tooltip #0*/
 .button.flat.audio-toggle-bordered.custom-toolbar-button-muted:hover {
 	-fx-background-color: rgba(160, 25, 25, 0.28);
-	-fx-border-color: rgb(225, 90, 90);
+	-fx-border-color: -color-danger-icon;
 }
 
 /*@after .tooltip #0*/
 .button.custom-toolbar-button-muted .ikonli-font-icon {
-	-fx-icon-color: rgb(225, 90, 90);
-	-fx-fill: rgb(225, 90, 90);
+	-fx-icon-color: -color-danger-icon;
+	-fx-fill: -color-danger-icon;
 }
 
 /*@after .tooltip #0*/
 .button.custom-toolbar-button-muted:hover .ikonli-font-icon {
-	-fx-icon-color: rgb(255, 110, 110);
-	-fx-fill: rgb(255, 110, 110);
+	-fx-icon-color: -color-danger-icon-hover;
+	-fx-fill: -color-danger-icon-hover;
 }
 
 /*@after .tooltip #0*/
 .muted-status-icon {
-	-fx-icon-color: rgb(225, 90, 90);
-	-fx-fill: rgb(225, 90, 90);
+	-fx-icon-color: -color-danger-icon;
+	-fx-fill: -color-danger-icon;
 }
 
 /*@after .tooltip #0*/
 .self-muted-status-icon {
-	-fx-icon-color: #cdd0d5;
-	-fx-fill: #cdd0d5;
+	-fx-icon-color: -color-icon-soft;
+	-fx-fill: -color-icon-soft;
 }
 
 /*@after .tooltip #0*/
@@ -1983,7 +2005,7 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 	-fx-background-color: -color-bg-overlay;
 	-fx-background-radius: 4px;
 	-fx-border-radius: 4px;
-	-fx-border-color: -color-accent-8;
+	-fx-border-color: -color-modal-border;
 	-fx-border-width: 1px;
 }
 
@@ -2162,7 +2184,7 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 
 /*@after .tooltip #0*/
 .connected-user-card:hover {
-	-fx-background-color: rgba(255, 255, 255, 0.04);
+	-fx-background-color: -color-overlay-2;
 }
 
 /*@after .tooltip #0*/
@@ -2173,7 +2195,7 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 
 /*@after .tooltip #0*/
 .friend-item:hover {
-	-fx-background-color: rgba(255, 255, 255, 0.04);
+	-fx-background-color: -color-overlay-2;
 }
 
 /*@after .tooltip #0*/
@@ -2205,9 +2227,9 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 
 /*@after .tooltip #0*/
 .channel-box {
-	-fx-background-color: rgba(255, 255, 255, 0.03);
+	-fx-background-color: -color-overlay-1;
 	-fx-background-radius: 3px;
-	-fx-border-color: rgba(255, 255, 255, 0.06);
+	-fx-border-color: -color-overlay-3;
 	-fx-border-radius: 3px;
 	-fx-border-width: 1px;
 	-fx-cursor: hand;
@@ -2215,8 +2237,8 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 
 /*@after .tooltip #0*/
 .channel-box:hover {
-	-fx-background-color: rgba(255, 255, 255, 0.07);
-	-fx-border-color: rgba(255, 255, 255, 0.10);
+	-fx-background-color: -color-overlay-4;
+	-fx-border-color: -color-overlay-5;
 }
 
 /*@after .tooltip #0*/

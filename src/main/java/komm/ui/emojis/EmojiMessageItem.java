@@ -687,10 +687,10 @@ public class EmojiMessageItem extends HBox {
     String rowStyle(boolean hover) {
         if (mentionsMe) {
             return "-fx-background-color: -color-accent-emphasis, -color-accent-subtle"
-                    + (hover ? ", rgba(255,255,255,0.03);" : ";")
+                    + (hover ? ", -color-overlay-1;" : ";")
                     + "-fx-background-insets: 0, 0 0 0 3" + (hover ? ", 0 0 0 3;" : ";");
         }
-        return hover ? "-fx-background-color: rgba(255,255,255,0.03);" : "-fx-background-color: transparent;";
+        return hover ? "-fx-background-color: -color-overlay-1;" : "-fx-background-color: transparent;";
     }
 
     void setHoverActive(boolean active) {

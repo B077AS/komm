@@ -283,7 +283,7 @@ public class BotsModal extends VBox {
         rail.setPrefWidth(270);
         rail.setMinWidth(270);
         rail.setMaxWidth(270);
-        rail.setStyle("-fx-background-color: rgba(255,255,255,0.03); -fx-background-radius: 0 0 0 4px;");
+        rail.setStyle("-fx-background-color: -color-overlay-1; -fx-background-radius: 0 0 0 4px;");
         return rail;
     }
 

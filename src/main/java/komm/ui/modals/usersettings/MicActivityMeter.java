@@ -28,12 +28,12 @@ import javafx.scene.text.Font;
  */
 public class MicActivityMeter extends VBox {
 
-    private static final Color TRACK_BG  = Color.web("#0b0b0c");   // -color-bg-inset
-    private static final Color GREEN     = Color.web("#8AFF80");   // -color-success-fg
-    private static final Color AMBER     = Color.web("#FFCA80");   // -color-warning-fg
+    private static Color trackBg()  { return komm.ui.theme.ThemeManager.get().isDark() ? Color.web("#0b0b0c") : Color.web("#eef0f3"); } // -color-bg-inset
+    private static Color green()    { return komm.ui.theme.ThemeManager.get().isDark() ? Color.web("#8AFF80") : Color.web("#22a356"); } // -color-success-fg
+    private static Color amber()    { return komm.ui.theme.ThemeManager.get().isDark() ? Color.web("#FFCA80") : Color.web("#d18a00"); } // -color-warning-fg
     private static final Color RED       = Color.web("#ef5350");   // -color-danger-fg
     private static final Color DOT_OFF   = Color.web("#7e7f86");   // -color-fg-subtle
-    private static final Color IDLE_FILL = Color.web("#55565c");   // grey fill while not transmitting
+    private static Color idleFill() { return komm.ui.theme.ThemeManager.get().isDark() ? Color.web("#55565c") : Color.web("#c7c7cc"); } // grey fill while not transmitting
 
     private static final double MIN_DB = -60.0;
     private static final double BAR_HEIGHT = 22;
@@ -102,7 +102,7 @@ public class MicActivityMeter extends VBox {
         this.transmitting = transmitting;
 
         dbValueLabel.setText(db <= MIN_DB ? "-∞ dB" : String.format("%.1f dB", db));
-        statusDot.setFill(transmitting ? GREEN : DOT_OFF);
+        statusDot.setFill(transmitting ? green() : DOT_OFF);
         statusLabel.setText(transmitting ? "Transmitting - others hear this" : "Listening - nothing is sent");
         redraw();
     }
@@ -112,15 +112,15 @@ public class MicActivityMeter extends VBox {
         double w = levelCanvas.getWidth(), h = levelCanvas.getHeight();
         gc.clearRect(0, 0, w, h);
 
-        gc.setFill(TRACK_BG);
+        gc.setFill(trackBg());
         gc.fillRoundRect(0, 0, w, h, 6, 6);
 
         double levelFrac = clamp((heldDb - MIN_DB) / -MIN_DB);
         if (testing && levelFrac > 0) {
             // Grey while the gate is closed, loudness colors while transmitting — the green
             // flood is the "others can hear you" signal, same as Discord's meter.
-            Color fill = !transmitting ? IDLE_FILL
-                    : levelFrac < 0.65 ? GREEN : levelFrac < 0.85 ? AMBER : RED;
+            Color fill = !transmitting ? idleFill()
+                    : levelFrac < 0.65 ? green() : levelFrac < 0.85 ? amber() : RED;
             gc.setFill(fill);
             gc.fillRoundRect(1, 1, levelFrac * (w - 2), h - 2, 5, 5);
         }

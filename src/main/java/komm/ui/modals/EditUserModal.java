@@ -87,9 +87,9 @@ public class EditUserModal extends HBox {
 
         setAlignment(Pos.TOP_LEFT);
         getStyleClass().add("custom-modal");
-        setMaxSize(800, 620);
-        setMinSize(800, 620);
-        setPrefSize(800, 620);
+        setMaxSize(1000, 660);
+        setMinSize(1000, 660);
+        setPrefSize(1000, 660);
         setSpacing(0);
 
         tabContent = new StackPane();
@@ -140,10 +140,10 @@ public class EditUserModal extends HBox {
         pane.setPrefWidth(240);
         pane.setMinWidth(240);
         pane.setMaxWidth(240);
-        pane.setStyle("-fx-background-color: rgba(255,255,255,0.03); -fx-background-radius: 4px 0 0 4px;");
+        pane.setStyle("-fx-background-color: -color-overlay-1; -fx-background-radius: 4px 0 0 4px;");
 
         VBox avatarSection = new VBox(0);
-        avatarSection.setPadding(new Insets(24, 20, 18, 20));
+        avatarSection.setPadding(new Insets(20, 20, 14, 20));
         avatarSection.setAlignment(Pos.CENTER);
         avatarSection.getChildren().add(avatarWidget);
 
@@ -157,6 +157,7 @@ public class EditUserModal extends HBox {
         ScrollPane navScroll = new ScrollPane(tabNav);
         navScroll.setFitToWidth(true);
         navScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        navScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);  // only if the nav ever outgrows the fixed-height modal
         navScroll.setStyle("-fx-background-color: transparent; -fx-background: transparent;");
         VBox.setVgrow(navScroll, Priority.ALWAYS);
 
@@ -194,7 +195,7 @@ public class EditUserModal extends HBox {
 
     private VBox createTabNav() {
         VBox nav = new VBox(2);
-        nav.setPadding(new Insets(0, 8, 12, 8));
+        nav.setPadding(new Insets(0, 8, 4, 8));
         this.tabNav = nav;
 
         addNavItem(generalTab);
