@@ -71,6 +71,15 @@ public class ChannelService {
     /**
      * Get all users currently connected to a specific channel
      */
+    /** Ids of every server member who can view the channel (for @mention suggestions). */
+    public List<UUID> getChannelViewers(UUID channelId) throws Exception {
+        return tokenManager.executeWithRetry(() -> {
+            String endpoint = "/api/channels/" + channelId + "/viewers";
+            Type listType = new TypeToken<List<UUID>>() {}.getType();
+            return httpClient.getWithType(endpoint, tokenManager.getAccessToken(), listType);
+        });
+    }
+
     public List<UserSessionEntry> getConnectedUsers(UUID channelId) throws Exception {
         if (channelId == null) {
             throw new IllegalArgumentException("serverId and channelId cannot be null");

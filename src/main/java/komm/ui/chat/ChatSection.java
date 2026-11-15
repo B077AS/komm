@@ -31,6 +31,7 @@ import komm.model.dto.summary.ServerSummary;
 import komm.ui.emojis.EmojiMessageContent;
 import komm.ui.emojis.EmojiMessageItem;
 import komm.ui.emojis.EmojiReactionBar;
+import komm.ui.mention.Mentions;
 import komm.websocket.messages.payloads.ChannelMessageEditedPayload;
 import komm.websocket.messages.payloads.MessageEditPayload;
 import komm.ui.sections.ServerMembersSection;
@@ -131,6 +132,17 @@ public class ChatSection extends VBox {
 
     @Getter
     private UUID activeTextChannelId;
+
+    // ── @mention candidates ───────────────────────────────────────────────────
+    private static final long MENTION_VIEWERS_TTL_MS = 60_000;
+    /** Who can view the active channel (from komm-server), names resolved into the AvatarCache. */
+    private volatile List<UUID> mentionViewers = List.of();
+    private volatile UUID mentionViewersChannelId;
+    private volatile long mentionViewersFetchedAt;
+    private volatile boolean mentionViewersLoading;
+    /** sender → sequence number of their latest message in the active channel (higher = more recent). */
+    private final Map<UUID, Long> lastSpokeSeq = new HashMap<>();
+    private long speakSeq = 0;
     private LocalDateTime oldestMessageTimestamp;
     private volatile boolean isFetchingHistory = false;
     private boolean allHistoryLoaded = false;
@@ -159,7 +171,13 @@ public class ChatSection extends VBox {
                                 .flatMap(m -> Stream.of(m.getSenderId(), m.getReplyToSenderId()))
                                 .filter(Objects::nonNull)
                                 .collect(Collectors.toSet());
-                        App.getAvatarCache().resolveAll(senderIds).join();
+                        Set<UUID> toResolve = new HashSet<>(senderIds);
+                        // mentioned users too, so pills render with their names in one batch
+                        for (MessageReceivedPayload m : page) {
+                            toResolve.addAll(Mentions.ids(m.getContent()));
+                            toResolve.addAll(Mentions.ids(m.getReplyToContent()));
+                        }
+                        App.getAvatarCache().resolveAll(toResolve).join();
                         App.getAvatarCache().preloadImages(senderIds);
                         // inline pictures go to the disk cache now, not onto the heap for the session
                         for (MessageReceivedPayload m : page) {
@@ -412,6 +430,10 @@ public class ChatSection extends VBox {
 
             chatHeader.setChannel(channel);
             messageInputBox.setPromptText("Message #" + channel.getChannelName());
+            messageInputBox.setMentionHeader("MEMBERS IN #" + channel.getChannelName().toUpperCase(Locale.ROOT));
+            lastSpokeSeq.clear();
+            mentionViewers = List.of();
+            loadMentionViewers(channel.getChannelId());
 
             fetchPage(channel.getChannelId(), null, true);
         });
@@ -519,8 +541,53 @@ public class ChatSection extends VBox {
         Platform.runLater(() -> {
             if (payload.getChannelId() == null
                     || !payload.getChannelId().equals(activeTextChannelId)) return;
+            noteSpeaker(payload);
             virtualList.appendMessage(payload);
         });
+    }
+
+    // ── @mentions ─────────────────────────────────────────────────────────────
+
+    /** Fetches who can view the channel, then resolves their names (off the FX thread). */
+    private void loadMentionViewers(UUID channelId) {
+        if (channelId == null || mentionViewersLoading) return;
+        mentionViewersLoading = true;
+        Thread.ofVirtual().start(() -> {
+            try {
+                List<UUID> ids = App.getServices().installation().getChannelService().getChannelViewers(channelId);
+                if (ids == null) ids = List.of();
+                App.getAvatarCache().resolveAll(ids).join();
+                if (channelId.equals(activeTextChannelId)) {
+                    mentionViewers = List.copyOf(ids);
+                    mentionViewersChannelId = channelId;
+                    mentionViewersFetchedAt = System.currentTimeMillis();
+                }
+            } catch (Exception e) {
+                log.warn("Failed to load mention candidates for channel {}: {}", channelId, e.getMessage());
+            } finally {
+                mentionViewersLoading = false;
+            }
+        });
+    }
+
+    /** Candidate supplier for the suggestion popup; refetches in the background when stale. */
+    private Collection<UUID> mentionCandidates() {
+        UUID channelId = activeTextChannelId;
+        if (channelId == null) return List.of();
+        boolean stale = !channelId.equals(mentionViewersChannelId)
+                || System.currentTimeMillis() - mentionViewersFetchedAt > MENTION_VIEWERS_TTL_MS;
+        if (stale) loadMentionViewers(channelId);
+        return channelId.equals(mentionViewersChannelId) ? mentionViewers : List.of();
+    }
+
+    private void noteSpeaker(MessageReceivedPayload p) {
+        if (p.getSenderId() != null) lastSpokeSeq.put(p.getSenderId(), ++speakSeq);
+    }
+
+    /** Smaller = spoke more recently in the active channel; MAX_VALUE = not in the loaded history. */
+    private int mentionRecency(UUID userId) {
+        Long seq = lastSpokeSeq.get(userId);
+        return seq == null ? Integer.MAX_VALUE : (int) Math.min(Integer.MAX_VALUE - 1, speakSeq - seq);
     }
 
     public void removeMessage(UUID messageId) {
@@ -668,8 +735,13 @@ public class ChatSection extends VBox {
 
         Collections.reverse(page);
 
-        if (result.isInitialLoad()) virtualList.setInitial(page);
-        else virtualList.prepend(page);
+        if (result.isInitialLoad()) {
+            // page is oldest → newest here, so later messages get the higher sequence numbers
+            for (MessageReceivedPayload m : page) noteSpeaker(m);
+            virtualList.setInitial(page);
+        } else {
+            virtualList.prepend(page);
+        }
 
         oldestMessageTimestamp = page.get(0).getSentAt();
         if (page.size() < PAGE_SIZE) allHistoryLoaded = true;
@@ -1056,7 +1128,7 @@ public class ChatSection extends VBox {
             preview = truncate("Poll: " + (target.getContent() == null ? "" : target.getContent())
                     .replaceAll("\\R", " ").strip(), 100);
         } else {
-            preview = target.getContent();
+            preview = Mentions.toPlain(target.getContent());
             if ((preview == null || preview.isBlank()) && target.isHasAttachments())
                 preview = target.getFileName() != null ? target.getFileName() : "Attachment";
             if (preview == null || preview.isBlank()) preview = "Message deleted";
@@ -1313,6 +1385,7 @@ public class ChatSection extends VBox {
         editBox.setOnSave(trimmed -> {
             if (!trimmed.equals(msg.getContent())) sendEditMessage(msg.getMessageId(), trimmed);
         });
+        editBox.enableMentions(this::mentionCandidates, this::mentionRecency);
         editBox.setOnDismiss(() -> {
             activeEditItems.remove(msg.getMessageId());
             contentCol.getChildren().remove(editBox);
@@ -1475,6 +1548,7 @@ public class ChatSection extends VBox {
         });
         messageInputBox.setAttachmentBarSlot(attachmentBarSlot);
         messageInputBox.getGifPicker().setOnGifSelected(this::sendGif);
+        messageInputBox.enableMentions(this::mentionCandidates, this::mentionRecency);
 
         typingRow = messageInputBox.getTypingIndicatorRow();
         VBox.setMargin(typingRow, new Insets(0, INPUT_H_PAD, 4, INPUT_H_PAD));

@@ -10,6 +10,7 @@ import komm.model.dto.summary.ChannelSummary;
 import komm.model.dto.summary.MainUserSummary.UserStatus;
 import komm.ui.chat.ChatSection;
 import komm.ui.customnodes.CustomNotification;
+import komm.ui.mention.Mentions;
 import komm.utils.NotificationSounds;
 import komm.websocket.interfaces.WsInboundMessageHandler;
 import komm.websocket.messages.WsMessageType;
@@ -19,6 +20,8 @@ import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignM;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 
 @Slf4j
@@ -105,8 +108,8 @@ public class ChannelMessageReceivedHandler implements WsInboundMessageHandler {
             } else if (p.isHasAttachments()) {
                 preview = p.getFileName() != null ? p.getFileName() : "Attachment";
             } else {
-                String content = p.getContent() != null ? p.getContent() : "";
-                preview = content.length() > 80 ? content.substring(0, 80) + "..." : content;
+                // Mention tokens are turned into @names once those are resolved (below).
+                preview = p.getContent() != null ? p.getContent() : "";
             }
 
             FontIcon channelIcon;
@@ -122,10 +125,15 @@ public class ChannelMessageReceivedHandler implements WsInboundMessageHandler {
             final FontIcon finalChannelIcon = channelIcon;
             final String channelName = channel.getChannelName() != null ? channel.getChannelName() : "Channel";
 
-            App.getAvatarCache().resolve(p.getSenderId()).thenAccept(cu -> {
-                String senderName = cu != null && cu.username() != null ? cu.username() : "Unknown";
+            Set<UUID> toResolve = new HashSet<>(Mentions.ids(preview));
+            if (p.getSenderId() != null) toResolve.add(p.getSenderId());
+            App.getAvatarCache().resolveAll(toResolve).whenComplete((v, err) -> {
+                String cachedSender = p.getSenderId() != null ? App.getAvatarCache().getUsername(p.getSenderId()) : null;
+                String senderName = cachedSender != null ? cachedSender : "Unknown";
+                String plain = Mentions.toPlain(preview);
+                String text = plain.length() > 80 ? plain.substring(0, 80) + "..." : plain;
                 Platform.runLater(() ->
-                    new CustomNotification(channelName, senderName, preview, finalChannelIcon)
+                    new CustomNotification(channelName, senderName, text, finalChannelIcon)
                         .showNotification()
                 );
             });

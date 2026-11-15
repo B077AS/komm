@@ -13,12 +13,18 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import komm.ui.emojis.EmojiPickerPopup;
 import komm.ui.emojis.EmojiTextArea;
+import komm.ui.mention.MentionSuggestBar;
+import komm.ui.mention.Mentions;
 import lombok.Setter;
 import org.kordamp.ikonli.feather.Feather;
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignE;
 
+import java.util.Collection;
+import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
+import java.util.function.ToIntFunction;
 
 /**
  * Inline message-editing widget. Drop it into a message's content column in
@@ -29,6 +35,9 @@ public class MessageEditBox extends VBox {
 
     private final EmojiTextArea editArea;
     private final EmojiPickerPopup emojiPicker = new EmojiPickerPopup();
+    private HBox editRow;
+    private MentionSuggestBar mentionBar;
+    private Supplier<Collection<UUID>> mentionCandidates;
 
     @Setter
     private Consumer<String> onSave;
@@ -64,7 +73,7 @@ public class MessageEditBox extends VBox {
         cancelBtn.setFocusTraversable(false);
         cancelBtn.setOnAction(e -> triggerDismiss());
 
-        HBox editRow = new HBox(4, editArea, emojiBtn, cancelBtn);
+        editRow = new HBox(4, editArea, emojiBtn, cancelBtn);
         editRow.setAlignment(Pos.BOTTOM_LEFT);
         editRow.setPadding(new Insets(4, 6, 4, 6));
         HBox.setHgrow(editArea, Priority.ALWAYS);
@@ -86,18 +95,35 @@ public class MessageEditBox extends VBox {
         editArea.setOnSubmit(text -> {
             String trimmed = text == null ? "" : text.trim();
             if ((!trimmed.isEmpty() || hasAttachment) && onSave != null) {
-                onSave.accept(trimmed);
+                onSave.accept(resolveTypedMentions(trimmed));
             }
             triggerDismiss();
             return true;
         });
 
         editArea.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
-            if (e.getCode() == KeyCode.ESCAPE) {
+            // An open suggestion list takes Esc first (the text area closes it).
+            if (e.getCode() == KeyCode.ESCAPE && (mentionBar == null || !mentionBar.isOpen())) {
                 triggerDismiss();
                 e.consume();
             }
         });
+    }
+
+    /** Turns on @mention suggestions while editing (channel messages only). */
+    public void enableMentions(Supplier<Collection<UUID>> candidates, ToIntFunction<UUID> recency) {
+        if (mentionBar != null) return;
+        mentionCandidates = candidates;
+        mentionBar = new MentionSuggestBar(editArea, candidates, recency);
+        mentionBar.setTopRounded(false);
+        getChildren().add(0, mentionBar); // docked on top of the edit row
+        editArea.setPasteTransformer(s -> Mentions.fromPlain(s, candidates.get()));
+    }
+
+    private String resolveTypedMentions(String text) {
+        if (mentionCandidates == null) return text;
+        String converted = Mentions.fromPlain(text, mentionCandidates.get());
+        return converted.length() <= 2000 ? converted : text;
     }
 
     /** Positions the caret at the end and requests focus once layout is ready. */
@@ -108,6 +134,7 @@ public class MessageEditBox extends VBox {
 
     private void triggerDismiss() {
         emojiPicker.hide();
+        if (mentionBar != null) mentionBar.close();
         if (onDismiss != null) onDismiss.run();
     }
 }

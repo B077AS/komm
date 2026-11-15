@@ -20,6 +20,8 @@ import komm.ui.emojis.EmojiPickerPopup;
 import komm.ui.emojis.EmojiTextArea;
 import komm.ui.code.CodeDetector;
 import komm.ui.gifs.GifPickerPopup;
+import komm.ui.mention.MentionSuggestBar;
+import komm.ui.mention.Mentions;
 import komm.ui.utils.FileChooserUtil;
 import komm.ui.utils.IconColorUtil;
 import komm.websocket.messages.payloads.MessageReceivedPayload;
@@ -35,6 +37,8 @@ import atlantafx.base.theme.Styles;
 
 import java.io.File;
 import java.util.*;
+import java.util.function.Supplier;
+import java.util.function.ToIntFunction;
 
 /**
  * The message input bar. Owns no reply bar or attachment bar — those live in
@@ -95,6 +99,9 @@ public class MessageInputBox extends VBox {
 
     private HBox mainInputRow;
     private EmojiTextArea emojiArea;
+    private MentionSuggestBar mentionBar;
+    private Supplier<Collection<UUID>> mentionCandidates;
+    private static final int MAX_MESSAGE_LENGTH = 2000;
 
     /**
      * Kept here only to pass on submit; actual UI lives in ChatSection.
@@ -206,6 +213,32 @@ public class MessageInputBox extends VBox {
         if (emojiArea != null) emojiArea.setPromptText(text);
     }
 
+    /**
+     * Turns on @mention suggestions (channels only). {@code candidates} is re-read on every
+     * keystroke; {@code recency} ranks people who spoke recently first (smaller = more recent).
+     */
+    public void enableMentions(Supplier<Collection<UUID>> candidates, ToIntFunction<UUID> recency) {
+        if (mentionBar != null) return;
+        mentionCandidates = candidates;
+        mentionBar = new MentionSuggestBar(emojiArea, candidates, recency);
+        mentionBar.setOnOpenChanged(this::refreshInputRowRadius);
+        // Docked directly on top of the input row, like the attachment bar.
+        getChildren().add(getChildren().indexOf(mainInputRow), mentionBar);
+        // A pasted "@name" (e.g. copied out of a message) becomes a real mention.
+        emojiArea.setPasteTransformer(s -> Mentions.fromPlain(s, candidates.get()));
+    }
+
+    public void setMentionHeader(String text) {
+        if (mentionBar != null) mentionBar.setHeaderText(text);
+    }
+
+    /** Turns fully typed {@code @name}s into mention tokens on send (if it still fits the limit). */
+    private String resolveTypedMentions(String text) {
+        if (mentionCandidates == null || text == null) return text;
+        String converted = Mentions.fromPlain(text, mentionCandidates.get());
+        return converted.length() <= MAX_MESSAGE_LENGTH ? converted : text;
+    }
+
     private HBox buildInputRow() {
         emojiArea = new EmojiTextArea(true);
         emojiArea.setMaxLength(2000);
@@ -307,7 +340,7 @@ public class MessageInputBox extends VBox {
     }
 
     private void submitMessage(String text) {
-        listener.onMessageSubmit(text, replyTarget);
+        listener.onMessageSubmit(resolveTypedMentions(text), replyTarget);
         if (replyTarget != null) {
             replyTarget = null;
             refreshInputRowRadius();
@@ -334,15 +367,20 @@ public class MessageInputBox extends VBox {
         if (mainInputRow == null) return;
         boolean flatTop = (replyTarget != null)
                 || (attachmentBarSlot != null && !attachmentBarSlot.isEmpty());
+        // The mention bar sits between those bars and the row: rounded on top only when it is the
+        // topmost piece, and it always flattens the row's top while open.
+        if (mentionBar != null) mentionBar.setTopRounded(!flatTop);
+        boolean mentionOpen = mentionBar != null && mentionBar.isOpen();
         mainInputRow.setStyle(
                 "-fx-background-color: -color-bg-subtle;" +
-                        "-fx-background-radius: " + (flatTop ? "0 0 8px 8px" : "8px") + ";"
+                        "-fx-background-radius: " + (flatTop || mentionOpen ? "0 0 8px 8px" : "8px") + ";"
         );
     }
 
     // Keep the old name so ChatSection compiles without changes
     void setInputRowRadius(boolean flatTop) {
         if (mainInputRow == null) return;
+        flatTop = flatTop || (mentionBar != null && mentionBar.isOpen());
         mainInputRow.setStyle(
                 "-fx-background-color: -color-bg-subtle;" +
                         "-fx-background-radius: " + (flatTop ? "0 0 8px 8px" : "8px") + ";"

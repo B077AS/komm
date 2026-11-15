@@ -9,6 +9,7 @@ import javafx.animation.SequentialTransition;
 import javafx.application.Platform;
 import javafx.beans.property.*;
 import javafx.css.PseudoClass;
+import javafx.geometry.Bounds;
 import javafx.geometry.Point2D;
 import javafx.geometry.Pos;
 import java.text.BreakIterator;
@@ -37,6 +38,7 @@ import javafx.scene.text.Font;
 import javafx.scene.text.Text;
 import javafx.scene.text.TextFlow;
 import javafx.util.Duration;
+import komm.ui.mention.Mentions;
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignE;
 
@@ -45,8 +47,10 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -158,6 +162,18 @@ public class EmojiTextArea extends HBox {
      * to divert pasted source code to the code-message editor).
      */
     private Function<String, Boolean> pasteInterceptor;
+
+    // ── @mentions ─────────────────────────────────────────────────────────────
+    /** {@code <@} + 36-char UUID + {@code >}. */
+    private static final int MENTION_TOKEN_LEN = 39;
+    /** Longest text after '@' that still counts as a mention query. */
+    private static final int MAX_MENTION_QUERY = 32;
+    /** Rewrites pasted text before insertion (turns pasted {@code @name}s into mention tokens). */
+    private java.util.function.UnaryOperator<String> pasteTransformer;
+    /** Consulted first on every key press; return true to consume it (the suggestion list's keys). */
+    private Predicate<KeyEvent> keyPreFilter;
+    /** Runs after every caret / text change (the suggestion popup re-reads the query). */
+    private Runnable onCaretChanged;
 
     // ── context menu ──────────────────────────────────────────────────────────
     private ContextMenu contextMenu;
@@ -397,6 +413,10 @@ public class EmojiTextArea extends HBox {
     // ─────────────────────────────────────────────────────────────────────────
 
     private void handleKeyPressed(KeyEvent e) {
+        if (keyPreFilter != null && editableProp.get() && keyPreFilter.test(e)) {
+            e.consume();
+            return;
+        }
         if (!editableProp.get()) {
             switch (e.getCode()) {
                 case LEFT, RIGHT, UP, DOWN, HOME, END, A, C -> {} // allow navigation and copy
@@ -509,31 +529,20 @@ public class EmojiTextArea extends HBox {
             }
             case C -> {
                 if (ctrl && hasSelection()) {
-                    toClipboard(selectedText());
+                    toClipboard(Mentions.toPlain(selectedText()));
                     e.consume();
                 }
             }
             case X -> {
                 if (ctrl && hasSelection()) {
-                    toClipboard(selectedText());
+                    toClipboard(Mentions.toPlain(selectedText()));
                     replaceSelection("");
                     e.consume();
                 }
             }
             case V -> {
                 if (ctrl) {
-                    String s = javafx.scene.input.Clipboard.getSystemClipboard().getString();
-                    if (s != null && !s.isEmpty()) {
-                        if (pasteInterceptor != null && Boolean.TRUE.equals(pasteInterceptor.apply(s))) {
-                            e.consume();
-                            return;
-                        }
-                        int available = capacityLeft();
-                        if (available > 0) {
-                            s = truncateAtGraphemeBoundary(s, available);
-                            if (!s.isEmpty()) replaceSelection(s);
-                        }
-                    }
+                    pasteText(javafx.scene.input.Clipboard.getSystemClipboard().getString());
                     e.consume();
                 }
             }
@@ -560,6 +569,22 @@ public class EmojiTextArea extends HBox {
         if (needed > capacityLeft()) return;
         replaceSelection(ch);
         e.consume();
+    }
+
+    /** Ctrl+V and the context menu's Paste: interceptor, transformer, then length limit. */
+    private void pasteText(String s) {
+        if (s == null || s.isEmpty() || !editableProp.get()) return;
+        if (pasteInterceptor != null && Boolean.TRUE.equals(pasteInterceptor.apply(s))) return;
+        int available = capacityLeft();
+        if (available <= 0) return;
+        if (pasteTransformer != null) {
+            String transformed = pasteTransformer.apply(s);
+            // A transformed paste that no longer fits falls back to the original text rather than
+            // being cut, which could split a mention token in half.
+            if (transformed != null && transformed.length() <= available) s = transformed;
+        }
+        s = truncateAtGraphemeBoundary(s, available);
+        if (!s.isEmpty()) replaceSelection(s);
     }
 
     /** How many more UTF-16 chars fit under {@link #maxLength}, counting the current selection as replaced. */
@@ -669,6 +694,9 @@ public class EmojiTextArea extends HBox {
 
     private int emojiLenAt(int idx) {
         if (idx >= buf.length()) return 0;
+        // A mention token is one unit for caret movement, deletion and hit-test snapping.
+        int mention = mentionLenAt(idx);
+        if (mention > 0) return mention;
         int len = Character.charCount(buf.codePointAt(idx));
         while (idx + len < buf.length()) {
             int cp = buf.codePointAt(idx + len);
@@ -697,6 +725,14 @@ public class EmojiTextArea extends HBox {
             start += len;
         }
         return Character.charCount(buf.codePointBefore(idx));
+    }
+
+    /** Length of the {@code <@uuid>} mention token starting at {@code idx}, or 0. */
+    private int mentionLenAt(int idx) {
+        if (idx + 1 >= buf.length() || buf.charAt(idx) != '<' || buf.charAt(idx + 1) != '@') return 0;
+        Matcher m = Mentions.TOKEN.matcher(buf);
+        m.region(idx, Math.min(buf.length(), idx + MENTION_TOKEN_LEN));
+        return m.lookingAt() ? m.end() - idx : 0;
     }
 
     private static boolean isEmojiCont(int cp) {
@@ -801,12 +837,8 @@ public class EmojiTextArea extends HBox {
         // emit the URL span, then continue. Within plain-text segments we
         // hand off to TextUtils for emoji decomposition as before.
 
-        Matcher urlMatcher = URL_PATTERN.matcher(raw);
-        // Collect all URL matches upfront so we can check them while walking.
-        List<int[]> urlRanges = new ArrayList<>(); // {start, end}
-        while (urlMatcher.find()) {
-            urlRanges.add(new int[]{urlMatcher.start(), urlMatcher.end()});
-        }
+        // Collect all URL and mention ranges upfront ({start, end, kind}; kind 1 = mention).
+        List<int[]> urlRanges = EmojiMessageContent.specialRanges(raw);
 
         int urlIdx = 0; // index into urlRanges for the next unprocessed URL
 
@@ -867,12 +899,24 @@ public class EmojiTextArea extends HBox {
                 rawCursor = segCursor;
 
             } else {
-                // ── emit URL span ─────────────────────────────────────────────
-                int urlEnd = urlRanges.get(urlIdx)[1];
+                // ── emit URL span / mention chip ──────────────────────────────
+                int[] range = urlRanges.get(urlIdx);
+                int urlEnd = range[1];
                 String urlText = raw.substring(urlStart, urlEnd);
                 starts.add(rawCursor);
-                nodeUrls.add(urlText);
-                textFlow.getChildren().add(makeLinkNode(urlText, font));
+                if (range[2] == 1) {
+                    Matcher m = Mentions.TOKEN.matcher(urlText);
+                    UUID userId = m.matches() ? Mentions.idOf(m) : null;
+                    nodeUrls.add(null);
+                    // A late-resolved name changes the chip width: re-measure.
+                    textFlow.getChildren().add(Mentions.pill(userId, font, p -> Platform.runLater(() -> {
+                        updateHeight();
+                        refreshOverlay();
+                    })));
+                } else {
+                    nodeUrls.add(urlText);
+                    textFlow.getChildren().add(makeLinkNode(urlText, font));
+                }
                 rawCursor = urlEnd;
                 urlIdx++;
             }
@@ -973,6 +1017,7 @@ public class EmojiTextArea extends HBox {
         positionCaret();
         if (layerStack.isFocused()) updateSelection();
         else clearSelRects();
+        if (onCaretChanged != null) onCaretChanged.run();
     }
 
     private void positionCaret() {
@@ -1308,22 +1353,15 @@ public class EmojiTextArea extends HBox {
         });
         miCut.setOnAction(e -> {
             if (hasSelection()) {
-                toClipboard(selectedText());
+                toClipboard(Mentions.toPlain(selectedText()));
                 replaceSelection("");
             }
         });
         miCopy.setOnAction(e -> {
-            if (hasSelection()) toClipboard(selectedText());
+            if (hasSelection()) toClipboard(Mentions.toPlain(selectedText()));
         });
         miPaste.setOnAction(e -> {
-            String s = Clipboard.getSystemClipboard().getString();
-            if (s != null && !s.isEmpty()) {
-                if (pasteInterceptor != null && Boolean.TRUE.equals(pasteInterceptor.apply(s))) {
-                    layerStack.requestFocus();
-                    return;
-                }
-                replaceSelection(s);
-            }
+            pasteText(Clipboard.getSystemClipboard().getString());
             layerStack.requestFocus();
         });
         miDelete.setOnAction(e -> {
@@ -1438,6 +1476,63 @@ public class EmojiTextArea extends HBox {
      */
     public void setPasteInterceptor(Function<String, Boolean> interceptor) {
         this.pasteInterceptor = interceptor;
+    }
+
+    // ── @mention hooks (used by komm.ui.mention.MentionSuggestBar) ────────────
+
+    public void setPasteTransformer(java.util.function.UnaryOperator<String> transformer) {
+        this.pasteTransformer = transformer;
+    }
+
+    public void setKeyPreFilter(Predicate<KeyEvent> filter) {
+        this.keyPreFilter = filter;
+    }
+
+    public void setOnCaretChanged(Runnable listener) {
+        this.onCaretChanged = listener;
+    }
+
+    /** Offset of the '@' that starts the mention being typed at the caret, or -1. */
+    private int mentionQueryStart() {
+        if (hasSelection() || !layerStack.isFocused()) return -1;
+        int limit = Math.max(0, caretPos - MAX_MENTION_QUERY - 1);
+        for (int i = caretPos - 1; i >= limit; i--) {
+            char c = buf.charAt(i);
+            if (c == '@') {
+                boolean boundary = i == 0 || Character.isWhitespace(buf.charAt(i - 1));
+                return boundary ? i : -1;
+            }
+            if (Character.isWhitespace(c) || c == '<' || c == '>') return -1;
+        }
+        return -1;
+    }
+
+    /**
+     * The text typed after an '@' at the caret (may be empty, right after typing '@'), or
+     * {@code null} when the caret isn't in a mention being typed.
+     */
+    public String getMentionQuery() {
+        int at = mentionQueryStart();
+        return at < 0 ? null : buf.substring(at + 1, caretPos);
+    }
+
+    /** Screen bounds of the caret, for anchoring popups; null when not shown. */
+    public Bounds getCaretScreenBounds() {
+        return caretRect.getScene() == null ? null : caretRect.localToScreen(caretRect.getBoundsInLocal());
+    }
+
+    /** Replaces the {@code @query} being typed with a mention token for {@code userId} plus a space. */
+    public void insertMention(UUID userId) {
+        int at = mentionQueryStart();
+        if (at < 0 || userId == null) return;
+        String ins = Mentions.token(userId) + " ";
+        if (ins.length() - (caretPos - at) > maxLength - buf.length()) return; // would exceed the limit
+        pushUndo();
+        buf.replace(at, caretPos, ins);
+        caretPos = anchorPos = at + ins.length();
+        commitText();
+        rebuild();
+        layerStack.requestFocus();
     }
 
     public void setMaxLength(int maxLength) {

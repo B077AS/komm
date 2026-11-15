@@ -23,6 +23,7 @@ import komm.App;
 import komm.model.permissions.Permission;
 import komm.ui.avatar.AvatarCache;
 import komm.ui.avatar.AvatarColor;
+import komm.ui.mention.Mentions;
 import komm.ui.profile.UserProfilePopup;
 import komm.ui.utils.IconColorUtil;
 import komm.websocket.messages.payloads.MessageReceivedPayload;
@@ -72,6 +73,8 @@ public class EmojiMessageItem extends HBox {
     private final VBox contentCol;
     private Label editedLabel;
     private boolean hovered = false;
+    /** Someone else's message that mentions the logged-in user. */
+    private final boolean mentionsMe;
 
     public EmojiMessageItem(MessageReceivedPayload payload, boolean isOwnMessage) {
         super(0);
@@ -82,6 +85,9 @@ public class EmojiMessageItem extends HBox {
         this.payload = payload;
 
         UUID senderId = payload.getSenderId();
+        this.mentionsMe = !isOwnMessage
+                && payload.getMessageType() != MessageReceivedPayload.MessageType.CODE
+                && Mentions.mentionsMe(payload.getContent());
         boolean isBotSender = senderId != null && App.getBotRoster().isBot(senderId);
 
         // ── Avatar ────────────────────────────────────────────────────────────
@@ -276,7 +282,7 @@ public class EmojiMessageItem extends HBox {
         // insert at 0 so any linePane added above stays rendered on top
         getChildren().add(0, itemStack);
 
-        setStyle("-fx-background-color: transparent;");
+        setStyle(rowStyle(false));
         setOnMouseEntered(e -> setHoverActive(true));
         setOnMouseExited(e -> setHoverActive(false));
 
@@ -410,7 +416,7 @@ public class EmojiMessageItem extends HBox {
         if (labelOnly || preview == null || preview.isBlank()) {
             preview = replyPreviewPlaceholder(payload);
         } else {
-            preview = preview.replaceAll("\\R", " ").strip();
+            preview = Mentions.toPlain(preview).replaceAll("\\R", " ").strip();
             if (payload.getReplyToMessageType() == MessageReceivedPayload.MessageType.POLL) {
                 preview = "Poll: " + preview;
             }
@@ -674,24 +680,37 @@ public class EmojiMessageItem extends HBox {
 
     private static EmojiMessageItem activeItem = null;
 
+    /**
+     * Row background. A message that mentions the logged-in user gets an accent tint plus a
+     * 3px accent stripe on the left (two background layers, so no border shifts the layout).
+     */
+    String rowStyle(boolean hover) {
+        if (mentionsMe) {
+            return "-fx-background-color: -color-accent-emphasis, -color-accent-subtle"
+                    + (hover ? ", rgba(255,255,255,0.03);" : ";")
+                    + "-fx-background-insets: 0, 0 0 0 3" + (hover ? ", 0 0 0 3;" : ";");
+        }
+        return hover ? "-fx-background-color: rgba(255,255,255,0.03);" : "-fx-background-color: transparent;";
+    }
+
     void setHoverActive(boolean active) {
         if (active) {
             // Clear previous non-sticky activeItem
             if (activeItem != null && activeItem != this) {
                 activeItem.hovered = false;
-                activeItem.setStyle("-fx-background-color: transparent;");
+                activeItem.setStyle(activeItem.rowStyle(false));
                 activeItem.actionBar.setMouseTransparent(true);
                 activeItem.actionBar.setOpacity(0);
             }
             activeItem = this;
             hovered = true;
-            setStyle("-fx-background-color: rgba(255,255,255,0.03);");
+            setStyle(rowStyle(true));
             actionBar.setMouseTransparent(false);
             actionBar.setOpacity(1.0);
 
             // Re-apply highlight to sticky if we just wiped it (it's a different item)
             if (stickyHovered != null && stickyHovered != this && stickyHovered.bubble.isAnyPopupOpen()) {
-                stickyHovered.setStyle("-fx-background-color: rgba(255,255,255,0.03);");
+                stickyHovered.setStyle(stickyHovered.rowStyle(true));
                 stickyHovered.actionBar.setMouseTransparent(false);
                 stickyHovered.actionBar.setOpacity(1.0);
             }
@@ -701,7 +720,7 @@ public class EmojiMessageItem extends HBox {
             if (stickyHovered == this && bubble.isAnyPopupOpen()) return;
 
             hovered = false;
-            setStyle("-fx-background-color: transparent;");
+            setStyle(rowStyle(false));
             actionBar.setMouseTransparent(true);
             actionBar.setOpacity(0);
             if (activeItem == this) activeItem = null;
