@@ -41,10 +41,12 @@ abstract class PingGraphPopupBase extends Popup {
     private static final int CANVAS_H = 104;
     private static final int VISIBLE_POINTS = 20;
 
-    private static final Color BG_OVERLAY = Color.color(0, 0, 0, 0.20);
-    private static final Color GRID_COLOR = Color.color(1, 1, 1, 0.055);
-    private static final Color LABEL_COLOR = Color.color(1, 1, 1, 0.30);
-    private static final Color NO_DATA_CLR = Color.color(1, 1, 1, 0.22);
+    // Canvas inks follow the light/dark mode (white ink on dark, black ink on light).
+    private static double ink() { return komm.ui.theme.ThemeManager.get().isDark() ? 1 : 0; }
+    private static Color bgOverlay() { return Color.color(0, 0, 0, komm.ui.theme.ThemeManager.get().isDark() ? 0.20 : 0.04); }
+    private static Color gridColor() { return Color.color(ink(), ink(), ink(), 0.055); }
+    private static Color labelColor() { return Color.color(ink(), ink(), ink(), komm.ui.theme.ThemeManager.get().isDark() ? 0.30 : 0.50); }
+    private static Color noDataColor() { return Color.color(ink(), ink(), ink(), komm.ui.theme.ThemeManager.get().isDark() ? 0.22 : 0.40); }
 
     private static final Color COLOR_GOOD = Color.web("#43b581");
     private static final Color COLOR_OK = Color.web("#9dcc5a");
@@ -77,7 +79,7 @@ abstract class PingGraphPopupBase extends Popup {
         header.setAlignment(Pos.CENTER_LEFT);
 
         Label title = new Label(titleText);
-        title.setStyle("-fx-text-fill: rgba(255,255,255,0.45); -fx-font-size: 10px; -fx-font-weight: bold;");
+        title.setStyle("-fx-text-fill: -color-fg-subtle; -fx-font-size: 10px; -fx-font-weight: bold;");
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
@@ -152,9 +154,9 @@ abstract class PingGraphPopupBase extends Popup {
         if (pings.isEmpty()) {
             currentPingLabel.setText("-- ms");
             currentPingLabel.setStyle(pingValueStyle(COLOR_BAD));
-            applyStatStyle(avgValueLabel, "--", LABEL_COLOR);
-            applyStatStyle(jitterValueLabel, "--", LABEL_COLOR);
-            applyStatStyle(lossValueLabel, "--", LABEL_COLOR);
+            applyStatStyle(avgValueLabel, "--", labelColor());
+            applyStatStyle(jitterValueLabel, "--", labelColor());
+            applyStatStyle(lossValueLabel, "--", labelColor());
             drawGraph(pings);
             return;
         }
@@ -185,12 +187,12 @@ abstract class PingGraphPopupBase extends Popup {
         double w = CANVAS_W, h = CANVAS_H;
         gc.clearRect(0, 0, w, h);
 
-        gc.setFill(BG_OVERLAY);
+        gc.setFill(bgOverlay());
         gc.fillRoundRect(0, 0, w, h, 8, 8);
 
         if (visible.isEmpty()) {
             pulseRing.setVisible(false);
-            gc.setFill(NO_DATA_CLR);
+            gc.setFill(noDataColor());
             gc.setFont(Font.font("System", 11));
             gc.fillText("Waiting for data…", w / 2 - 56, h / 2 + 4);
             return;
@@ -208,10 +210,10 @@ abstract class PingGraphPopupBase extends Popup {
         int[] steps = {0, yMax / 2, yMax};
         for (int val : steps) {
             double y = padT + gh * (1.0 - (double) val / yMax);
-            gc.setStroke(GRID_COLOR);
+            gc.setStroke(gridColor());
             gc.setLineWidth(1);
             gc.strokeLine(padL, y, w - padR, y);
-            gc.setFill(LABEL_COLOR);
+            gc.setFill(labelColor());
             String lbl = val == 0 ? "0" : val + "";
             gc.fillText(lbl, 2, y + 3.5);
         }
@@ -219,7 +221,7 @@ abstract class PingGraphPopupBase extends Popup {
         // Dashed average reference line
         double avgVisible = visible.stream().mapToInt(Integer::intValue).average().orElse(0);
         double avgY = padT + gh * (1.0 - Math.min(avgVisible, yMax) / yMax);
-        gc.setStroke(LABEL_COLOR);
+        gc.setStroke(labelColor());
         gc.setLineWidth(1);
         gc.setLineDashes(4, 4);
         gc.strokeLine(padL, avgY, w - padR, avgY);
@@ -384,8 +386,8 @@ abstract class PingGraphPopupBase extends Popup {
 
     private static VBox makeStatBlock(String header, Label valueLabel) {
         Label h = new Label(header);
-        h.setStyle("-fx-font-size: 9px; -fx-text-fill: rgba(255,255,255,0.35); -fx-font-weight: bold;");
-        valueLabel.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: rgba(255,255,255,0.55);");
+        h.setStyle("-fx-font-size: 9px; -fx-text-fill: -color-fg-subtle; -fx-font-weight: bold;");
+        valueLabel.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: -color-fg-muted;");
         VBox box = new VBox(2, h, valueLabel);
         box.setAlignment(Pos.CENTER);
         return box;

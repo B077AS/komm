@@ -175,9 +175,6 @@ public final class WindowChrome {
         return root;
     }
 
-    /** The app's window background (-color-bg-default); shown instead of JavaFX's white before CSS is applied. */
-    private static final Color WINDOW_BG = Color.web("#161616");
-
     /**
      * Shows the stage without a visible "small window, then maximise, then white, then content"
      * sequence: the stage is created fully transparent, the scene is pre-filled with the app
@@ -186,7 +183,7 @@ public final class WindowChrome {
      */
     public static void show(Stage stage) {
         Scene scene = stage.getScene();
-        if (scene != null) scene.setFill(WINDOW_BG);
+        if (scene != null) scene.setFill(komm.ui.theme.ThemeManager.get().windowBackground()); // shown before CSS applies
 
         if (!ENABLED && !isWindows()) {
             stage.show();
@@ -208,7 +205,7 @@ public final class WindowChrome {
         // Native title bar: DWM only honours dark mode once the window exists (see WindowsThemeUtil).
         String title = stage.getTitle();
         Thread.ofVirtual().start(() -> {
-            WindowsThemeUtil.enableDarkTitleBar(title);
+            if (komm.ui.theme.ThemeManager.get().isDark()) WindowsThemeUtil.enableDarkTitleBar(title);
             Platform.runLater(() -> revealAfterFirstFrames(stage, false));
         });
     }

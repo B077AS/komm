@@ -592,7 +592,7 @@ public class UserProfilePopup extends Popup {
         HBox badge = new HBox(5, dot, lbl);
         badge.setAlignment(Pos.CENTER_LEFT);
         badge.setPadding(new Insets(2, 8, 2, 6));
-        badge.setStyle("-fx-background-color: rgba(255,255,255,0.07); -fx-background-radius: 3;");
+        badge.setStyle("-fx-background-color: -color-overlay-4; -fx-background-radius: 3;");
         return badge;
     }
 

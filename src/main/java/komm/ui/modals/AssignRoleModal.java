@@ -86,7 +86,7 @@ public class AssignRoleModal extends HBox {
         panel.setPrefWidth(240);
         panel.setMinWidth(240);
         panel.setMaxWidth(240);
-        panel.setStyle("-fx-background-color: rgba(255,255,255,0.03); -fx-background-radius: 4px 0 0 4px;");
+        panel.setStyle("-fx-background-color: -color-overlay-1; -fx-background-radius: 4px 0 0 4px;");
 
         // Avatar slot — empty until cache resolves
         avatarSlot = new StackPane();

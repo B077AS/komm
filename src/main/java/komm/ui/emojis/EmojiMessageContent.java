@@ -23,7 +23,10 @@ import komm.App;
 import komm.ui.code.CodeBlockView;
 import komm.ui.code.CodeLanguage;
 import komm.ui.gifs.GifMessageCell;
+import komm.ui.mention.MentionPill;
+import komm.ui.mention.Mentions;
 import komm.ui.modals.ConfirmationModal;
+import komm.ui.profile.UserProfilePopup;
 import komm.ui.poll.PollMessageView;
 import komm.websocket.messages.payloads.MessageReceivedPayload;
 import komm.ui.utils.IconColorUtil;
@@ -41,6 +44,7 @@ import java.awt.Desktop;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
@@ -87,6 +91,8 @@ public class EmojiMessageContent extends VBox {
     private int anchorPos = 0;
     private int dragAnchorRaw = 0;
     private String pendingLinkUrl;
+    private MentionPill pendingMentionPill;
+    private MentionPill hoveredPill;
 
     // ── Nodes ─────────────────────────────────────────────────────────────────
 
@@ -254,6 +260,9 @@ public class EmojiMessageContent extends VBox {
             pendingLinkUrl = e.getButton() == MouseButton.PRIMARY && e.getClickCount() == 1
                     ? urlAt(e.getX(), e.getY())
                     : null;
+            pendingMentionPill = e.getButton() == MouseButton.PRIMARY && e.getClickCount() == 1
+                    ? mentionPillAt(e.getX(), e.getY())
+                    : null;
 
             if (e.getClickCount() == 2) {
                 setCaretAndAnchor(0, text.length());
@@ -280,12 +289,21 @@ public class EmojiMessageContent extends VBox {
             int idx = hitTest(e.getX(), e.getY());
             anchorPos = dragAnchorRaw;
             caretPos = idx;
-            if (idx != dragAnchorRaw) pendingLinkUrl = null; // dragging = selecting, not a link click
+            if (idx != dragAnchorRaw) { // dragging = selecting, not a link/mention click
+                pendingLinkUrl = null;
+                pendingMentionPill = null;
+            }
             refreshOverlay();
             e.consume();
         });
 
+        bubbleStack.setOnMouseExited(e -> setHoveredPill(null));
+
         bubbleStack.setOnMouseReleased(e -> {
+            if (pendingMentionPill != null && mentionPillAt(e.getX(), e.getY()) == pendingMentionPill) {
+                openMentionProfile(pendingMentionPill, e.getScreenX(), e.getScreenY());
+            }
+            pendingMentionPill = null;
             if (pendingLinkUrl != null && urlAt(e.getX(), e.getY()) != null) {
                 confirmOpenUrl(pendingLinkUrl);
             }
@@ -312,7 +330,7 @@ public class EmojiMessageContent extends VBox {
                 }
                 case C -> {
                     if (ctrl && hasSelection()) {
-                        toClipboard(selectedText());
+                        toClipboard(Mentions.toPlain(selectedText()));
                         e.consume();
                     }
                 }
@@ -356,9 +374,8 @@ public class EmojiMessageContent extends VBox {
         List<Integer> starts = new ArrayList<>();
         Font font = Font.font(14);
 
-        Matcher urlMatcher = URL_PATTERN.matcher(text);
-        List<int[]> urlRanges = new ArrayList<>();
-        while (urlMatcher.find()) urlRanges.add(new int[]{urlMatcher.start(), urlMatcher.end()});
+        // Special ranges: {start, end, kind} with kind 0 = URL, 1 = mention token.
+        List<int[]> urlRanges = specialRanges(text);
 
         int rawCursor = 0;
         int urlIdx = 0;
@@ -413,11 +430,20 @@ public class EmojiMessageContent extends VBox {
                 rawCursor = segCursor;
 
             } else {
-                int urlEnd = urlRanges.get(urlIdx)[1];
+                int[] range = urlRanges.get(urlIdx);
+                int urlEnd = range[1];
                 String urlTxt = text.substring(urlStart, urlEnd);
                 starts.add(rawCursor);
-                nodeUrls.add(urlTxt);
-                textFlow.getChildren().add(makeLinkNode(urlTxt, font));
+                if (range[2] == 1) {
+                    // Mention pill: one inline node covering the whole <@uuid> token.
+                    Matcher m = Mentions.TOKEN.matcher(urlTxt);
+                    UUID userId = m.matches() ? Mentions.idOf(m) : null;
+                    nodeUrls.add(null);
+                    textFlow.getChildren().add(Mentions.pill(userId, font, null));
+                } else {
+                    nodeUrls.add(urlTxt);
+                    textFlow.getChildren().add(makeLinkNode(urlTxt, font));
+                }
                 rawCursor = urlEnd;
                 urlIdx++;
             }
@@ -427,6 +453,58 @@ public class EmojiMessageContent extends VBox {
         charStarts = starts.stream().mapToInt(Integer::intValue).toArray();
         if (charStarts[charStarts.length - 1] != text.length())
             charStarts[charStarts.length - 1] = text.length();
+    }
+
+    /**
+     * URL and mention ranges of {@code s}, sorted and non-overlapping, as {start, end, kind}
+     * (kind 0 = URL, 1 = mention). A URL can't swallow a token: the URL pattern stops at '<'.
+     */
+    static List<int[]> specialRanges(String s) {
+        List<int[]> ranges = new ArrayList<>();
+        Matcher u = URL_PATTERN.matcher(s);
+        while (u.find()) ranges.add(new int[]{u.start(), u.end(), 0});
+        if (s.indexOf("<@") >= 0) {
+            Matcher m = Mentions.TOKEN.matcher(s);
+            while (m.find()) ranges.add(new int[]{m.start(), m.end(), 1});
+        }
+        ranges.sort(java.util.Comparator.comparingInt(r -> r[0]));
+        List<int[]> clean = new ArrayList<>(ranges.size());
+        int end = 0;
+        for (int[] r : ranges) {
+            if (r[0] < end) continue;
+            clean.add(r);
+            end = r[1];
+        }
+        return clean;
+    }
+
+    // ── Mention pills ─────────────────────────────────────────────────────────
+
+    /** The mention pill under a bubbleStack-local point, or null. */
+    private MentionPill mentionPillAt(double x, double y) {
+        Point2D p = textFlow.parentToLocal(x, y);
+        for (Node n : textFlow.getChildren()) {
+            if (n instanceof MentionPill l
+                    && n.getBoundsInParent().contains(p)) {
+                return l;
+            }
+        }
+        return null;
+    }
+
+    private void setHoveredPill(MentionPill pill) {
+        if (hoveredPill == pill) return;
+        if (hoveredPill != null) Mentions.setPillHover(hoveredPill, false);
+        hoveredPill = pill;
+        if (pill != null) Mentions.setPillHover(pill, true);
+    }
+
+    private void openMentionProfile(MentionPill pill, double screenX, double screenY) {
+        if (!Mentions.isResolved(pill) || getScene() == null) return;
+        UUID userId = pill.getUserId();
+        UUID serverId = App.getCachedServerPage() != null && App.getCachedServerPage().getServer() != null
+                ? App.getCachedServerPage().getServer().getServerId() : null;
+        UserProfilePopup.getInstance().show(getScene().getWindow(), screenX, screenY, userId, serverId, null);
     }
 
     // ── Overlay: selection rectangles ─────────────────────────────────────────
@@ -507,9 +585,9 @@ public class EmojiMessageContent extends VBox {
             if (onEdit != null) onEdit.run();
         });
         miCopy.setOnAction(e -> {
-            if (hasSelection()) toClipboard(selectedText());
+            if (hasSelection()) toClipboard(Mentions.toPlain(selectedText()));
         });
-        miCopyAll.setOnAction(e -> toClipboard(text));
+        miCopyAll.setOnAction(e -> toClipboard(Mentions.toPlain(text)));
         miAddReaction.setOnAction(e -> openReactionPickerAt(lastContextMenuScreenX, lastContextMenuScreenY));
         miDelete.setOnAction(e -> {
             if (onDelete != null) onDelete.run();
@@ -682,7 +760,9 @@ public class EmojiMessageContent extends VBox {
     private void updateCursorForPosition(double x, double y, boolean modDown) {
         // Set the cursor on bubbleStack, not on `this`: bubbleStack has its own
         // cursor (TEXT) which takes precedence over any ancestor cursor.
-        bubbleStack.setCursor(urlAt(x, y) != null
+        MentionPill pill = mentionPillAt(x, y);
+        setHoveredPill(pill != null && Mentions.isResolved(pill) ? pill : null);
+        bubbleStack.setCursor(hoveredPill != null || urlAt(x, y) != null
                 ? javafx.scene.Cursor.HAND
                 : javafx.scene.Cursor.TEXT);
     }

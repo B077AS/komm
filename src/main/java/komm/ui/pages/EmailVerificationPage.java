@@ -107,9 +107,9 @@ public class EmailVerificationPage extends BorderPane {
                 "-fx-background-color: -color-bg-overlay; " +
                 "-fx-background-radius: 4px; " +
                 "-fx-border-radius: 4px; " +
-                "-fx-border-color: -color-accent-8; " +
+                "-fx-border-color: -color-modal-border; " +
                 "-fx-border-width: 1px; " +
-                "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.5), 26, 0, 0, 10);");
+                "-fx-effect: dropshadow(gaussian, -color-card-shadow, 18, 0, 0, 4);");
 
         // ── Header ──────────────────────────────────────────────────────────
         VBox headerBox = new VBox(10);

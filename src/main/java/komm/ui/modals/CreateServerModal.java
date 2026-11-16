@@ -107,7 +107,7 @@ public class CreateServerModal extends HBox {
         pane.setPrefWidth(290);
         pane.setMinWidth(290);
         pane.setMaxWidth(290);
-        pane.setStyle("-fx-background-color: rgba(255,255,255,0.03); -fx-background-radius: 4px 0 0 4px;" );
+        pane.setStyle("-fx-background-color: -color-overlay-1; -fx-background-radius: 4px 0 0 4px;" );
         pane.getChildren().add(avatarWidget);
         return pane;
     }

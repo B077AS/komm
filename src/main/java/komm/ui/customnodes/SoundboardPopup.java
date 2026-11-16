@@ -98,7 +98,7 @@ public class SoundboardPopup extends Popup {
         VBox side = new VBox(0);
         side.setMinWidth(150);
         side.setMaxWidth(150);
-        side.setStyle("-fx-background-color: rgba(255,255,255,0.03); -fx-background-radius: 4px 0 0 4px;");
+        side.setStyle("-fx-background-color: -color-overlay-1; -fx-background-radius: 4px 0 0 4px;");
 
         Label title = new Label("SOUNDBOARD");
         title.setStyle("-fx-font-size: 10px; -fx-font-weight: bold; -fx-text-fill: -color-fg-subtle; -fx-padding: 14 0 6 14;");

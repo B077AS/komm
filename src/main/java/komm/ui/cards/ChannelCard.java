@@ -214,7 +214,7 @@ public class ChannelCard extends VBox {
         separator.setPrefWidth(1.5);
         separator.setMinWidth(1.5);
         separator.setMaxWidth(1.5);
-        separator.setStyle("-fx-background-color: rgba(255,255,255,0.10); -fx-background-radius: 2;");
+        separator.setStyle("-fx-background-color: -color-overlay-5; -fx-background-radius: 2;");
         VBox.setMargin(separator, new Insets(2, 0, 4, 0));
 
         // ── Connected-users list ──────────────────────────────────────────

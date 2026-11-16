@@ -74,7 +74,7 @@ public class ClockCanvas extends Canvas {
         // Re-resolve the accent color on live theme switches — the scene-property
         // listener above only fires on attach/detach, so it misses in-place theme
         // changes while this node stays mounted (e.g. switching theme on the server page).
-        ThemeManager.get().themeProperty().addListener((obs, old, newTheme) -> {
+        ThemeManager.get().appearanceProperty().addListener((obs, old, newAppearance) -> {
             if (getScene() != null) {
                 Color accent = resolveAccent();
                 setUserData(accent);

@@ -161,7 +161,7 @@ public class PanelWidthCard extends HBox {
         double inner = panelW - 12;
         double[] fractions = {0.9, 0.7, 0.8, 0.6, 0.85, 0.75, 0.65, 0.9};
         for (double f : fractions) {
-            channels.getChildren().add(skeleton(inner * f, 7, "rgba(255,255,255,0.14)"));
+            channels.getChildren().add(skeleton(inner * f, 7, "-color-overlay-6"));
         }
         channels.setLayoutX(0);
 
@@ -201,7 +201,7 @@ public class PanelWidthCard extends HBox {
     }
 
     private static HBox bubble(double width, boolean mine, double height) {
-        String color = mine ? "-color-accent-muted" : "rgba(255,255,255,0.09)";
+        String color = mine ? "-color-accent-muted" : "-color-overlay-5";
         if (height > 9) color = "rgba(255,255,255,0.05)";   // the message-input bar
         HBox row = new HBox(skeleton(width, height, color));
         row.setAlignment(mine ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);

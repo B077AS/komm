@@ -1,0 +1,123 @@
+/*
+ * Komm light mode: neutral + semantic token overrides on top of the dark (default) palette in
+ * komm-theme.css. ThemeManager puts this .root block, followed by the accent override for light
+ * mode (AppTheme.getCssOverride(false)), into the scene stylesheet when light mode is active.
+ * Only looked-up colours belong here: rules stay in komm-theme.css and must use tokens, never
+ * hardcoded white/black overlays, so they work in both modes.
+ *
+ * Palette "Mist" (cool grey, picked over paper-white for less glare). Same structure as dark:
+ * bg-default is the chat surface, bg-subtle the side panels, bg-inset and
+ * bg-void the recessed areas (inputs, code), bg-elevated/overlay/popup the raised surfaces.
+ */
+.root {
+	-color-dark: #1d2025;
+	-color-light: #ffffff;
+
+	/* Base scale keeps its ROLE: high numbers are the hover/fill greys used on top of panels. */
+	-color-base-0: #1d2025;
+	-color-base-1: #2c3038;
+	-color-base-2: #3b4049;
+	-color-base-3: #5f6570;
+	-color-base-4: #8a909b;
+	-color-base-5: #d5d9df;
+	-color-base-6: #dfe2e7;
+	-color-base-7: #e7e9ed;
+	-color-base-8: #eef0f3;
+	-color-base-9: #f5f6f8;
+
+	-color-fg-default: #1d2025;
+	-color-fg-muted: #525863;
+	-color-fg-subtle: #6b717c;
+	-color-fg-emphasis: #ffffff;
+
+	-color-bg-default: #f5f6f8;
+	-color-bg-overlay: #ffffff;
+	-color-bg-subtle: #ebedf0;
+	-color-bg-middle: #e1e4e8;
+	-color-bg-inset: #eef0f3;
+	-color-bg-void: #e4e6ea;
+	-color-bg-elevated: #ffffff;
+	-color-bg-panel: #f5f6f8;
+	-color-bg-popup: #ffffff;
+
+	-color-border-default: #cfd3d9;
+	-color-border-muted: #dde0e5;
+	-color-border-subtle: #e3e6ea;
+	-color-shadow-default: rgba(20, 28, 40, 0.12);
+
+	-color-neutral-emphasis-plus: #6b717c;
+	-color-neutral-emphasis: #8a909b;
+	-color-neutral-muted: rgba(138, 144, 155, 0.35);
+	-color-neutral-subtle: rgba(138, 144, 155, 0.12);
+
+	/* Semantic colours: the neon dark-mode greens/oranges are unreadable on white. */
+	-color-success-0: #0f3d20;
+	-color-success-1: #145228;
+	-color-success-2: #176631;
+	-color-success-3: #18803f;
+	-color-success-4: #1a8f46;
+	-color-success-5: #18803f;
+	-color-success-6: #3fb36a;
+	-color-success-7: #7fd19c;
+	-color-success-8: #bfe8cd;
+	-color-success-9: #e3f5e9;
+	-color-success-fg: #18803f;
+	-color-success-emphasis: #18803f;
+	-color-success-muted: rgba(24, 128, 63, 0.30);
+	-color-success-subtle: rgba(24, 128, 63, 0.10);
+
+	-color-warning-0: #4a2f00;
+	-color-warning-1: #613d00;
+	-color-warning-2: #7a4d00;
+	-color-warning-3: #935d00;
+	-color-warning-4: #a8650a;
+	-color-warning-5: #a8650a;
+	-color-warning-6: #d18a00;
+	-color-warning-7: #f0b54a;
+	-color-warning-8: #f8dca3;
+	-color-warning-9: #fdf2dc;
+	-color-warning-fg: #a8650a;
+	-color-warning-emphasis: #a8650a;
+	-color-warning-muted: rgba(168, 101, 10, 0.30);
+	-color-warning-subtle: rgba(168, 101, 10, 0.10);
+
+	-color-danger-0: #4d0d0d;
+	-color-danger-1: #661111;
+	-color-danger-2: #851717;
+	-color-danger-3: #a81e1e;
+	-color-danger-4: #c42626;
+	-color-danger-5: #d42c2c;
+	-color-danger-6: #e05555;
+	-color-danger-7: #ec8f8f;
+	-color-danger-8: #f6c6c6;
+	-color-danger-9: #fce8e8;
+	-color-danger-fg: #c42626;
+	-color-danger-emphasis: #d42c2c;
+	-color-danger-muted: rgba(212, 44, 44, 0.30);
+	-color-danger-subtle: rgba(212, 44, 44, 0.10);
+
+	/* Komm tokens (dark values: komm-theme.css .root) */
+	-color-overlay-1: rgba(0, 0, 0, 0.025);
+	-color-overlay-2: rgba(0, 0, 0, 0.035);
+	-color-overlay-3: rgba(0, 0, 0, 0.05);
+	-color-overlay-4: rgba(0, 0, 0, 0.06);
+	-color-overlay-5: rgba(0, 0, 0, 0.08);
+	-color-overlay-6: rgba(0, 0, 0, 0.12);
+	-color-overlay-sheen: rgba(0, 0, 0, 0.10);
+	-color-modal-overlay: rgba(25, 32, 45, 0.40);
+	-color-modal-border: #c3c8d0;
+	-color-card-shadow: rgba(20, 28, 40, 0.08);
+	-color-danger-icon: rgb(200, 45, 45);
+	-color-danger-icon-hover: rgb(165, 25, 25);
+	-color-icon-soft: #525863;
+
+	/* One Light (the dark theme uses One Dark) */
+	-color-syntax-keyword: #a626a4;
+	-color-syntax-string: #3f8a3c;
+	-color-syntax-comment: #848b96;
+	-color-syntax-number: #986801;
+	-color-syntax-type: #a36a00;
+	-color-syntax-method: #2f6fd6;
+	-color-syntax-variable: #353a44;
+	-color-syntax-final: #c4314b;
+}

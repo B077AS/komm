@@ -19,6 +19,7 @@ import javafx.scene.layout.VBox;
 import javafx.util.Duration;
 import komm.App;
 import komm.model.permissions.Permission;
+import komm.ui.mention.Mentions;
 import komm.ui.utils.IconColorUtil;
 import komm.websocket.messages.WsMessageType;
 import komm.websocket.messages.payloads.MessageReceivedPayload;
@@ -71,7 +72,7 @@ public class PollMessageView extends VBox {
                 + "-fx-border-radius: 6px;"
                 + "-fx-border-width: 1px;");
 
-        Label question = new Label(message.getContent() == null ? "" : message.getContent());
+        Label question = new Label(message.getContent() == null ? "" : Mentions.toPlain(message.getContent()));
         question.setWrapText(true);
         question.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
         question.setMinHeight(Region.USE_PREF_SIZE);
