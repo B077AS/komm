@@ -5,6 +5,8 @@
   "updateUrl": "https://github.com/B077AS/komm/releases/latest/download",
   "policy": "manual",
 
+  "log": false,
+
   "archive": false,
 
   "appImageName": "Komm.AppImage",

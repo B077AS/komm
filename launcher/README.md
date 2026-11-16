@@ -20,13 +20,19 @@ Komm.exe  (jpack stub - the only program that starts processes)
 launcher (this folder)
    |  2. jpack.check()    - is the latest GitHub release different from what is installed?
    |  3. jpack.download() - only the parts whose hash changed, with progress for the bar
-   |  4. jpack.startAfterExit("app"), then exits
+   |  4. jpack.startNow("app")
    v
-Komm.exe   5. swaps the downloaded files in (nothing is running, so nothing is locked), starts "app"
+   +-- nothing downloaded: Komm.exe starts "app" right away, next to the launcher
+   |      5. the launcher waits in jpack.whenShown("app")
+   |      6. the client shows its window and calls notifyShown() -> the launcher closes
+   |
+   +-- update downloaded: startNow completes empty, the launcher exits
+          5. Komm.exe swaps the downloaded files in (nothing is running, so nothing is locked), starts "app"
    v
 komm client (komm.Launcher)
 ```
 
+- **No blank moment.** When nothing has to be swapped in, the launcher stays on screen until the client's window is up (`komm.update.OnScreen` in the client says so once `WindowChrome` reveals the window). If the client exits before that, the launcher shows an error instead of vanishing; if it never says so, the launcher closes after 60 seconds. After an update the launcher must exit first, so "Starting Komm..." is the last thing it shows.
 - **Two JVMs, on purpose.** The launcher's JVM must be gone before the files it is running from (jars, runtime) can be replaced, so the client cannot start inside it.
 - **Everything is a part of one release**: Java runtime, client jar, launcher jar and the stub itself. The launcher is therefore updated by the same mechanism and is always the same version as the client. No self-update code, no "catch-up" path.
 - **Every update is mandatory.** Once a newer release is known, a failed download shows an error and the launcher never starts the stale install. Only when the update server can't be asked at all (offline, GitHub down, no release published yet) does the installed version start as-is.
@@ -102,7 +108,7 @@ The launcher's pom version is deliberately **not** bumped by releases and its ja
 | `Launcher` | Entry point: app-data dirs, logging properties, protocol registration, hands off to the UI |
 | `LauncherApp` | The frameless JavaFX window: phases, progress bar, animations; closes on X or Esc |
 | `LauncherTheme` | Reads the user's accent (`config/accent`) and builds its palette stylesheet |
-| `update/UpdateManager` | check -> download -> `startAfterExit("app")` through the `jpack-api` library, plus the scripted demo |
+| `update/UpdateManager` | check -> download -> `startNow("app")` -> `whenShown("app")` through the `jpack-api` library, plus the scripted demo |
 | `update/Phase` | The status phrases (`CHECKING`, `DOWNLOADING`, `INSTALLING`, `STARTING`, `UP_TO_DATE`, `DONE`) |
 | `ProtocolRegistrar` | `komm://` scheme registration (Windows registry / Linux `.desktop` + `xdg-mime`) |
 | `packaging/windows/komm.iss` | Inno Setup script wrapping the jpack install folder |

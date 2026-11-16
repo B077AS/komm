@@ -5,6 +5,7 @@ import io.github.b077as.jpack.JpackException;
 import io.github.b077as.jpack.UpdateCheck;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.OptionalLong;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -18,9 +19,10 @@ import java.util.concurrent.TimeoutException;
  *   <li>if so, have it download and verify the changed parts, following the progress
  *       ({@link Jpack#download}) - jars, the Java runtime, the stub and this launcher itself are all
  *       parts of the same release, so there is no separate launcher or client update path,</li>
- *   <li>tell the stub to start the client once this process has exited ({@link Jpack#startAfterExit}).
- *       The stub swaps the downloaded files in while no Java process is running, then starts the
- *       {@value #APP_ENTRY} entry.</li>
+ *   <li>start the client ({@link Jpack#startNow}). With nothing downloaded it starts right away and
+ *       the launcher stays on screen until the client's window is up ({@link Jpack#whenShown}). With an
+ *       update downloaded, the stub first swaps the files in once this process has exited (no Java
+ *       process may run during the swap), then starts the {@value #APP_ENTRY} entry.</li>
  * </ol>
  *
  * <p>Every update is mandatory: once a newer release is known, a failed download shows an error
@@ -37,6 +39,9 @@ public class UpdateManager {
 
     /** The launch entry of the client in {@code jpack.json} (the plugin names it "app"). */
     private static final String APP_ENTRY = "app";
+
+    /** How long the launcher waits for the client's window before closing anyway (a slow first start, an old client). */
+    private static final long SHOWN_TIMEOUT_SECONDS = 60;
 
     /** Callbacks for the UI. They fire off the FX thread. */
     public interface Listener {
@@ -126,11 +131,35 @@ public class UpdateManager {
         pause(400);
     }
 
-    /** Tells the stub to swap the downloaded files in and start the client as soon as this process exits. */
-    private void handOver(Jpack jpack, long beat) {
+    /**
+     * Starts the client. With nothing to swap in, it starts now, next to the launcher, and the launcher closes once the
+     * client's window is on screen (the client calls {@code notifyShown}). With an update downloaded, it starts after this
+     * process has exited (the files are swapped first): "Starting Komm" is the last thing on screen, and a short gap before
+     * the client appears cannot be avoided.
+     */
+    private void handOver(Jpack jpack, long beat) throws Exception {
         listener.onPhase(Phase.STARTING);
-        pause(beat);
-        jpack.startAfterExit(APP_ENTRY);
+        long since = System.nanoTime();
+        OptionalLong client = jpack.startNow(APP_ENTRY).get(30, TimeUnit.SECONDS);
+        if (client.isEmpty()) {
+            log.info("The client starts once the launcher has exited and the update is swapped in");
+            pause(beat);
+            listener.onLaunched();
+            return;
+        }
+        log.info("Client started next to the launcher (pid {})", client.getAsLong());
+        try {
+            jpack.whenShown(APP_ENTRY).get(SHOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            log.info("Client on screen {} ms after the hand-over", TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - since));
+        } catch (ExecutionException e) {
+            log.error("The client did not start: {}", describe(e));
+            listener.onError("Komm closed before its window appeared. Try again");
+            return;
+        } catch (TimeoutException e) {
+            log.warn("The client did not say it was on screen within {} s; closing the launcher anyway", SHOWN_TIMEOUT_SECONDS);
+        }
+        // Keep "Starting Komm..." readable if the client was quicker than that.
+        pause(Math.max(0, beat - TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - since)));
         listener.onLaunched();
     }
 
