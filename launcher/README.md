@@ -51,7 +51,7 @@ jpack.json                              what is installed (the manifest)
 runtime/                                one jlink runtime for launcher AND client (modules found with jdeps)
   bin/Komm.exe                          javaw.exe renamed and branded, so Task Manager says "Komm" (Windows)
 app/komm-<version>.jar                  the client fat jar
-launcher/komm-launcher.jar              this project's fat jar (single-platform JavaFX natives)
+launcher/komm-launcher.jar              this project's fat jar (Windows and Linux JavaFX natives in one jar)
 ```
 
 JVM options live in [`../src/jpack/jpack.json`](../src/jpack/jpack.json): the client's (`-Xms32m -Xmx2g`, periodic G1 GC with tight free ratios, `ParallelGCThreads=2 ConcGCThreads=1`, `MaxDirectMemorySize=1g`, `UseCompactObjectHeaders`, native access; env `MALLOC_ARENA_MAX=2` for Linux) and the launcher's (Serial GC, 128 MB heap, C1 only). The root `pom.xml`'s `javafx:run` options mirror the client's - keep them in sync. Branding (icon, "Komm" file properties) comes from `src/jpack/icon.ico`; the AppImage icon from `src/jpack/icon.png`.
@@ -74,8 +74,9 @@ Requirements: **Java 25** (with `jmods`, i.e. a full JDK) and Maven. Windows ins
 # Launcher dev run: has no jpack stub, so it only previews the UI
 mvn -f launcher/pom.xml javafx:run -Dlauncher.demo=true
 
-# The launcher jar jpack packages (single-platform natives)
-mvn -f launcher/pom.xml clean package -Pwin-natives      # or -Plinux-natives
+# The launcher jar jpack packages: -Pall-natives is the one jar a release ships (both platforms' natives);
+# -Pwin-natives / -Plinux-natives make a smaller one for trying a single platform locally
+mvn -f launcher/pom.xml clean package -Pall-natives
 
 # From the repo root: client fat jar + the whole install
 mvn clean package -Ppackage,prod,jpack
@@ -90,7 +91,7 @@ Testing against a fork or another location: `-Djpack.updateUrl=https://github.co
 
 ## Releases
 
-Built by the repo's single `.github/workflows/release.yml`. Publishing a GitHub release (tag e.g. `0.0.3`) runs one job on Windows and one on Linux, each with the tag's version. They attach to the release: **all of `target/jpack/release/`** (manifest `jpack-<platform>.json`, the part zips, the AppImage and its `.blocks` index), plus `Komm-Setup-<v>.exe` / `Komm-<v>-x86_64.AppImage` and the stable aliases `Komm-Setup.exe` / `Komm.AppImage`. Installed copies read `releases/latest/download/`, so a release has to carry every file, changed or not, and the manifest goes up last. A manual run (Actions -> Run workflow, existing tag) rebuilds and replaces both platforms' assets.
+Built by the repo's single `.github/workflows/release.yml`. Publishing a GitHub release (tag e.g. `0.0.3`) first builds the client jar and this launcher jar (`-Pall-natives`) once, then runs one job on Windows and one on Linux that package those same two files, each with the tag's version. They attach to the release: **all of `target/jpack/release/`** (manifest `jpack-<platform>.json`, the two jars `komm-<v>.jar` / `komm-launcher.jar` as they are, `runtime-<platform>.zip`, `stub-<platform>.zip`, and on Linux `Komm.AppImage` with its `.blocks` index), plus `Komm-Setup.exe`. No download carries a version in its name, so `releases/latest/download/Komm-Setup.exe` and `.../Komm.AppImage` never change. Installed copies read `releases/latest/download/`, so a release has to carry every file, changed or not, and the manifest goes up last. A manual run (Actions -> Run workflow, existing tag) rebuilds and replaces both platforms' assets.
 
 The launcher's pom version is deliberately **not** bumped by releases and its jar has fixed timestamps: the same sources give the same bytes, so the launcher part keeps its hash and isn't downloaded again until the launcher really changes.
 

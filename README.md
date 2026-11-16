@@ -27,7 +27,7 @@ The platform has three pieces - you choose how many to run:
 | Piece | Role | Who runs it |
 |---|---|---|
 | **komm** (this repo: the client + its launcher in [`launcher/`](launcher/)) | Desktop client for Windows & Linux, kept up to date by the launcher | Everyone |
-| [komm-server](https://github.com/B077AS/komm-server) | A community's own server: channels, messages, voice rooms, permissions. One JAR, embedded database | Community owners |
+| [komm-server](https://github.com/B077AS/komm-server) | A community's own server: channels, messages, voice rooms, permissions. Embedded database; installed as an OS service and updated with its `kommserver` command (same repo) | Community owners |
 | [komm-hub](https://github.com/B077AS/komm-hub) | The network's directory: accounts, friends, DMs, and the CA that vouches for servers | Almost nobody - most people use [kommvoice.com](https://kommvoice.com) |
 
 This repo is the app everyone actually looks at: a native-feeling JavaFX desktop client that talks to the hub for your account, friends and DMs, and connects **directly** to each community's own server for chat and voice. Messages and voice never pass through the hub. It also contains the [launcher](launcher/) - the small auto-updater that the Windows installer and Linux AppImage are built from.
@@ -150,7 +150,7 @@ Komm ships as a [jpack](https://github.com/B077AS/jpack) install: a tiny native 
 2. The launcher asks the stub whether the latest GitHub release differs from what is installed, shows the download, and then asks the stub to start the client once the launcher has exited.
 3. When the launcher exits, the stub swaps the downloaded files in (nothing is running, so nothing is locked) and starts the **client**.
 
-A release is a set of *parts* (Java runtime, client, launcher, stub), each a zip named by its hash, so an update downloads only what changed - usually just the client jar. The runtime, the launcher and the stub update like any other part. Updates are verified (SHA-256), atomic, and rolled back automatically if the new version can't start. On Linux the AppImage replaces its own file, fetching only the changed blocks. Every update is mandatory: if a newer release exists and can't be downloaded, the launcher shows an error instead of starting the stale install; if GitHub can't be reached at all, the installed version starts.
+A release is a set of *parts* (Java runtime, client, launcher, stub): the client and launcher jars are published as they are, the runtime and the stub as one zip per platform, and the manifest lists the SHA-256 of each, so an update downloads only what changed - usually just the client jar. The runtime, the launcher and the stub update like any other part. Updates are verified (SHA-256), atomic, and rolled back automatically if the new version can't start. On Linux the AppImage replaces its own file, fetching only the changed blocks. Every update is mandatory: if a newer release exists and can't be downloaded, the launcher shows an error instead of starting the stale install; if GitHub can't be reached at all, the installed version starts.
 
 See [launcher/README.md](launcher/README.md) for the mechanics and the release pipeline.
 
@@ -215,7 +215,7 @@ mvn clean package -Ppackage,prod,jpack                        # -> target/jpack/
 
 `mvn javafx:run` starts the client with the same memory options the installed client is started with (`jvmArgs` in `src/jpack/jpack.json`): small initial heap with a 2 GB ceiling, periodic G1 GC with tight heap free ratios so idle memory goes back to the OS, two GC threads and capped direct memory.
 
-Releases are built by `.github/workflows/release.yml`: publishing a GitHub release builds, on a Windows and a Linux runner, the jpack install and update files, the Windows installer (`Komm-Setup-<v>.exe`) and the AppImage, all versioned from the tag, and attaches them to that release.
+Releases are built by `.github/workflows/release.yml`: publishing a GitHub release builds the client and launcher jars once, then, on a Windows and a Linux runner, the jpack install and update files, the Windows installer (`Komm-Setup.exe`) and the AppImage (`Komm.AppImage`), all versioned from the tag, and attaches them to that release. The download names carry no version, so `releases/latest/download/...` links never change.
 
 By default the client points at a hub on `localhost` - the pom's `hub.url` / `hub.ws.url` properties are baked into `app.properties` at build time, and the `prod` profile switches them to the official hub. To bake any other hub: `-Dhub.url=https://my-hub -Dhub.ws.url=wss://my-hub/ws`. The production URLs end up **only inside the jar**: after packaging, the prod profile restores the localhost values in `target/classes`, so running the main class straight from your IDE after a prod build still targets your local hub.
 
@@ -244,7 +244,7 @@ On first launch the client creates its app data directory - `%APPDATA%\Komm` on 
 | Repo | What it is |
 |---|---|
 | komm | This repo - desktop client (JavaFX, Windows & Linux) and its auto-updating launcher ([`launcher/`](launcher/): Windows installer & Linux AppImage) |
-| [komm-server](https://github.com/B077AS/komm-server) | Self-hosted community server (single JAR, embedded database) |
+| [komm-server](https://github.com/B077AS/komm-server) | Self-hosted community server (embedded database) and its `kommserver` command - Windows installer & Linux tarball |
 | [komm-hub](https://github.com/B077AS/komm-hub) | Accounts, friends & DMs, server directory, CA, and the kommvoice.com website |
 
 ## FAQ
