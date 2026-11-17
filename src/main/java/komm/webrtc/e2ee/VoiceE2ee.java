@@ -2,6 +2,7 @@ package komm.webrtc.e2ee;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import dev.onvoid.webrtc.RTCEncodedFrame;
 import dev.onvoid.webrtc.RTCEncodedFrameTransformer;
 import dev.onvoid.webrtc.e2ee.CryptoEvent;
 import dev.onvoid.webrtc.e2ee.CryptoFailure;
@@ -125,22 +126,44 @@ public final class VoiceE2ee implements AutoCloseable {
 
     /** For an audio sender. */
     public RTCEncodedFrameTransformer createEncryptor() {
-        return keys.createEncryptor();
+        return skipEmpty(keys.createEncryptor());
     }
 
     /** For a video sender; {@code keyFrameRequest} is typically {@code sender::generateKeyFrame}. */
     public RTCEncodedFrameTransformer createEncryptor(Runnable keyFrameRequest) {
-        return keys.createEncryptor(keyFrameRequest);
+        return skipEmpty(keys.createEncryptor(keyFrameRequest));
     }
 
     /** For an audio receiver. */
     public RTCEncodedFrameTransformer createDecryptor() {
-        return keys.createDecryptor();
+        return skipEmpty(keys.createDecryptor());
     }
 
     /** For a video receiver; {@code keyFrameRequest} is typically {@code receiver::requestKeyFrame}. */
     public RTCEncodedFrameTransformer createDecryptor(Runnable keyFrameRequest) {
-        return keys.createDecryptor(keyFrameRequest);
+        return skipEmpty(keys.createDecryptor(keyFrameRequest));
+    }
+
+    /**
+     * Lets empty frames through untouched. During silence (Opus DTX) the audio
+     * sender hands the transform empty frames; the library calls them MALFORMED
+     * (no TOC byte to keep clear) and drops them, which logged a warning each time
+     * silence followed speech. An empty frame has nothing to protect, and WebRTC
+     * sends no packet for it either way.
+     */
+    private static RTCEncodedFrameTransformer skipEmpty(RTCEncodedFrameTransformer inner) {
+        return new RTCEncodedFrameTransformer() {
+            @Override
+            public void transform(RTCEncodedFrame frame) {
+                if (frame.getData().remaining() == 0) return;
+                inner.transform(frame);
+            }
+
+            @Override
+            public boolean allowsPlaintextObservers() {
+                return inner.allowsPlaintextObservers();
+            }
+        };
     }
 
     public CryptoStats getStats() {
