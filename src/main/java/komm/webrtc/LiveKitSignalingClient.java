@@ -21,6 +21,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -45,6 +50,36 @@ public class LiveKitSignalingClient extends Endpoint {
     private volatile Consumer<String> onError;
     @Setter
     private volatile Runnable onParticipantsUpdated;
+    /**
+     * True when our tracks are end-to-end encrypted (SFrame). AddTrackRequests then declare
+     * {@code encryption = CUSTOM} and audio asks for {@code disable_red}: the SFU can't build
+     * RED packets out of frames it can't read, and a RED-wrapped frame wouldn't decrypt.
+     */
+    @Setter
+    private volatile boolean encrypted;
+    /**
+     * Fired at most once when the signal connection dies on its own — closed by the other
+     * side, or silent past LiveKit's ping timeout (a NAT/firewall dropped it without either
+     * end being told). Never fired after {@link #disconnect()}.
+     */
+    @Setter
+    private volatile Consumer<String> onConnectionLost;
+
+    /** LiveKit's ping_req/pong_resp keepalive; checks a timestamp and queues an async send per tick. */
+    private static final ScheduledExecutorService KEEPALIVE = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread t = new Thread(r, "livekit-signal-keepalive");
+        t.setDaemon(true);
+        return t;
+    });
+    /** Used when the JoinResponse doesn't carry them (LiveKit's own defaults). */
+    private static final int DEFAULT_PING_INTERVAL_S = 5;
+    private static final int DEFAULT_PING_TIMEOUT_S  = 15;
+
+    private volatile boolean closing;
+    private final AtomicBoolean lost = new AtomicBoolean();
+    private volatile long lastReceivedNanos = System.nanoTime();
+    private volatile long lastRttMs;
+    private volatile ScheduledFuture<?> keepalive;
 
     private volatile Session wsSession;
     private volatile RTCSessionDescription pendingPublisherOffer;
@@ -79,6 +114,8 @@ public class LiveKitSignalingClient extends Endpoint {
     }
 
     public void disconnect() {
+        closing = true;
+        stopKeepalive();
         Session s = wsSession;
         if (s != null && s.isOpen()) {
             try {
@@ -153,15 +190,16 @@ public class LiveKitSignalingClient extends Endpoint {
 
     public void sendAddTrackRequest(String cid, String name,
                                     LivekitModels.TrackType type, LivekitModels.TrackSource source) {
-        livekit.LivekitRtc.SignalRequest req = livekit.LivekitRtc.SignalRequest.newBuilder()
-                .setAddTrack(livekit.LivekitRtc.AddTrackRequest.newBuilder()
-                        .setCid(cid)
-                        .setName(name)
-                        .setType(type)
-                        .setSource(source)
-                        .build())
-                .build();
-        sendBinary(req);
+        livekit.LivekitRtc.AddTrackRequest.Builder add = livekit.LivekitRtc.AddTrackRequest.newBuilder()
+                .setCid(cid)
+                .setName(name)
+                .setType(type)
+                .setSource(source);
+        if (encrypted) {
+            add.setEncryption(LivekitModels.Encryption.Type.CUSTOM);
+            if (type == LivekitModels.TrackType.AUDIO) add.setDisableRed(true);
+        }
+        sendBinary(livekit.LivekitRtc.SignalRequest.newBuilder().setAddTrack(add.build()).build());
         log.debug("[LiveKit] → AddTrackRequest sent cid={}", cid);
     }
 
@@ -187,6 +225,7 @@ public class LiveKitSignalingClient extends Endpoint {
                         .setWidth(width)
                         .setHeight(height)
                         .setBitrate(maxBitrateBps));
+        if (encrypted) add.setEncryption(LivekitModels.Encryption.Type.CUSTOM);
         // Declares the publishing codec the same way LiveKit's own SDKs do, so the SFU
         // negotiates exactly that codec for this track (it otherwise falls back to the
         // offer's order, which the transceiver's codec preferences already set too).
@@ -285,11 +324,77 @@ public class LiveKitSignalingClient extends Endpoint {
     // JSR-356 CALLBACKS
     // ─────────────────────────────────────────────────────────────────────────
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // KEEPALIVE
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * LiveKit's own client keepalive: a ping_req every {@code pingInterval}, and the
+     * connection counts as dead when nothing at all has arrived for {@code pingTimeout}
+     * (the SFU answers each ping_req with a pong_resp, so a healthy idle connection always
+     * has traffic). Both values come from the JoinResponse.
+     */
+    private void startKeepalive(int intervalSeconds, int timeoutSeconds) {
+        int interval = intervalSeconds > 0 ? intervalSeconds : DEFAULT_PING_INTERVAL_S;
+        long timeoutMs = TimeUnit.SECONDS.toMillis(timeoutSeconds > 0 ? timeoutSeconds : DEFAULT_PING_TIMEOUT_S);
+        stopKeepalive();
+        lastReceivedNanos = System.nanoTime();
+        keepalive = KEEPALIVE.scheduleAtFixedRate(() -> {
+            long silentMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - lastReceivedNanos);
+            if (silentMs >= timeoutMs) {
+                connectionLost("no response from the server for " + silentMs / 1000 + " s");
+                return;
+            }
+            Session s = wsSession;
+            if (s == null || !s.isOpen()) return;
+            byte[] ping = livekit.LivekitRtc.SignalRequest.newBuilder()
+                    .setPingReq(livekit.LivekitRtc.Ping.newBuilder()
+                            .setTimestamp(System.currentTimeMillis())
+                            .setRtt(lastRttMs))
+                    .build()
+                    .toByteArray();
+            try {
+                // Async: a blocking send towards a dead peer could stall this tick — and with
+                // it the very timeout check that is meant to detect that peer.
+                s.getAsyncRemote().sendBinary(ByteBuffer.wrap(ping));
+            } catch (Exception e) {
+                log.debug("[LiveKit] ping_req send failed: {}", e.getMessage());
+            }
+        }, interval, interval, TimeUnit.SECONDS);
+    }
+
+    private void stopKeepalive() {
+        ScheduledFuture<?> k = keepalive;
+        keepalive = null;
+        if (k != null) k.cancel(false);
+    }
+
+    private void connectionLost(String reason) {
+        if (closing || !lost.compareAndSet(false, true)) return;
+        stopKeepalive();
+        log.warn("[LiveKit] Signal connection lost: {}", reason);
+        Session s = wsSession;
+        wsSession = null;
+        if (s != null && s.isOpen()) {
+            // Closing writes a close frame; towards a dead peer that may block, so not on this thread.
+            Thread.startVirtualThread(() -> {
+                try {
+                    s.close(new CloseReason(CloseReason.CloseCodes.GOING_AWAY, "connection lost"));
+                } catch (Exception ignored) {
+                }
+            });
+        }
+        Consumer<String> cb = onConnectionLost;
+        if (cb != null) cb.accept(reason);
+    }
+
     @Override
     public void onOpen(Session session, EndpointConfig config) {
         this.wsSession = session;
+        lastReceivedNanos = System.nanoTime();
 
         session.addMessageHandler(ByteBuffer.class, data -> {
+            lastReceivedNanos = System.nanoTime();
             try {
                 byte[] bytes = new byte[data.remaining()];
                 data.get(bytes);
@@ -314,6 +419,7 @@ public class LiveKitSignalingClient extends Endpoint {
                 log.info("[LiveKit] ← join: room={} participant={}",
                         join.getRoom().getName(),
                         join.getParticipant().getIdentity());
+                startKeepalive(join.getPingInterval(), join.getPingTimeout());
 
                 // Cache self
                 sidToIdentity.put(join.getParticipant().getSid(), join.getParticipant().getIdentity());
@@ -403,6 +509,23 @@ public class LiveKitSignalingClient extends Endpoint {
                 }
             }
 
+            case LEAVE -> {
+                // The SFU ending our session on purpose (room deleted because the channel was,
+                // duplicate identity, …) is not a lost connection: reconnecting would recreate
+                // the room. Only an explicit request to come back counts as one.
+                livekit.LivekitRtc.LeaveRequest leave = msg.getLeave();
+                if (leave.getAction() == livekit.LivekitRtc.LeaveRequest.Action.DISCONNECT) {
+                    log.info("[LiveKit] ← leave: {} — session ended by the server", leave.getReason());
+                    closing = true;
+                    stopKeepalive();
+                } else {
+                    connectionLost("server asked us to reconnect (" + leave.getReason() + ")");
+                }
+            }
+
+            case PONG_RESP -> lastRttMs = Math.max(0,
+                    System.currentTimeMillis() - msg.getPongResp().getLastPingTimestamp());
+
             case REFRESH_TOKEN -> {
                 String newToken = msg.getRefreshToken();
                 log.debug("[LiveKit] ← refresh_token received");
@@ -458,9 +581,10 @@ public class LiveKitSignalingClient extends Endpoint {
 
     @Override
     public void onClose(Session session, CloseReason reason) {
-        this.wsSession = null;
+        if (wsSession == session) this.wsSession = null;
         sidToIdentity.clear();
-        log.info("[LiveKit] Signal WebSocket closed: {}", reason.getReasonPhrase());
+        log.info("[LiveKit] Signal WebSocket closed: {} {}", reason.getCloseCode(), reason.getReasonPhrase());
+        connectionLost("closed by the server (" + reason.getCloseCode() + " " + reason.getReasonPhrase() + ")");
     }
 
     @OnError

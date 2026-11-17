@@ -14,6 +14,7 @@ import komm.App;
 import komm.api.json.GsonProvider;
 import komm.utils.UserSettings;
 import komm.webrtc.audio.AudioLoopbackCapture;
+import komm.webrtc.e2ee.VoiceE2ee;
 import komm.webrtc.pipeline.MicCapture;
 import komm.webrtc.pipeline.SoundboardReceiver;
 import komm.webrtc.pipeline.UserAudioPipeline;
@@ -35,6 +36,7 @@ import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
@@ -122,6 +124,14 @@ public class WebrtcRoomClient {
 
     // ── Screen share ──────────────────────────────────────────────────────────
     private ScreenShareClient screenShareClient;
+
+    // ── End-to-end encryption ─────────────────────────────────────────────────
+    /**
+     * The current call's E2EE session, or null when the installation runs the call
+     * unencrypted (older servers / {@code komm.voice.e2ee=false}). One per room join:
+     * created in {@link #onVoiceTokenReceived}, closed with the peer connections.
+     */
+    private volatile VoiceE2ee e2ee;
 
     // ── State ─────────────────────────────────────────────────────────────────
     private final AtomicBoolean running = new AtomicBoolean(false);
@@ -312,6 +322,7 @@ public class WebrtcRoomClient {
         }
 
         closePeerConnections();
+        closeE2ee();
 
         if (deviceChangeListener != null) {
             MediaDevices.removeDeviceChangeListener(deviceChangeListener);
@@ -394,7 +405,19 @@ public class WebrtcRoomClient {
             }
             wsClient.unregister(WsMessageType.CHANNEL_TOKEN);
             String token = voiceTokenPayload.getToken();
-            submitChannelOp(() -> onVoiceTokenReceived(signalUrl, sslContext, token, channelId));
+            boolean encrypted = voiceTokenPayload.isE2ee();
+            submitChannelOp(() -> onVoiceTokenReceived(signalUrl, sslContext, token, channelId, encrypted));
+        });
+
+        // Key exchange for the encrypted call; dispatched to whichever session is current
+        // (each one ignores messages for another channel).
+        wsClient.register(WsMessageType.E2EE_ANNOUNCE, payload -> {
+            VoiceE2ee s = e2ee;
+            if (s != null) s.onAnnounce(payload);
+        });
+        wsClient.register(WsMessageType.E2EE_KEY, payload -> {
+            VoiceE2ee s = e2ee;
+            if (s != null) s.onKey(payload);
         });
 
         wsClient.send(WsMessageType.CHANNEL_JOIN, ChannelJoinPayload.builder()
@@ -404,8 +427,13 @@ public class WebrtcRoomClient {
                 .build());
     }
 
+    /**
+     * @param encrypted true when the installation runs this call end-to-end encrypted
+     *                  ({@code CHANNEL_TOKEN.e2ee}); every sent frame is then SFrame-encrypted
+     *                  and every received one must decrypt.
+     */
     public void onVoiceTokenReceived(String signalUrl, javax.net.ssl.SSLContext sslContext,
-                                     String token, UUID channelId) {
+                                     String token, UUID channelId, boolean encrypted) {
         // A still-newer join was requested while this token sat in the executor queue —
         // its own token is coming, so don't waste a full connect on a channel we've left.
         if (channelId != null && !channelId.equals(this.currentChannelId)) {
@@ -426,6 +454,7 @@ public class WebrtcRoomClient {
         if (screenShareClient != null) { screenShareClient.dispose(); screenShareClient = null; }
         if (livekitSignaling   != null) { livekitSignaling.disconnect(); livekitSignaling = null; }
         closePeerConnections();
+        closeE2ee();
         if (audioPipeline != null) {
             audioPipeline.stopCapture();
             audioPipeline.getSoundboardMixer().stopAll();
@@ -434,29 +463,34 @@ public class WebrtcRoomClient {
 
         this.currentToken      = token;
 
+        // E2EE session first: announcing our public key now lets the peers' keys arrive
+        // while LiveKit is still connecting.
+        VoiceE2ee session = null;
+        if (encrypted && channelId != null && App.getUser() != null) {
+            session = new VoiceE2ee(wsClient, channelId, App.getUser().getUserId());
+            e2ee = session;
+            session.start();
+        } else if (encrypted) {
+            log.warn("[E2EE] Encrypted call requested but no channel/user — joining unencrypted is not allowed, aborting");
+            return;
+        }
+
         // The headless ADM keeps pumping across joins/leaves (started once in start()), so
         // there is no per-session playout stop/init cycle to race with peer-connection teardown.
 
         publisherPc  = factory.createPeerConnection(buildRTCConfiguration(), new PublisherObserver());
         subscriberPc = factory.createPeerConnection(buildRTCConfiguration(), new SubscriberObserver());
 
-        RTCRtpTransceiverInit sendInit = new RTCRtpTransceiverInit();
-        sendInit.direction = RTCRtpTransceiverDirection.SEND_ONLY;
-        publisherPc.addTransceiver(localAudioTrack, sendInit);
-
-        RTCRtpTransceiverInit soundboardSendInit = new RTCRtpTransceiverInit();
-        soundboardSendInit.direction = RTCRtpTransceiverDirection.SEND_ONLY;
-        publisherPc.addTransceiver(soundboardTrack, soundboardSendInit);
-
-        RTCRtpTransceiverInit screenAudioSendInit = new RTCRtpTransceiverInit();
-        screenAudioSendInit.direction = RTCRtpTransceiverDirection.SEND_ONLY;
-        publisherPc.addTransceiver(screenAudioTrack, screenAudioSendInit);
+        addSendTransceiver(localAudioTrack, session);
+        addSendTransceiver(soundboardTrack, session);
+        addSendTransceiver(screenAudioTrack, session);
 
         RTCRtpTransceiverInit recvInit = new RTCRtpTransceiverInit();
         recvInit.direction = RTCRtpTransceiverDirection.RECV_ONLY;
         subscriberPc.addTransceiver(localAudioTrack, recvInit);
 
         livekitSignaling = new LiveKitSignalingClient();
+        livekitSignaling.setEncrypted(session != null);
 
         // Wait for all three tracks to be acknowledged before creating the publisher offer,
         // so all are included in the initial SDP.
@@ -523,6 +557,12 @@ public class WebrtcRoomClient {
 
         livekitSignaling.setOnError(err -> log.error("[LiveKit] Signaling error: {}", err));
 
+        // Signal connection died under us (dropped by a NAT/firewall, server restart, …):
+        // without it no refresh tokens, speaker rings or participant changes arrive, so
+        // rejoin the same channel instead of sitting in a half-working call.
+        livekitSignaling.setOnConnectionLost(reason -> submitChannelOp(() ->
+                reconnectAfterSignalLoss(signalingRef, signalUrl, sslContext, channelId, encrypted, 1)));
+
         // A participant UPDATE just landed — re-process any audio m-lines that arrived
         // before their track SID → participant mapping (see handleRemoteAudioTrack).
         livekitSignaling.setOnParticipantsUpdated(() -> {
@@ -544,7 +584,7 @@ public class WebrtcRoomClient {
 
         livekitSignaling.liveKitConnect(signalUrl, sslContext, token);
 
-        screenShareClient = new ScreenShareClient(factory, publisherPc, livekitSignaling);
+        screenShareClient = new ScreenShareClient(factory, publisherPc, livekitSignaling, session);
         screenShareClient.setOnSharingStateChanged(() -> {
             boolean sharing = screenShareClient.isSharing();
             if (!sharing && systemAudioCapture != null) {
@@ -590,6 +630,51 @@ public class WebrtcRoomClient {
             src.pushAudio(sbPush0, 16, 48_000, 1, PUBLISH_PUSH_SAMPLES);
             src.pushAudio(sbPush1, 16, 48_000, 1, PUBLISH_PUSH_SAMPLES);
         });
+    }
+
+    /** Delays before each rejoin attempt with the last LiveKit token, after the signal connection is lost. */
+    private static final long[] SIGNAL_REJOIN_DELAYS_MS = {0, 2_000, 5_000};
+
+    /**
+     * Rejoins {@code channelId} after its LiveKit signal connection was lost. Uses the
+     * latest token LiveKit refreshed for us — no server round trip, no leave/join seen by
+     * the others. If that keeps failing (e.g. the token expired while the machine slept),
+     * asks the server for a fresh one via a normal CHANNEL_JOIN.
+     *
+     * @param lost the signaling client whose connection was lost; if it is no longer the
+     *             current one, the user already left/switched or another rejoin won, so
+     *             this attempt is dropped
+     */
+    private void reconnectAfterSignalLoss(LiveKitSignalingClient lost, String signalUrl,
+                                          javax.net.ssl.SSLContext sslContext, UUID channelId,
+                                          boolean encrypted, int attempt) {
+        if (livekitSignaling != lost || channelId == null || !channelId.equals(currentChannelId)) return;
+
+        String token = currentToken;
+        if (token != null) {
+            log.warn("[Voice] LiveKit signaling lost — rejoining channel {} (attempt {}/{})",
+                    channelId, attempt, SIGNAL_REJOIN_DELAYS_MS.length);
+            try {
+                onVoiceTokenReceived(signalUrl, sslContext, token, channelId, encrypted);
+                return;
+            } catch (RuntimeException e) {
+                log.warn("[Voice] Rejoin attempt {} failed: {}", attempt, e.getMessage());
+            }
+        }
+
+        LiveKitSignalingClient failed = livekitSignaling; // the attempt's own (never connected) client
+        if (token != null && attempt < SIGNAL_REJOIN_DELAYS_MS.length) {
+            CompletableFuture.delayedExecutor(SIGNAL_REJOIN_DELAYS_MS[attempt], TimeUnit.MILLISECONDS)
+                    .execute(() -> submitChannelOp(() ->
+                            reconnectAfterSignalLoss(failed, signalUrl, sslContext, channelId, encrypted, attempt + 1)));
+            return;
+        }
+
+        UUID serverId = currentServerId;
+        if (serverId != null && channelId.equals(currentChannelId)) {
+            log.warn("[Voice] Rejoining channel {} with a fresh token from the server", channelId);
+            connectToChannel(serverId, channelId);
+        }
     }
 
     public void disconnectFromChannel() {
@@ -650,6 +735,7 @@ public class WebrtcRoomClient {
         }
 
         closePeerConnections();
+        closeE2ee();
         currentToken = null;
 
         Runnable cb = onConnectionStateChanged;
@@ -693,7 +779,8 @@ public class WebrtcRoomClient {
             screenAudioActive = false;
         }
 
-        VideoCodecChoice codec = (selection.getCodec() != null ? selection.getCodec() : VideoCodecChoice.AUTO).resolve();
+        VideoCodecChoice codec = (selection.getCodec() != null ? selection.getCodec() : VideoCodecChoice.AUTO)
+                .resolve(isE2eeActive());
         screenShareClient.startSharing(selection.getSourceId(), selection.isWindow(), selection.getQuality(), codec);
     }
 
@@ -945,9 +1032,23 @@ public class WebrtcRoomClient {
             if (livekitSignaling != null) livekitSignaling.sendIceCandidate(candidate, false);
         }
         @Override public void onTrack(RTCRtpTransceiver transceiver) {
-            MediaStreamTrack track = transceiver.getReceiver().getTrack();
+            RTCRtpReceiver receiver = transceiver.getReceiver();
+            MediaStreamTrack track = receiver.getTrack();
             String mid = transceiver.getMid();
             log.debug("[Subscriber] onTrack: kind={} mid={} id={}", track.getKind(), mid, track.getId());
+
+            // Encrypted call: decrypt every frame before the decoder; one that doesn't
+            // authenticate is dropped. The transform belongs to the native receiver, so a
+            // re-used m-line just gets a fresh one. Video asks for a key frame once frames
+            // decrypt again after a gap (the wrapper is kept for that, never disposed).
+            VoiceE2ee session = e2ee;
+            if (session != null) {
+                if (track instanceof VideoTrack) {
+                    receiver.setTransform(session.createDecryptor(receiver::requestKeyFrame));
+                } else {
+                    receiver.setTransform(session.createDecryptor());
+                }
+            }
 
             if (track instanceof AudioTrack remoteTrack) {
                 handleRemoteAudioTrack(mid != null ? mid : "track:" + remoteTrack.getId(), remoteTrack, false);
@@ -1577,5 +1678,57 @@ public class WebrtcRoomClient {
     private void closePeerConnections() {
         if (publisherPc != null) { publisherPc.close();  publisherPc  = null; }
         if (subscriberPc != null){ subscriberPc.close(); subscriberPc = null; }
+    }
+
+    // ── End-to-end encryption ─────────────────────────────────────────────────
+
+    /** True while the current call is end-to-end encrypted. */
+    public boolean isE2eeActive() {
+        return e2ee != null;
+    }
+
+    /**
+     * A member left a voice channel (USER_LEFT_CHANNEL). If it was ours, the encryption
+     * session drops their keys and rotates our own, so they can't follow the call any more.
+     */
+    public void onVoiceUserLeft(UUID channelId, UUID userId) {
+        VoiceE2ee s = e2ee;
+        if (s != null && channelId != null && channelId.equals(s.getChannelId())) s.onPeerLeft(userId);
+    }
+
+    private void closeE2ee() {
+        VoiceE2ee s = e2ee;
+        e2ee = null;
+        if (s != null) s.close();
+    }
+
+    /**
+     * Adds a send-only audio transceiver to the publisher. In an encrypted call its sender
+     * gets the encryptor before the first offer (so no frame ever leaves unencrypted), and
+     * RED is taken out of its codec list: a RED packet bundles several frames and would not
+     * decrypt as one.
+     */
+    private void addSendTransceiver(AudioTrack track, VoiceE2ee session) {
+        RTCRtpTransceiverInit init = new RTCRtpTransceiverInit();
+        init.direction = RTCRtpTransceiverDirection.SEND_ONLY;
+        RTCRtpTransceiver transceiver = publisherPc.addTransceiver(track, init);
+        if (session == null || transceiver == null) return;
+        RTCRtpSender sender = transceiver.getSender();
+        try {
+            sender.setTransform(session.createEncryptor());
+            try {
+                List<RTCRtpCodecCapability> codecs = new ArrayList<>(
+                        factory.getRtpSenderCapabilities(dev.onvoid.webrtc.media.MediaType.AUDIO).getCodecs());
+                if (codecs.removeIf(c -> "red".equalsIgnoreCase(c.getName()))) {
+                    transceiver.setCodecPreferences(codecs);
+                }
+            } catch (Throwable t) {
+                log.warn("[E2EE] Could not exclude RED from audio codecs: {}", t.toString());
+            }
+        } finally {
+            // The transform stays on the native sender; these wrappers were only needed here.
+            try { sender.dispose(); } catch (Throwable ignored) {}
+            try { transceiver.dispose(); } catch (Throwable ignored) {}
+        }
     }
 }

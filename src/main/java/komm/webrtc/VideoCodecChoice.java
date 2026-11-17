@@ -17,7 +17,9 @@ import java.util.Locale;
  * the libvpx software encoders.
  *
  * <p>{@link #AUTO} resolves to GPU H.264 when available and to CPU VP8 otherwise, and any saved
- * GPU choice that the current machine can't encode in hardware falls back to CPU VP8.
+ * GPU choice that the current machine can't encode in hardware falls back to CPU VP8. In an
+ * end-to-end encrypted call H.264 is unavailable ({@link #supportsE2ee()}); Auto then resolves to
+ * GPU AV1 when available and CPU VP8 otherwise.
  */
 @Getter
 public enum VideoCodecChoice {
@@ -48,24 +50,54 @@ public enum VideoCodecChoice {
         return sdpName != null && VideoCodecSupport.isHardwareEncoded(sdpName);
     }
 
+    /**
+     * True if frames of this codec can be end-to-end encrypted. H.264's packetizer splits a frame
+     * at Annex-B start codes, which ciphertext contains anywhere, so it can't carry SFrame (see
+     * {@code dev.onvoid.webrtc.e2ee.KeyProvider#supportsCodec}).
+     */
+    public boolean supportsE2ee() {
+        return this != H264;
+    }
+
     /** The concrete codec a share will use for this choice on this machine (never {@link #AUTO}). */
     public VideoCodecChoice resolve() {
-        if (this == AUTO) return H264.isHardwareEncoded() ? H264 : VP8;
+        return resolve(false);
+    }
+
+    /**
+     * Like {@link #resolve()}, for an end-to-end encrypted call when {@code e2ee}: H.264 is never
+     * picked there, Auto prefers a GPU AV1 encoder and otherwise uses CPU VP8.
+     */
+    public VideoCodecChoice resolve(boolean e2ee) {
+        if (this == AUTO || (e2ee && !supportsE2ee())) {
+            if (e2ee) return AV1.isHardwareEncoded() ? AV1 : VP8;
+            return H264.isHardwareEncoded() ? H264 : VP8;
+        }
         if (hardwareOnly && !isHardwareEncoded()) return VP8;
         return this;
     }
 
     /** "H.264 · GPU", "VP8 · CPU", or for AUTO "Auto (H.264 · GPU)". */
     public String label() {
-        if (this == AUTO) return "Auto (" + resolve().label() + ")";
+        return label(false);
+    }
+
+    /** {@link #label()} with Auto resolved for an end-to-end encrypted call when {@code e2ee}. */
+    public String label(boolean e2ee) {
+        if (this == AUTO) return "Auto (" + resolve(e2ee).label() + ")";
         return displayName + (isHardwareEncoded() ? " · GPU" : " · CPU");
     }
 
     /** Choices worth offering on this machine, AUTO first. */
     public static List<VideoCodecChoice> available() {
+        return available(false);
+    }
+
+    /** Choices worth offering on this machine, without those an encrypted call can't use when {@code e2ee}. */
+    public static List<VideoCodecChoice> available(boolean e2ee) {
         List<VideoCodecChoice> out = new ArrayList<>();
         for (VideoCodecChoice c : values()) {
-            if (!c.hardwareOnly || c.isHardwareEncoded()) out.add(c);
+            if ((!c.hardwareOnly || c.isHardwareEncoded()) && (!e2ee || c.supportsE2ee())) out.add(c);
         }
         return out;
     }

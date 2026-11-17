@@ -90,5 +90,8 @@ public enum WsMessageType {
     INSTALLATION_DELETED,
     POKE_USER,
     USER_POKED,
-    BOTS_UPDATED
+    BOTS_UPDATED,
+    // Voice E2EE key exchange, relayed (never readable) by the installation — see komm.webrtc.e2ee
+    E2EE_ANNOUNCE,
+    E2EE_KEY
 }
