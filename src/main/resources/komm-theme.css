@@ -1205,6 +1205,15 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 	-fx-font-family: "JetBrains Mono", "Consolas", "Menlo", "DejaVu Sans Mono", monospace;
 }
 
+/* The edit menu of a code editor (CodeAreaSupport.installEditContextMenu) would otherwise
+   inherit the editor's monospace font: keep the app's normal font. */
+/*@after .ring-progress-indicator:indeterminate>.container>.track #0*/
+.code-area .context-menu,
+.code-area .context-menu .label {
+	-fx-font-family: "System";
+	-fx-font-size: 14px;
+}
+
 /*@after .ring-progress-indicator:indeterminate>.container>.track #0*/
 .code-area .caret {
 	-fx-stroke: -color-fg-default;

@@ -147,6 +147,7 @@ public class CodeMessageModal extends VBox {
         codeArea.setStyle("-fx-background-color: transparent;");
         codeArea.setParagraphGraphicFactory(CodeAreaSupport.lineNumberFactory(codeArea));
         codeArea.setWrapText(false);
+        CodeAreaSupport.installEditContextMenu(codeArea);
         // updateCounter is cheap — fire immediately on every change
         codeArea.multiPlainChanges().subscribe(c -> updateCounter());
         // tokenizing is O(chars) (off-thread) — debounce so it only
