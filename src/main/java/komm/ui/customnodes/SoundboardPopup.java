@@ -1,5 +1,8 @@
 package komm.ui.customnodes;
 
+import komm.ui.utils.IconColorUtil;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignD;
+
 import atlantafx.base.theme.Styles;
 import io.github.b077as.emojifx.util.TextUtils;
 import javafx.application.Platform;
@@ -592,12 +595,12 @@ public class SoundboardPopup extends Popup {
         if (onEdit != null || onRemove != null) {
             ContextMenu menu = new ContextMenu();
             if (onEdit != null) {
-                MenuItem editItem = new MenuItem("Edit sound");
+                MenuItem editItem = new MenuItem("Edit sound", new FontIcon(MaterialDesignP.PENCIL_OUTLINE));
                 editItem.setOnAction(e -> onEdit.run());
                 menu.getItems().add(editItem);
             }
             if (onRemove != null) {
-                MenuItem removeItem = new MenuItem("Remove sound");
+                MenuItem removeItem = new MenuItem("Remove sound", IconColorUtil.colored(MaterialDesignD.DELETE_OUTLINE, "-color-danger-fg", 18));
                 removeItem.setOnAction(e -> onRemove.run());
                 menu.getItems().add(removeItem);
             }

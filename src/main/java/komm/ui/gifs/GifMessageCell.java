@@ -1,5 +1,9 @@
 package komm.ui.gifs;
 
+import org.kordamp.ikonli.javafx.FontIcon;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignD;
+
 import javafx.application.Platform;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
@@ -303,8 +307,8 @@ public class GifMessageCell extends StackPane {
         viewer.setFitWidth(VIEWER_W);
         viewer.setFitHeight(VIEWER_H);
 
-        MenuItem miCopyUrl = new MenuItem("Copy " + kindLabel + " URL");
-        MenuItem miDownload = new MenuItem("Download " + kindLabel + "…");
+        MenuItem miCopyUrl = new MenuItem("Copy " + kindLabel + " URL", new FontIcon(MaterialDesignC.CONTENT_COPY));
+        MenuItem miDownload = new MenuItem("Download " + kindLabel + "…", new FontIcon(MaterialDesignD.DOWNLOAD));
         ContextMenu menu = new ContextMenu(miCopyUrl, miDownload);
 
         miCopyUrl.setOnAction(ev -> {

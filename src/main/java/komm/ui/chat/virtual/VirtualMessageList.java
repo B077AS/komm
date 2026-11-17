@@ -8,6 +8,9 @@ import javafx.beans.binding.Bindings;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.input.KeyEvent;
+import javafx.scene.input.MouseEvent;
+import javafx.scene.input.ScrollEvent;
 import javafx.scene.layout.Region;
 import javafx.util.Duration;
 import komm.websocket.messages.payloads.MessageReceivedPayload;
@@ -114,6 +117,26 @@ public class VirtualMessageList extends Region {
         InvalidationListener viewport = o -> onViewportChanged();
         flow.estimatedScrollYProperty().addListener(viewport);
         flow.totalHeightEstimateProperty().addListener(viewport);
+
+        // Anything the user does to move the view: wheel/touchpad, scrollbar drag or click,
+        // keyboard. Only within USER_SCROLL_WINDOW of one of these may a scrollY drop turn
+        // follow-bottom off (see onViewportChanged).
+        vsp.addEventFilter(ScrollEvent.ANY, e -> noteUserScroll());
+        vsp.addEventFilter(MouseEvent.MOUSE_PRESSED, e -> noteUserScroll());
+        vsp.addEventFilter(MouseEvent.MOUSE_DRAGGED, e -> noteUserScroll());
+        vsp.addEventFilter(KeyEvent.KEY_PRESSED, e -> noteUserScroll());
+    }
+
+    /** How long after user input a scrollY drop still counts as the user scrolling up. */
+    private static final long USER_SCROLL_WINDOW_NANOS = 500_000_000L;
+    private long lastUserScrollNanos = Long.MIN_VALUE / 2;
+
+    private void noteUserScroll() {
+        lastUserScrollNanos = System.nanoTime();
+    }
+
+    private boolean userScrolledRecently() {
+        return System.nanoTime() - lastUserScrollNanos < USER_SCROLL_WINDOW_NANOS;
     }
 
     // ── content mutation (call only from a clean FX callback) ──────────────────
@@ -308,11 +331,16 @@ public class VirtualMessageList extends Region {
             double sy = syObj == null ? 0 : syObj;
             boolean atBottom = isAtBottom();
 
-            // Only a real downward drag turns off follow-bottom. Content growing
+            // Only a real scroll-up by the user turns off follow-bottom. Content growing
             // underneath (a GIF committing its real height, a code block, an image)
             // pushes the bottom away without moving scrollY, so it must NOT unstick.
+            // Nor may a scrollY drop on its own: scrollY is an ESTIMATE (index × average
+            // row height), so when rows get measured — images arriving while a channel
+            // opens — it can fall by far more than the slack with nobody touching
+            // anything. That left a freshly opened channel stuck short of the bottom,
+            // only sometimes (depends on how fast the images load).
             if (!programmaticScroll) {
-                if (sy < lastScrollY - SCROLL_UP_SLACK) followBottom = false;
+                if (sy < lastScrollY - SCROLL_UP_SLACK && userScrolledRecently()) followBottom = false;
                 else if (atBottom) followBottom = true;
             }
             lastScrollY = sy;

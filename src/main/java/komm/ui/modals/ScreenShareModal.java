@@ -66,6 +66,8 @@ public class ScreenShareModal extends HBox {
     private Button startButton;
     private Button cancelButton;
     private Button closeButton;
+    /** Only shown on the Applications (windows) tab: the other tabs have nothing worth searching. */
+    private TextField searchField;
     private ProgressIndicator progressIndicator;
     private CheckBox audioCheck;
     private Label statusLabel;
@@ -221,15 +223,12 @@ public class ScreenShareModal extends HBox {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        TextField searchField = new TextField();
+        searchField = new TextField();
         searchField.setPromptText("Search...");
         searchField.setPrefWidth(160);
         searchField.getStyleClass().add(Styles.SMALL);
         searchField.textProperty().addListener((obs, old, text) -> filterCards(text.trim().toLowerCase()));
-        if (WAYLAND) {
-            searchField.setVisible(false);
-            searchField.setManaged(false);
-        }
+        setSearchVisible(false); // shown by switchToWindows()
 
         closeButton = new Button(null, new FontIcon(MaterialDesignC.CLOSE));
         closeButton.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE);
@@ -639,6 +638,7 @@ public class ScreenShareModal extends HBox {
     // ── Tab switching ─────────────────────────────────────────────────────────
 
     private void switchToScreens() {
+        setSearchVisible(false);
         if (activeNavItem != screensNavItem) {
             setNavInactive(activeNavItem);
             setNavActive(screensNavItem);
@@ -653,6 +653,7 @@ public class ScreenShareModal extends HBox {
     }
 
     private void switchToWindows() {
+        setSearchVisible(true);
         if (activeNavItem != windowsNavItem) {
             setNavInactive(activeNavItem);
             setNavActive(windowsNavItem);
@@ -688,6 +689,7 @@ public class ScreenShareModal extends HBox {
     }
 
     private void switchToPortalInfo() {
+        setSearchVisible(false);
         if (activeNavItem != screensNavItem) {
             setNavInactive(activeNavItem);
             setNavActive(screensNavItem);
@@ -697,12 +699,21 @@ public class ScreenShareModal extends HBox {
     }
 
     private void switchToQuality() {
+        setSearchVisible(false);
         if (activeNavItem != qualityNavItem) {
             setNavInactive(activeNavItem);
             setNavActive(qualityNavItem);
             activeNavItem = qualityNavItem;
         }
         animateContentTo(qualityView);
+    }
+
+    /** Hiding also clears the query, so no filter stays applied to cards on a tab without the field. */
+    private void setSearchVisible(boolean visible) {
+        if (searchField == null) return;
+        if (!visible) searchField.clear();
+        searchField.setVisible(visible);
+        searchField.setManaged(visible);
     }
 
     private void animateContentTo(Node node) {

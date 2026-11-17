@@ -1,5 +1,11 @@
 package komm.ui.emojis;
 
+import org.kordamp.ikonli.materialdesign2.MaterialDesignB;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignR;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignS;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignU;
+
 import atlantafx.base.theme.Styles;
 import io.github.b077as.emojifx.Emoji;
 import io.github.b077as.emojifx.util.TextUtils;
@@ -1335,13 +1341,13 @@ public class EmojiTextArea extends HBox {
     }
 
     private ContextMenu buildContextMenu() {
-        MenuItem miUndo = new MenuItem("Undo");
-        MenuItem miRedo = new MenuItem("Redo");
-        MenuItem miCut = new MenuItem("Cut");
-        MenuItem miCopy = new MenuItem("Copy");
-        MenuItem miPaste = new MenuItem("Paste");
-        MenuItem miDelete = new MenuItem("Delete");
-        MenuItem miSelectAll = new MenuItem("Select All");
+        MenuItem miUndo = new MenuItem("Undo", new FontIcon(MaterialDesignU.UNDO));
+        MenuItem miRedo = new MenuItem("Redo", new FontIcon(MaterialDesignR.REDO));
+        MenuItem miCut = new MenuItem("Cut", new FontIcon(MaterialDesignC.CONTENT_CUT));
+        MenuItem miCopy = new MenuItem("Copy", new FontIcon(MaterialDesignC.CONTENT_COPY));
+        MenuItem miPaste = new MenuItem("Paste", new FontIcon(MaterialDesignC.CONTENT_PASTE));
+        MenuItem miDelete = new MenuItem("Delete", new FontIcon(MaterialDesignB.BACKSPACE_OUTLINE));
+        MenuItem miSelectAll = new MenuItem("Select All", new FontIcon(MaterialDesignS.SELECT_ALL));
 
         miUndo.setOnAction(e -> {
             undo();
