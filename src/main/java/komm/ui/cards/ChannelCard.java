@@ -475,7 +475,6 @@ public class ChannelCard extends VBox {
             currentlyConnected.disconnectFromVoiceChannel();
         }
         App.webrtcRoomClient.connectToChannel(
-                server.getIpAddress() + ":" + server.getSignalPort(),
                 server.getServerId(),
                 channel.getChannelId()
         );

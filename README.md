@@ -231,7 +231,7 @@ On first launch the client creates its app data directory - `%APPDATA%\Komm` on 
 |---|---|
 | Language / runtime | Java 25 |
 | UI | JavaFX 27, [AtlantaFX](https://github.com/mkpaz/atlantafx) 3.0 themes and custom title bar, Ikonli icon packs, RichTextFX, emojifx |
-| Voice / video | [webrtc-java](https://github.com/devopvoid/webrtc-java) 1.0.0 (hardware-first video encoders: NVENC, Media Foundation, VA-API), LiveKit signaling |
+| Voice / video | [webrtc-java](https://github.com/devopvoid/webrtc-java) 1.0.1 (hardware-first video encoders: NVENC, Media Foundation, VA-API), LiveKit signaling |
 | Audio DSP | RNNoise (rnnoise4j), WebRTC VAD (webrtc-java), WebRTC AEC3/AGC2, mp3spi |
 | System integration | JNA / JNA Platform (WASAPI loopback, PipeWire patch bay), JNativeHook (global hotkeys) |
 | Networking | Java `HttpClient`, Tyrus WebSocket client, Spring WebSocket/messaging (client-side) |

@@ -25,7 +25,6 @@ public class GeneralInstallationTab implements InstallationSettingsTab {
     private final TextField nameField = readOnlyField();
     private final TextField ipField = readOnlyField();
     private final TextField apiPortField = readOnlyField();
-    private final TextField signalPortField = readOnlyField();
     private final TextField tcpPortField = readOnlyField();
     private final TextField mediaPortField = readOnlyField();
 
@@ -90,7 +89,6 @@ public class GeneralInstallationTab implements InstallationSettingsTab {
         nameField.setPromptText("Loading…");
         ipField.setPromptText("Loading…");
         apiPortField.setPromptText("-");
-        signalPortField.setPromptText("-");
         tcpPortField.setPromptText("-");
         mediaPortField.setPromptText("-");
 
@@ -108,7 +106,6 @@ public class GeneralInstallationTab implements InstallationSettingsTab {
         HBox portsRow = new HBox(10);
         portsRow.getChildren().addAll(
                 buildPortBox("API Port", "TCP", apiPortField),
-                buildPortBox("Signaling Port", "TCP", signalPortField),
                 buildPortBox("TCP Port", "TCP", tcpPortField),
                 buildPortBox("Media Port", "UDP", mediaPortField)
         );
@@ -136,7 +133,6 @@ public class GeneralInstallationTab implements InstallationSettingsTab {
         nameField.setText(d.getInstallationName() != null ? d.getInstallationName() : "-");
         ipField.setText(d.getIpAddress() != null && !d.getIpAddress().isBlank() ? d.getIpAddress() : "-");
         apiPortField.setText(d.getInstallationPort() != 0 ? String.valueOf(d.getInstallationPort()) : "-");
-        signalPortField.setText(d.getSignalPort() != 0 ? String.valueOf(d.getSignalPort()) : "-");
         tcpPortField.setText(d.getTcpPort() != 0 ? String.valueOf(d.getTcpPort()) : "-");
         mediaPortField.setText(d.getMediaPort() != 0 ? String.valueOf(d.getMediaPort()) : "-");
     }

@@ -29,6 +29,13 @@ public class InstallationConnection {
     private final SoundboardService soundboardService;
     private final MemberService memberService;
     private final BotService botService;
+    /** Hub-CA trust for this installation's https/wss endpoints; null when it serves plain http/ws. */
+    private final javax.net.ssl.SSLContext sslContext;
+    /**
+     * LiveKit signaling, proxied by the installation on its API port (wss when TLS is on).
+     * The SFU's own signal port is loopback-only on the installation.
+     */
+    private final String liveKitSignalUrl;
 
     public InstallationConnection(ServerSummary server, String ticket) throws Exception {
         // The hub reports whether this installation serves TLS with its hub-signed
@@ -49,6 +56,8 @@ public class InstallationConnection {
         auth.login(ticket);
 
         String wsBase = (tls ? "wss://" : "ws://") + hostPort;
+        this.sslContext = sslContext;
+        this.liveKitSignalUrl = wsBase + "/rtc";
         this.wsClient = new InstallationWsClient(wsBase, sslContext);
         this.wsClient.connect(tokenManager.getAccessToken());
 

@@ -95,22 +95,7 @@ public class InstallationWsClient extends Endpoint {
                         }
                     })
                     .build();
-            WebSocketContainer container;
-            if (sslContext != null) {
-                // Tyrus needs the custom SSLContext via client properties. Host
-                // verification is off because installations sit on bare IPs — the
-                // trust manager already checks the hub-signed CN identity instead.
-                org.glassfish.tyrus.client.ClientManager client =
-                        org.glassfish.tyrus.client.ClientManager.createClient();
-                org.glassfish.tyrus.client.SslEngineConfigurator ssl =
-                        new org.glassfish.tyrus.client.SslEngineConfigurator(sslContext, true, false, false);
-                ssl.setHostVerificationEnabled(false);
-                client.getProperties().put(
-                        org.glassfish.tyrus.client.ClientProperties.SSL_ENGINE_CONFIGURATOR, ssl);
-                container = client;
-            } else {
-                container = ContainerProvider.getWebSocketContainer();
-            }
+            WebSocketContainer container = InstallationWebSockets.container(sslContext);
             container.connectToServer(this, config, URI.create(baseUrl + "/ws"));
         } catch (Exception e) {
             throw new RuntimeException("Failed to connect to installation WS: " + e.getMessage(), e);
