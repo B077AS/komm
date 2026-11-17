@@ -21,9 +21,13 @@ import atlantafx.base.controls.ToggleSwitch;
 import komm.ui.theme.AppTheme;
 import komm.ui.theme.ThemeManager;
 import komm.ui.theme.ThemeMode;
+import komm.App;
+import komm.ui.modals.ConfirmationModal;
 import komm.ui.utils.WindowChrome;
+import komm.update.AppRestart;
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignP;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignR;
 
 import static komm.ui.modals.usersettings.UserSettingsUi.*;
 
@@ -91,7 +95,19 @@ public class AppearanceUserTab implements UserSettingsTab {
 
         ToggleSwitch customBar = new ToggleSwitch();
         customBar.setSelected(WindowChrome.isCustomPreferred());
-        customBar.selectedProperty().addListener((o, was, now) -> WindowChrome.setCustomPreferred(now));
+        customBar.selectedProperty().addListener((o, was, now) -> {
+            WindowChrome.setCustomPreferred(now);
+            // A window's style can't change once it exists, so offer to restart right away. Only when
+            // the new choice differs from what this window uses (switching back and forth asks nothing)
+            // and when jpack can start us again; otherwise the hint's "after restarting" applies.
+            if (now != WindowChrome.isExtended() && AppRestart.isSupported()) {
+                App.showModal(new ConfirmationModal(
+                        "Restart Komm?",
+                        "The title bar changes after a restart. Restart now? You'll leave any voice channel you're in.",
+                        new FontIcon(MaterialDesignR.RESTART),
+                        AppRestart::restart));
+            }
+        });
 
         HBox barRow = new HBox(16, barText, customBar);
         barRow.setAlignment(Pos.CENTER_LEFT);
