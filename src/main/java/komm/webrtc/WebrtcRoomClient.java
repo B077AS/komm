@@ -146,9 +146,6 @@ public class WebrtcRoomClient {
 
     @Getter private volatile UUID   currentServerId   = null;
     @Getter private volatile UUID   currentChannelId  = null;
-    private volatile String currentLivekitUrl = null;
-
-    private List<String> STUN_URLS;
 
     @Setter private volatile Runnable onConnectionStateChanged;
     /** Fired whenever the real screen-share state changes (Wayland: after the first frame). */
@@ -372,10 +369,13 @@ public class WebrtcRoomClient {
         }
     }
 
-    public void connectToChannel(String ip, UUID serverId, UUID channelId) {
+    public void connectToChannel(UUID serverId, UUID channelId) {
         if (!running.get()) throw new IllegalStateException("Call start() before connectToChannel()");
 
-        this.wsClient         = App.getServices().installation().getWsClient();
+        komm.api.InstallationConnection installation = App.getServices().installation();
+        String signalUrl = installation.getLiveKitSignalUrl();
+        javax.net.ssl.SSLContext sslContext = installation.getSslContext();
+        this.wsClient         = installation.getWsClient();
         this.currentServerId  = serverId;
         this.currentChannelId = channelId;
 
@@ -394,7 +394,7 @@ public class WebrtcRoomClient {
             }
             wsClient.unregister(WsMessageType.CHANNEL_TOKEN);
             String token = voiceTokenPayload.getToken();
-            submitChannelOp(() -> onVoiceTokenReceived(ip, token, channelId));
+            submitChannelOp(() -> onVoiceTokenReceived(signalUrl, sslContext, token, channelId));
         });
 
         wsClient.send(WsMessageType.CHANNEL_JOIN, ChannelJoinPayload.builder()
@@ -404,7 +404,8 @@ public class WebrtcRoomClient {
                 .build());
     }
 
-    public void onVoiceTokenReceived(String livekitUrl, String token, UUID channelId) {
+    public void onVoiceTokenReceived(String signalUrl, javax.net.ssl.SSLContext sslContext,
+                                     String token, UUID channelId) {
         // A still-newer join was requested while this token sat in the executor queue —
         // its own token is coming, so don't waste a full connect on a channel we've left.
         if (channelId != null && !channelId.equals(this.currentChannelId)) {
@@ -432,8 +433,6 @@ public class WebrtcRoomClient {
         }
 
         this.currentToken      = token;
-        this.currentLivekitUrl = livekitUrl;
-        STUN_URLS = List.of("stun:" + livekitUrl);
 
         // The headless ADM keeps pumping across joins/leaves (started once in start()), so
         // there is no per-session playout stop/init cycle to race with peer-connection teardown.
@@ -543,7 +542,7 @@ public class WebrtcRoomClient {
             attachWaitingSinks();
         });
 
-        livekitSignaling.liveKitConnect(livekitUrl, token);
+        livekitSignaling.liveKitConnect(signalUrl, sslContext, token);
 
         screenShareClient = new ScreenShareClient(factory, publisherPc, livekitSignaling);
         screenShareClient.setOnSharingStateChanged(() -> {
@@ -1563,12 +1562,16 @@ public class WebrtcRoomClient {
         MediaDevices.addDeviceChangeListener(deviceChangeListener);
     }
 
+    /**
+     * No ICE servers. The SFU advertises its own reachable candidates (its node IP on
+     * the media ports), and checks from our host candidates reach it — LiveKit learns
+     * our NAT-mapped address from those. TURN, if an installation ever configures it,
+     * arrives in the JoinResponse. (The STUN entry that used to sit here
+     * pointed at LiveKit's TCP signal port, where no STUN server ever answered — and
+     * that port is loopback-only on the installation now.)
+     */
     private RTCConfiguration buildRTCConfiguration() {
-        RTCConfiguration config = new RTCConfiguration();
-        RTCIceServer stun = new RTCIceServer();
-        stun.urls.addAll(STUN_URLS);
-        config.iceServers.add(stun);
-        return config;
+        return new RTCConfiguration();
     }
 
     private void closePeerConnections() {

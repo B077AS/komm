@@ -21,7 +21,6 @@ public class ServerSummary {
     private UUID installationId;
     private String ipAddress;
     private Integer port;
-    private Integer signalPort;
     private boolean tlsEnabled;
     private String avatar;
     private String avatarImageFormat;

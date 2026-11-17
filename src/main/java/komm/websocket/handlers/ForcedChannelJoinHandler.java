@@ -52,7 +52,6 @@ public class ForcedChannelJoinHandler implements WsInboundMessageHandler {
             // connectToChannel tears down existing WebRTC (soundboard, screen share, PCs) internally
             // and reconnects once the server responds with CHANNEL_TOKEN.
             App.webrtcRoomClient.connectToChannel(
-                    server.getIpAddress() + ":" + server.getSignalPort(),
                     server.getServerId(),
                     newChannelId
             );

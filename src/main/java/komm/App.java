@@ -234,7 +234,8 @@ public class App extends Application {
         // background after the main window is closed. Force a full shutdown instead.
         primaryStage.setOnCloseRequest(e -> Platform.exit());
         // Fully transparent until the window has maximised and rendered its first frames (no visible resize / white flash).
-        WindowChrome.show(primaryStage);
+        // Once it is visible, the launcher (waiting in Jpack.whenShown) is told it can close.
+        WindowChrome.show(primaryStage, komm.update.OnScreen::tellLauncher);
 
         komm.ui.theme.ThemeManager.get().init();
         komm.ui.theme.ThemeManager.get().applyFromSettings();

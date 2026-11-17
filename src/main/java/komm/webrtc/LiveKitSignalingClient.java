@@ -59,15 +59,20 @@ public class LiveKitSignalingClient extends Endpoint {
     // Remote VIDEO track SID → publishing participant identity (only currently published tracks)
     private final Map<String, String> videoTrackSidToParticipant = new ConcurrentHashMap<>();
 
-    public void liveKitConnect(String livekitUrl, String token) {
-        String url = "ws://" + livekitUrl + "/rtc?access_token=" + token
+    /**
+     * @param signalUrl  the installation's LiveKit signaling proxy
+     *                   ({@code wss://host:apiPort/rtc}, or {@code ws://} without TLS)
+     * @param sslContext hub-CA trust for wss; null for plain ws
+     */
+    public void liveKitConnect(String signalUrl, javax.net.ssl.SSLContext sslContext, String token) {
+        String url = signalUrl + "?access_token=" + token
                 + "&sdk=javaclient&version=1.0&protocol=9&auto_subscribe=1";
         try {
             ClientEndpointConfig config = ClientEndpointConfig.Builder.create().build();
-            WebSocketContainer container = ContainerProvider.getWebSocketContainer();
+            WebSocketContainer container = komm.websocket.InstallationWebSockets.container(sslContext);
             container.setDefaultMaxTextMessageBufferSize(128 * 1024);
             container.connectToServer(this, config, URI.create(url));
-            log.info("[LiveKit] Connecting to {}", livekitUrl);
+            log.info("[LiveKit] Connecting to {}", signalUrl);
         } catch (Exception e) {
             throw new RuntimeException("Failed to connect to LiveKit signal: " + e.getMessage(), e);
         }

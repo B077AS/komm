@@ -35,7 +35,6 @@ public class ServerSummaryDeserializer implements JsonDeserializer<ServerSummary
                 .installationId(context.deserialize(obj.get("installationId"), UUID.class))
                 .ipAddress(KommUtils.getStringOrNull(obj, "ipAddress"))
                 .port(obj.has("port") && !obj.get("port").isJsonNull() ? obj.get("port").getAsInt() : null)
-                .signalPort(obj.has("signalPort") && !obj.get("signalPort").isJsonNull() ? obj.get("signalPort").getAsInt() : null)
                 .tlsEnabled(obj.has("tlsEnabled") && !obj.get("tlsEnabled").isJsonNull()
                         && obj.get("tlsEnabled").getAsBoolean())
                 .avatar(avatar)

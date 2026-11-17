@@ -25,7 +25,6 @@ public class CreateInstallationModal extends VBox {
 
     private TextField installationNameField;
     private TextField apiPortField;
-    private TextField signalPortField;
     private TextField tcpPortField;
     private TextField mediaPortField;
     private ProgressIndicator progressIndicator;
@@ -67,7 +66,6 @@ public class CreateInstallationModal extends VBox {
             closeButton.setDisable(isRunning);
             installationNameField.setDisable(isRunning);
             apiPortField.setDisable(isRunning);
-            signalPortField.setDisable(isRunning);
             tcpPortField.setDisable(isRunning);
             mediaPortField.setDisable(isRunning);
             progressIndicator.setVisible(isRunning);
@@ -120,7 +118,6 @@ public class CreateInstallationModal extends VBox {
         nameBox.getChildren().addAll(nameLabel, installationNameField);
 
         apiPortField = new TextField();
-        signalPortField = new TextField();
         tcpPortField = new TextField();
         mediaPortField = new TextField();
 
@@ -128,7 +125,6 @@ public class CreateInstallationModal extends VBox {
         portsRow.setAlignment(Pos.BOTTOM_CENTER);
         portsRow.getChildren().addAll(
                 buildPortBox("API Port", "TCP", "8080", apiPortField),
-                buildPortBox("Signaling Port", "TCP", "7880", signalPortField),
                 buildPortBox("TCP Port", "TCP", "7881", tcpPortField),
                 buildPortBox("Media Port", "UDP", "7882", mediaPortField)
         );
@@ -209,7 +205,6 @@ public class CreateInstallationModal extends VBox {
     private void handleCreateInstallation() {
         String installationName = installationNameField.getText().trim();
         String apiPortText = apiPortField.getText().trim();
-        String signalPortText = signalPortField.getText().trim();
         String tcpPortText = tcpPortField.getText().trim();
         String mediaPortText = mediaPortField.getText().trim();
 
@@ -221,10 +216,6 @@ public class CreateInstallationModal extends VBox {
             showNotification("API port is required");
             return;
         }
-        if (signalPortText.isEmpty()) {
-            showNotification("Signaling port is required");
-            return;
-        }
         if (tcpPortText.isEmpty()) {
             showNotification("TCP port is required");
             return;
@@ -234,10 +225,9 @@ public class CreateInstallationModal extends VBox {
             return;
         }
 
-        int apiPort, signalPort, tcpPort, mediaPort;
+        int apiPort, tcpPort, mediaPort;
         try {
             apiPort = parsePort(apiPortText);
-            signalPort = parsePort(signalPortText);
             tcpPort = parsePort(tcpPortText);
             mediaPort = parsePort(mediaPortText);
         } catch (IllegalArgumentException ex) {
@@ -255,7 +245,6 @@ public class CreateInstallationModal extends VBox {
         currentRequest = CreateInstallationRequest.builder()
                 .installationName(installationName)
                 .installationPort(apiPort)
-                .signalPort(signalPort)
                 .tcpPort(tcpPort)
                 .mediaPort(mediaPort)
                 .installationCsr(csr)

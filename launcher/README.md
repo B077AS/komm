@@ -20,13 +20,19 @@ Komm.exe  (jpack stub - the only program that starts processes)
 launcher (this folder)
    |  2. jpack.check()    - is the latest GitHub release different from what is installed?
    |  3. jpack.download() - only the parts whose hash changed, with progress for the bar
-   |  4. jpack.startAfterExit("app"), then exits
+   |  4. jpack.startNow("app")
    v
-Komm.exe   5. swaps the downloaded files in (nothing is running, so nothing is locked), starts "app"
+   +-- nothing downloaded: Komm.exe starts "app" right away, next to the launcher
+   |      5. the launcher waits in jpack.whenShown("app")
+   |      6. the client shows its window and calls notifyShown() -> the launcher closes
+   |
+   +-- update downloaded: startNow completes empty, the launcher exits
+          5. Komm.exe swaps the downloaded files in (nothing is running, so nothing is locked), starts "app"
    v
 komm client (komm.Launcher)
 ```
 
+- **No blank moment.** When nothing has to be swapped in, the launcher stays on screen until the client's window is up (`komm.update.OnScreen` in the client says so once `WindowChrome` reveals the window). If the client exits before that, the launcher shows an error instead of vanishing; if it never says so, the launcher closes after 60 seconds. After an update the launcher must exit first, so "Starting Komm..." is the last thing it shows.
 - **Two JVMs, on purpose.** The launcher's JVM must be gone before the files it is running from (jars, runtime) can be replaced, so the client cannot start inside it.
 - **Everything is a part of one release**: Java runtime, client jar, launcher jar and the stub itself. The launcher is therefore updated by the same mechanism and is always the same version as the client. No self-update code, no "catch-up" path.
 - **Every update is mandatory.** Once a newer release is known, a failed download shows an error and the launcher never starts the stale install. Only when the update server can't be asked at all (offline, GitHub down, no release published yet) does the installed version start as-is.
@@ -51,7 +57,7 @@ jpack.json                              what is installed (the manifest)
 runtime/                                one jlink runtime for launcher AND client (modules found with jdeps)
   bin/Komm.exe                          javaw.exe renamed and branded, so Task Manager says "Komm" (Windows)
 app/komm-<version>.jar                  the client fat jar
-launcher/komm-launcher.jar              this project's fat jar (single-platform JavaFX natives)
+launcher/komm-launcher.jar              this project's fat jar (Windows and Linux JavaFX natives in one jar)
 ```
 
 JVM options live in [`../src/jpack/jpack.json`](../src/jpack/jpack.json): the client's (`-Xms32m -Xmx2g`, periodic G1 GC with tight free ratios, `ParallelGCThreads=2 ConcGCThreads=1`, `MaxDirectMemorySize=1g`, `UseCompactObjectHeaders`, native access; env `MALLOC_ARENA_MAX=2` for Linux) and the launcher's (Serial GC, 128 MB heap, C1 only). The root `pom.xml`'s `javafx:run` options mirror the client's - keep them in sync. Branding (icon, "Komm" file properties) comes from `src/jpack/icon.ico`; the AppImage icon from `src/jpack/icon.png`.
@@ -74,8 +80,9 @@ Requirements: **Java 25** (with `jmods`, i.e. a full JDK) and Maven. Windows ins
 # Launcher dev run: has no jpack stub, so it only previews the UI
 mvn -f launcher/pom.xml javafx:run -Dlauncher.demo=true
 
-# The launcher jar jpack packages (single-platform natives)
-mvn -f launcher/pom.xml clean package -Pwin-natives      # or -Plinux-natives
+# The launcher jar jpack packages: -Pall-natives is the one jar a release ships (both platforms' natives);
+# -Pwin-natives / -Plinux-natives make a smaller one for trying a single platform locally
+mvn -f launcher/pom.xml clean package -Pall-natives
 
 # From the repo root: client fat jar + the whole install
 mvn clean package -Ppackage,prod,jpack
@@ -90,7 +97,7 @@ Testing against a fork or another location: `-Djpack.updateUrl=https://github.co
 
 ## Releases
 
-Built by the repo's single `.github/workflows/release.yml`. Publishing a GitHub release (tag e.g. `0.0.3`) runs one job on Windows and one on Linux, each with the tag's version. They attach to the release: **all of `target/jpack/release/`** (manifest `jpack-<platform>.json`, the part zips, the AppImage and its `.blocks` index), plus `Komm-Setup-<v>.exe` / `Komm-<v>-x86_64.AppImage` and the stable aliases `Komm-Setup.exe` / `Komm.AppImage`. Installed copies read `releases/latest/download/`, so a release has to carry every file, changed or not, and the manifest goes up last. A manual run (Actions -> Run workflow, existing tag) rebuilds and replaces both platforms' assets.
+Built by the repo's single `.github/workflows/release.yml`. Publishing a GitHub release (tag e.g. `0.0.3`) first builds the client jar and this launcher jar (`-Pall-natives`) once, then runs one job on Windows and one on Linux that package those same two files, each with the tag's version. They attach to the release: **all of `target/jpack/release/`** (manifest `jpack-<platform>.json`, the two jars `komm-<v>.jar` / `komm-launcher.jar` as they are, `runtime-<platform>.zip`, `stub-<platform>.zip`, and on Linux `Komm.AppImage` with its `.blocks` index), plus `Komm-Setup.exe`. No download carries a version in its name, so `releases/latest/download/Komm-Setup.exe` and `.../Komm.AppImage` never change. Installed copies read `releases/latest/download/`, so a release has to carry every file, changed or not, and the manifest goes up last. A manual run (Actions -> Run workflow, existing tag) rebuilds and replaces both platforms' assets.
 
 The launcher's pom version is deliberately **not** bumped by releases and its jar has fixed timestamps: the same sources give the same bytes, so the launcher part keeps its hash and isn't downloaded again until the launcher really changes.
 
@@ -101,7 +108,7 @@ The launcher's pom version is deliberately **not** bumped by releases and its ja
 | `Launcher` | Entry point: app-data dirs, logging properties, protocol registration, hands off to the UI |
 | `LauncherApp` | The frameless JavaFX window: phases, progress bar, animations; closes on X or Esc |
 | `LauncherTheme` | Reads the user's accent (`config/accent`) and builds its palette stylesheet |
-| `update/UpdateManager` | check -> download -> `startAfterExit("app")` through the `jpack-api` library, plus the scripted demo |
+| `update/UpdateManager` | check -> download -> `startNow("app")` -> `whenShown("app")` through the `jpack-api` library, plus the scripted demo |
 | `update/Phase` | The status phrases (`CHECKING`, `DOWNLOADING`, `INSTALLING`, `STARTING`, `UP_TO_DATE`, `DONE`) |
 | `ProtocolRegistrar` | `komm://` scheme registration (Windows registry / Linux `.desktop` + `xdg-mime`) |
 | `packaging/windows/komm.iss` | Inno Setup script wrapping the jpack install folder |

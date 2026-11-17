@@ -34,11 +34,21 @@
         <!-- <hub.dev.ws.url>wss://kommvoice.com/ws</hub.dev.ws.url> -->
         <hub.url>${hub.dev.url}</hub.url>
         <hub.ws.url>${hub.dev.ws.url}</hub.ws.url>
-        <!-- jpack (self-updating install: stub + launcher + jlink runtime) - plugin version -->
-        <jpack.plugin.version>0.1.2</jpack.plugin.version>
+        <!-- jpack (self-updating install: stub + launcher + jlink runtime). Keep the plugin (it bundles the stub) and
+             jpack-api on the same release: notifyShown needs a stub from 0.1.3 on, and launcher/pom.xml has its own
+             jpack.api.version. -->
+        <jpack.plugin.version>0.1.3</jpack.plugin.version>
+        <!-- Jpack.notifyShown: the launcher closes once the client's window is on screen. -->
+        <jpack.api.version>0.1.3</jpack.api.version>
     </properties>
 
     <dependencies>
+        <!-- Tells the jpack stub (and through it the launcher) that the main window is on screen (komm.update.OnScreen) -->
+        <dependency>
+            <groupId>io.github.b077as</groupId>
+            <artifactId>jpack-api</artifactId>
+            <version>${jpack.api.version}</version>
+        </dependency>
         <!-- https://mvnrepository.com/artifact/org.openjfx/javafx-controls -->
         <dependency>
             <groupId>org.openjfx</groupId>
@@ -150,7 +160,7 @@
         <dependency>
             <groupId>dev.onvoid.webrtc</groupId>
             <artifactId>webrtc-java</artifactId>
-            <version>1.0.0</version>
+            <version>1.0.1</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/org.bouncycastle/bcpkix-jdk18on -->
         <dependency>
@@ -192,7 +202,7 @@
         <dependency>
             <groupId>io.livekit</groupId>
             <artifactId>livekit-server</artifactId>
-            <version>0.15.1</version>
+            <version>0.17.0</version>
         </dependency>
         <!-- https://github.com/henkelmax/rnnoise4j/releases/tag/2.1.3 -->
         <dependency>
@@ -346,13 +356,13 @@
                 <dependency>
                     <groupId>dev.onvoid.webrtc</groupId>
                     <artifactId>webrtc-java</artifactId>
-                    <version>1.0.0</version>
+                    <version>1.0.1</version>
                     <classifier>windows-x86_64</classifier>
                 </dependency>
                 <dependency>
                     <groupId>dev.onvoid.webrtc</groupId>
                     <artifactId>webrtc-java</artifactId>
-                    <version>1.0.0</version>
+                    <version>1.0.1</version>
                     <classifier>linux-x86_64</classifier>
                 </dependency>
             </dependencies>

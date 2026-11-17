@@ -182,11 +182,17 @@ public final class WindowChrome {
      * and lay out. With native decorations on Windows this also applies the DWM dark-mode workaround.
      */
     public static void show(Stage stage) {
+        show(stage, null);
+    }
+
+    /** {@link #show(Stage)}, running {@code onRevealed} on the FX thread once the window is actually visible. */
+    public static void show(Stage stage, Runnable onRevealed) {
         Scene scene = stage.getScene();
         if (scene != null) scene.setFill(komm.ui.theme.ThemeManager.get().windowBackground()); // shown before CSS applies
 
         if (!ENABLED && !isWindows()) {
             stage.show();
+            if (onRevealed != null) Platform.runLater(onRevealed);
             return;
         }
         if (ENABLED) {
@@ -197,7 +203,7 @@ public final class WindowChrome {
             // poller.)
             stage.setOpacity(0);
             stage.show();
-            revealAfterFirstFrames(stage, false);
+            revealAfterFirstFrames(stage, false, onRevealed);
             return;
         }
         stage.setOpacity(0);
@@ -206,7 +212,7 @@ public final class WindowChrome {
         String title = stage.getTitle();
         Thread.ofVirtual().start(() -> {
             if (komm.ui.theme.ThemeManager.get().isDark()) WindowsThemeUtil.enableDarkTitleBar(title);
-            Platform.runLater(() -> revealAfterFirstFrames(stage, false));
+            Platform.runLater(() -> revealAfterFirstFrames(stage, false, onRevealed));
         });
     }
 
@@ -215,7 +221,7 @@ public final class WindowChrome {
     private static final long REVEAL_MAX_NANOS = 900_000_000L;   // never leave the user without a window
 
     /** Sets opacity to 1 after a few rendered frames, bounded by a minimum settle time and a hard cap. */
-    private static void revealAfterFirstFrames(Stage stage, boolean cloaked) {
+    private static void revealAfterFirstFrames(Stage stage, boolean cloaked, Runnable onRevealed) {
         new AnimationTimer() {
             private long start = -1;
             private int frames = 0;
@@ -230,6 +236,8 @@ public final class WindowChrome {
                     stop();
                     if (cloaked) WindowsThemeUtil.setCloaked(stage.getTitle(), false);
                     else stage.setOpacity(1);
+                    // Next pulse: the frame with full opacity is on screen by then.
+                    if (onRevealed != null) Platform.runLater(onRevealed);
                 }
             }
         }.start();
