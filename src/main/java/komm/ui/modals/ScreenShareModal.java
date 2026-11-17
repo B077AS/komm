@@ -409,8 +409,10 @@ public class ScreenShareModal extends HBox {
         codecHint.getStyleClass().addAll(Styles.TEXT_MUTED, Styles.TEXT_SMALL);
         codecHint.setWrapText(true);
         codecHint.setMaxWidth(440);
-        for (VideoCodecChoice c : VideoCodecChoice.available()) {
-            ToggleButton btn = new ToggleButton(c.label());
+        // End-to-end encrypted call: H.264 can't carry SFrame, so it isn't offered at all.
+        final boolean e2ee = isEncryptedCall();
+        for (VideoCodecChoice c : VideoCodecChoice.available(e2ee)) {
+            ToggleButton btn = new ToggleButton(c.label(e2ee));
             btn.setToggleGroup(codecGroup);
             btn.setFocusTraversable(false);
             btn.getStyleClass().addAll(Styles.BUTTON_OUTLINED, Styles.SMALL);
@@ -419,7 +421,7 @@ public class ScreenShareModal extends HBox {
                 if (is) {
                     selectedCodec = c;
                     UserSettings.getInstance().setScreenShareCodec(c);
-                    codecHint.setText(codecHint(c));
+                    codecHint.setText(codecHint(c, e2ee));
                 }
             });
             codecRow.getChildren().add(btn);
@@ -432,19 +434,27 @@ public class ScreenShareModal extends HBox {
         codecGroup.selectedToggleProperty().addListener((obs, old, nv) -> {
             if (nv == null) old.setSelected(true);
         });
-        codecHint.setText(codecHint(selectedCodec));
+        codecHint.setText(codecHint(selectedCodec, e2ee));
 
         root.getChildren().addAll(resLabel, resRow, fpsLabel, fpsRow, codecLabel, codecRow, codecHint);
         return root;
     }
 
-    private static String codecHint(VideoCodecChoice choice) {
-        VideoCodecChoice c = choice.resolve();
+    private static boolean isEncryptedCall() {
+        var client = komm.App.getWebrtcRoomClient();
+        return client != null && client.isE2eeActive();
+    }
+
+    private static String codecHint(VideoCodecChoice choice, boolean e2ee) {
+        VideoCodecChoice c = choice.resolve(e2ee);
         String base = c.isHardwareEncoded()
                 ? "Encoded by your graphics card — lowest CPU usage. Falls back to the CPU if the GPU encoder fails."
                 : "Encoded on the CPU (" + c.getDisplayName() + "). Higher resolutions and frame rates cost noticeably more CPU.";
         if (choice == VideoCodecChoice.AUTO) {
-            return (c.isHardwareEncoded() ? "Uses your GPU. " : "No supported GPU encoder found, uses the CPU. ") + base;
+            base = (c.isHardwareEncoded() ? "Uses your GPU. " : "No supported GPU encoder found, uses the CPU. ") + base;
+        }
+        if (e2ee && VideoCodecChoice.H264.isHardwareEncoded()) {
+            base += " H.264 isn't available because this call is end-to-end encrypted.";
         }
         return base;
     }

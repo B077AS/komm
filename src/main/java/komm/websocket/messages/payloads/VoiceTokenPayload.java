@@ -16,4 +16,6 @@ public class VoiceTokenPayload {
     private String token;
     /** The channel this token was issued for; null from older servers. */
     private UUID channelId;
+    /** True when the installation runs this call end-to-end encrypted; false from older servers. */
+    private boolean e2ee;
 }

@@ -6,6 +6,7 @@ import dev.onvoid.webrtc.media.video.VideoDesktopSource;
 import dev.onvoid.webrtc.media.video.VideoTrack;
 import dev.onvoid.webrtc.media.video.VideoTrackSink;
 import komm.ui.screenshare.ScreenShareQuality;
+import komm.webrtc.e2ee.VoiceE2ee;
 import livekit.LivekitModels;
 import lombok.extern.slf4j.Slf4j;
 
@@ -87,6 +88,8 @@ public class ScreenShareClient {
     private final PeerConnectionFactory factory;
     private final RTCPeerConnection publisherPc;
     private final LiveKitSignalingClient livekitSignaling;
+    /** Non-null when the call is end-to-end encrypted: every published sender gets its encryptor. */
+    private final VoiceE2ee e2ee;
 
     private VideoDesktopSource desktopSource;
     private VideoTrack videoTrack;
@@ -105,12 +108,17 @@ public class ScreenShareClient {
 
     // ── Constructor ────────────────────────────────────────────────────────────
 
+    /**
+     * @param e2ee the call's encryption session, or null for an unencrypted call
+     */
     public ScreenShareClient(PeerConnectionFactory factory,
                              RTCPeerConnection publisherPc,
-                             LiveKitSignalingClient livekitSignaling) {
+                             LiveKitSignalingClient livekitSignaling,
+                             VoiceE2ee e2ee) {
         this.factory = factory;
         this.publisherPc = publisherPc;
         this.livekitSignaling = livekitSignaling;
+        this.e2ee = e2ee;
     }
 
     // ── Public API ─────────────────────────────────────────────────────────────
@@ -120,7 +128,7 @@ public class ScreenShareClient {
      */
     public void startSharing(long sourceId, boolean isWindow, ScreenShareQuality quality, VideoCodecChoice codec) {
         this.quality = quality;
-        this.codec = codec == null || codec == VideoCodecChoice.AUTO ? VideoCodecChoice.AUTO.resolve() : codec;
+        this.codec = (codec == null ? VideoCodecChoice.AUTO : codec).resolve(e2ee != null);
         VideoTrack oldTrack = null;
         boolean isReuse = sharing.getAndSet(true);
         if (isReuse) {
@@ -204,14 +212,17 @@ public class ScreenShareClient {
                 // inactive in the same offer that adds the new one).
                 log.info("[ScreenShare] Codec changed {} -> {} — re-publishing the track",
                         senderCodec == null ? "?" : senderCodec.label(), codec.label());
-                try { publisherPc.removeTrack(sender); } catch (Throwable ignored) {}
-                try { sender.dispose(); } catch (Throwable ignored) {}
-                sender = null;
+                retireSender();
             }
-            // addTrack creates the sender. Codec preference and bitrate settings are applied
-            // before the offer goes out, so the first negotiation already uses them.
+            // addTrack creates the sender. Encryption, codec preference and bitrate settings are
+            // applied before the offer goes out, so the first negotiation already uses them
+            // (and no frame of this sender is ever sent unencrypted).
             sender = publisherPc.addTrack(track, List.of("screen-stream"));
             senderCodec = codec;
+            if (e2ee != null) {
+                RTCRtpSender s = sender;
+                s.setTransform(e2ee.createEncryptor(s::generateKeyFrame));
+            }
             applyCodecPreferences();
             applyBitrateSettings();
 
@@ -373,15 +384,7 @@ public class ScreenShareClient {
         releaseDesktopResources();
 
         if (sender != null && publisherPc != null) {
-            try {
-                publisherPc.removeTrack(sender);
-            } catch (Throwable ignored) {
-            }
-            try {
-                sender.dispose(); // addTrack() senders are not owned by the PC
-            } catch (Throwable ignored) {
-            }
-            sender = null;
+            retireSender();
             senderCodec = null;
         }
         if (videoTrack != null) {
@@ -588,16 +591,26 @@ public class ScreenShareClient {
             if (ordered.isEmpty()) {
                 log.warn("[ScreenShare] {} is not supported by this build — keeping the default codec order",
                         c.getDisplayName());
-                return;
+                // An encrypted call still has to keep H.264/H.265 out, so carry on with the rest.
+                if (e2ee == null) return;
             }
             for (RTCRtpCodecCapability cap : all) {
-                if (!c.getSdpName().equalsIgnoreCase(cap.getName())) ordered.add(cap);
+                if (c.getSdpName().equalsIgnoreCase(cap.getName())) continue;
+                // Encrypted call: never let negotiation fall back to a codec SFrame can't carry
+                // (the encryptor would drop all its frames). RTX / RED / FEC entries stay.
+                if (e2ee != null && isUnencryptableVideoCodec(cap.getName())) continue;
+                ordered.add(cap);
             }
             boolean applied = withTransceiverOf(sender, t -> t.setCodecPreferences(ordered));
             if (!applied) log.warn("[ScreenShare] Screen-share transceiver not found — codec preference not applied");
         } catch (Throwable t) {
             log.warn("[ScreenShare] Failed to apply codec preference {}: {}", c.getDisplayName(), t.toString());
         }
+    }
+
+    /** H.264 / H.265: their packetizers split frames at start codes, so SFrame can't be used. */
+    private static boolean isUnencryptableVideoCodec(String name) {
+        return "H264".equalsIgnoreCase(name) || "H265".equalsIgnoreCase(name);
     }
 
     /**
@@ -659,6 +672,21 @@ public class ScreenShareClient {
     }
 
     // ── Internal helpers ───────────────────────────────────────────────────────
+
+    /**
+     * Unpublishes and disposes {@link #sender}. Its encryptor is detached first: the transform
+     * holds this very wrapper for key-frame requests and must not call into it once disposed.
+     */
+    private void retireSender() {
+        RTCRtpSender s = sender;
+        sender = null;
+        if (s == null) return;
+        if (e2ee != null) {
+            try { s.setTransform(null); } catch (Throwable ignored) {}
+        }
+        try { publisherPc.removeTrack(s); } catch (Throwable ignored) {}
+        try { s.dispose(); } catch (Throwable ignored) {} // addTrack() senders are not owned by the PC
+    }
 
     private void releaseDesktopResources() {
         if (desktopSource != null) {

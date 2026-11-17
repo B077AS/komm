@@ -37,8 +37,10 @@ public class UserLeftChannelHandler implements WsInboundMessageHandler {
         //  • otherwise, stop just that user's sounds (and clear their ring).
         if (isSelf) {
             if (App.getWebrtcRoomClient() != null) App.getWebrtcRoomClient().stopSoundboards();
-        } else {
-            if (App.getWebrtcRoomClient() != null) App.getWebrtcRoomClient().stopSoundboardsBy(userId);
+        } else if (App.getWebrtcRoomClient() != null) {
+            App.getWebrtcRoomClient().stopSoundboardsBy(userId);
+            // Encrypted call: drop their keys and rotate ours so they can't keep listening.
+            App.getWebrtcRoomClient().onVoiceUserLeft(channelId, userId);
         }
 
         Platform.runLater(() -> {
