@@ -24,6 +24,7 @@ import komm.ui.customnodes.CustomNotification;
 public class CreateInstallationModal extends VBox {
 
     private TextField installationNameField;
+    private TextField publicAddressField;
     private TextField apiPortField;
     private TextField tcpPortField;
     private TextField mediaPortField;
@@ -48,9 +49,9 @@ public class CreateInstallationModal extends VBox {
     public CreateInstallationModal() {
         setAlignment(Pos.TOP_CENTER);
         getStyleClass().add("custom-modal");
-        setMaxSize(580, 350);
-        setMinSize(580, 350);
-        setPrefSize(580, 350);
+        setMaxSize(580, 440);
+        setMinSize(580, 440);
+        setPrefSize(580, 440);
 
         getChildren().addAll(
                 createHeader(),
@@ -65,6 +66,7 @@ public class CreateInstallationModal extends VBox {
             createButton.setDisable(isRunning);
             closeButton.setDisable(isRunning);
             installationNameField.setDisable(isRunning);
+            publicAddressField.setDisable(isRunning);
             apiPortField.setDisable(isRunning);
             tcpPortField.setDisable(isRunning);
             mediaPortField.setDisable(isRunning);
@@ -117,6 +119,18 @@ public class CreateInstallationModal extends VBox {
         installationNameField.setMaxWidth(Double.MAX_VALUE);
         nameBox.getChildren().addAll(nameLabel, installationNameField);
 
+        VBox addressBox = new VBox(5);
+        Label addressLabel = new Label("Public Address (optional)");
+        addressLabel.setStyle("-fx-font-size: 12px; -fx-font-weight: bold;");
+        publicAddressField = new TextField();
+        publicAddressField.setPromptText("example.com");
+        publicAddressField.setMaxWidth(Double.MAX_VALUE);
+        Label addressHint = new Label("Hosting behind a domain or reverse proxy? Enter the name players should connect to. "
+                + "Leave empty to use your server's IP address automatically.");
+        addressHint.setWrapText(true);
+        addressHint.setStyle("-fx-text-fill: -color-fg-muted; -fx-font-size: 11px;");
+        addressBox.getChildren().addAll(addressLabel, publicAddressField, addressHint);
+
         apiPortField = new TextField();
         tcpPortField = new TextField();
         mediaPortField = new TextField();
@@ -129,7 +143,7 @@ public class CreateInstallationModal extends VBox {
                 buildPortBox("Media Port", "UDP", "7882", mediaPortField)
         );
 
-        formContainer.getChildren().addAll(nameBox, portsRow);
+        formContainer.getChildren().addAll(nameBox, addressBox, portsRow);
         return formContainer;
     }
 
@@ -244,6 +258,7 @@ public class CreateInstallationModal extends VBox {
 
         currentRequest = CreateInstallationRequest.builder()
                 .installationName(installationName)
+                .publicAddress(publicAddressField.getText().trim())
                 .installationPort(apiPort)
                 .tcpPort(tcpPort)
                 .mediaPort(mediaPort)

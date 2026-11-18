@@ -15,5 +15,6 @@ public class CreateInstallationRequest {
     private int installationPort;
     private int tcpPort;
     private int mediaPort;
+    private String publicAddress;
     private String installationCsr;
 }
