@@ -43,6 +43,9 @@ on:
 permissions:
   contents: write
 
+env:
+  MIN_JAVA: "25.0.5.1"
+
 jobs:
   version:
     runs-on: ubuntu-latest
@@ -78,7 +81,7 @@ jobs:
 
       - uses: actions/setup-java@v5
         with:
-          distribution: temurin
+          distribution: zulu
           java-version: "25"
           cache: maven
 
@@ -126,7 +129,7 @@ jobs:
 
       - uses: actions/setup-java@v5
         with:
-          distribution: temurin
+          distribution: zulu
           java-version: "25"
           cache: maven
 
@@ -155,6 +158,9 @@ jobs:
           test -s "target/jpack/release/komm-$VERSION.jar"
           test -s target/jpack/release/komm-launcher.jar
           grep -q '"packed": false' target/jpack/release/jpack-windows-x64.json
+          runtime_version=$(sed -n 's/^JAVA_VERSION="\(.*\)"$/\1/p' target/jpack/image/windows-x64/runtime/release)
+          echo "bundled Java runtime: $runtime_version"
+          [ "$(printf '%s\n%s\n' "$MIN_JAVA" "$runtime_version" | sort -V | head -n1)" = "$MIN_JAVA" ] || { echo "the bundled runtime is $runtime_version, older than $MIN_JAVA"; exit 1; }
 
       - name: Build the installer
         shell: pwsh
@@ -192,7 +198,7 @@ jobs:
 
       - uses: actions/setup-java@v5
         with:
-          distribution: temurin
+          distribution: zulu
           java-version: "25"
           cache: maven
 
@@ -230,6 +236,9 @@ jobs:
           test -s "target/jpack/release/komm-$VERSION.jar"
           test -s target/jpack/release/komm-launcher.jar
           grep -q '"packed": false' target/jpack/release/jpack-linux-x64.json
+          runtime_version=$(sed -n 's/^JAVA_VERSION="\(.*\)"$/\1/p' target/jpack/image/linux-x64/runtime/release)
+          echo "bundled Java runtime: $runtime_version"
+          [ "$(printf '%s\n%s\n' "$MIN_JAVA" "$runtime_version" | sort -V | head -n1)" = "$MIN_JAVA" ] || { echo "the bundled runtime is $runtime_version, older than $MIN_JAVA"; exit 1; }
           test -s target/jpack/release/Komm.AppImage
           test -s target/jpack/release/Komm.AppImage.blocks
 
