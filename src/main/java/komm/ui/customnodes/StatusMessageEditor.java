@@ -70,7 +70,7 @@ public class StatusMessageEditor extends HBox {
             }
         });
 
-        MenuItem clearItem = new MenuItem("Clear status icon");
+        MenuItem clearItem = new MenuItem("Clear status icon", new FontIcon(org.kordamp.ikonli.materialdesign2.MaterialDesignC.CLOSE_CIRCLE_OUTLINE));
         clearItem.setOnAction(e -> setStatusEmojiUnified(null));
         emojiTileContextMenu.getItems().add(clearItem);
 

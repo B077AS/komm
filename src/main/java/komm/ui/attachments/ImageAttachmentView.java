@@ -1,5 +1,8 @@
 package komm.ui.attachments;
 
+import org.kordamp.ikonli.javafx.FontIcon;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignD;
+
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -230,7 +233,7 @@ final class ImageAttachmentView {
             }
         });
 
-        MenuItem miDownload = new MenuItem("Download image…");
+        MenuItem miDownload = new MenuItem("Download image…", new FontIcon(MaterialDesignD.DOWNLOAD));
         miDownload.setOnAction(ev -> save(msg, fileName, modalImage));
         ContextMenu modalMenu = new ContextMenu(miDownload);
 

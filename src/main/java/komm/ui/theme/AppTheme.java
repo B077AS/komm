@@ -117,6 +117,8 @@ public enum AppTheme {
                "-color-accent-emphasis:" + c5 + ";" +
                "-color-accent-muted:rgba(" + r + "," + g + "," + b + ",0.4);" +
                "-color-accent-subtle:rgba(" + r + "," + g + "," + b + ",0.1);" +
+               "-color-mention-bg:rgba(" + r + "," + g + "," + b + ",0.05);" +
+               "-color-mention-stripe:rgba(" + r + "," + g + "," + b + ",0.5);" +
                "-color-highlight:" + highlight + ";" +
                "-color-fg-self:" + c1 + ";";
     }
@@ -153,6 +155,8 @@ public enum AppTheme {
                "-color-accent-emphasis:" + accent + ";" +
                "-color-accent-muted:" + rgba + "0.30);" +
                "-color-accent-subtle:" + rgba + "0.10);" +
+               "-color-mention-bg:" + rgba + "0.05);" +
+               "-color-mention-stripe:" + rgba + "0.5);" +
                "-color-highlight:" + hsl(h, s * 0.85, 0.915) + ";" +
                "-color-fg-self:" + ramp[1] + ";";
     }

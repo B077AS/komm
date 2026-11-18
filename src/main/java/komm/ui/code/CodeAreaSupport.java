@@ -3,6 +3,9 @@ package komm.ui.code;
 import javafx.beans.InvalidationListener;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
+import javafx.scene.control.ContextMenu;
+import javafx.scene.control.MenuItem;
+import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.control.Label;
 import javafx.scene.layout.Background;
 import javafx.scene.layout.BackgroundFill;
@@ -12,6 +15,12 @@ import javafx.scene.paint.CycleMethod;
 import javafx.scene.paint.LinearGradient;
 import javafx.scene.paint.Stop;
 import org.fxmisc.richtext.CodeArea;
+import org.kordamp.ikonli.javafx.FontIcon;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignB;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignR;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignS;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignU;
 import org.fxmisc.richtext.model.StyleSpan;
 import org.fxmisc.richtext.model.StyleSpans;
 import org.reactfx.collection.LiveList;
@@ -150,5 +159,42 @@ public final class CodeAreaSupport {
     private static boolean sameStyle(Collection<String> a, Collection<String> b) {
         if (a.size() != b.size()) return false;
         return a.isEmpty() || a.containsAll(b);
+    }
+
+    /**
+     * The usual edit menu (Undo, Redo, Cut, Copy, Paste, Delete, Select All) for an editable
+     * {@link CodeArea}: RichTextFX ships none. Same items and icons as the chat input's menu
+     * ({@code EmojiTextArea}); paste goes through the area's normal text-change path.
+     */
+    public static void installEditContextMenu(CodeArea area) {
+        MenuItem miUndo = new MenuItem("Undo", new FontIcon(MaterialDesignU.UNDO));
+        MenuItem miRedo = new MenuItem("Redo", new FontIcon(MaterialDesignR.REDO));
+        MenuItem miCut = new MenuItem("Cut", new FontIcon(MaterialDesignC.CONTENT_CUT));
+        MenuItem miCopy = new MenuItem("Copy", new FontIcon(MaterialDesignC.CONTENT_COPY));
+        MenuItem miPaste = new MenuItem("Paste", new FontIcon(MaterialDesignC.CONTENT_PASTE));
+        MenuItem miDelete = new MenuItem("Delete", new FontIcon(MaterialDesignB.BACKSPACE_OUTLINE));
+        MenuItem miSelectAll = new MenuItem("Select All", new FontIcon(MaterialDesignS.SELECT_ALL));
+
+        miUndo.setOnAction(e -> area.undo());
+        miRedo.setOnAction(e -> area.redo());
+        miCut.setOnAction(e -> area.cut());
+        miCopy.setOnAction(e -> area.copy());
+        miPaste.setOnAction(e -> area.paste());
+        miDelete.setOnAction(e -> area.replaceSelection(""));
+        miSelectAll.setOnAction(e -> area.selectAll());
+
+        ContextMenu menu = new ContextMenu(miUndo, miRedo, miCut, miCopy, miPaste, miDelete,
+                new SeparatorMenuItem(), miSelectAll);
+        menu.setOnShowing(e -> {
+            boolean hasSel = area.getSelection().getLength() > 0;
+            miUndo.setDisable(!area.isUndoAvailable());
+            miRedo.setDisable(!area.isRedoAvailable());
+            miCut.setDisable(!hasSel);
+            miCopy.setDisable(!hasSel);
+            miDelete.setDisable(!hasSel);
+            miPaste.setDisable(!javafx.scene.input.Clipboard.getSystemClipboard().hasString());
+            miSelectAll.setDisable(area.getLength() == 0);
+        });
+        area.setContextMenu(menu);
     }
 }

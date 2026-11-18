@@ -118,6 +118,8 @@
 	-color-accent-emphasis: #7c5cff;
 	-color-accent-muted: rgba(124, 92, 255, 0.4);
 	-color-accent-subtle: rgba(124, 92, 255, 0.1);
+	-color-mention-bg: rgba(124, 92, 255, 0.05);
+	-color-mention-stripe: rgba(124, 92, 255, 0.5);
 	-color-warning-fg: #FFCA80;
 	-color-warning-emphasis: #FFCA80;
 	-color-warning-muted: rgba(255, 202, 128, 0.4);
@@ -1201,6 +1203,15 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 .code-area .text, .code-area .paragraph-box .text {
 	-fx-fill: -color-fg-default;
 	-fx-font-family: "JetBrains Mono", "Consolas", "Menlo", "DejaVu Sans Mono", monospace;
+}
+
+/* The edit menu of a code editor (CodeAreaSupport.installEditContextMenu) would otherwise
+   inherit the editor's monospace font: keep the app's normal font. */
+/*@after .ring-progress-indicator:indeterminate>.container>.track #0*/
+.code-area .context-menu,
+.code-area .context-menu .label {
+	-fx-font-family: "System";
+	-fx-font-size: 14px;
 }
 
 /*@after .ring-progress-indicator:indeterminate>.container>.track #0*/

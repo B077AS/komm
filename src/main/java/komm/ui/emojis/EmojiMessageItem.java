@@ -681,14 +681,21 @@ public class EmojiMessageItem extends HBox {
     private static EmojiMessageItem activeItem = null;
 
     /**
-     * Row background. A message that mentions the logged-in user gets an accent tint plus a
-     * 3px accent stripe on the left (two background layers, so no border shifts the layout).
+     * Row background. A message that mentions the logged-in user gets a 5% accent wash plus a
+     * 2px accent stripe at 50% on the left (-color-mention-bg / -color-mention-stripe; background
+     * layers, so no border shifts the layout). The user picked this look ("F") from mockups;
+     * anything stronger read as the whole row being painted in the accent.
+     * The stripe is a 2px absolute gradient (verified by snapshot: stripe at x=0..1, wash after),
+     * NOT a full-row layer under the wash: the wash is translucent and would let it show through.
      */
     String rowStyle(boolean hover) {
         if (mentionsMe) {
-            return "-fx-background-color: -color-accent-emphasis, -color-accent-subtle"
+            return "-fx-background-color: -color-mention-bg,"
+                    // Absolute from/to, NOT "to right, X 0px, X 2px, transparent 2px": JavaFX doesn't take
+                    // px stops in a proportional gradient, which painted the whole row in the stripe colour.
+                    + " linear-gradient(from 0px 0px to 2px 0px, -color-mention-stripe 0%, -color-mention-stripe 99%, transparent 100%)"
                     + (hover ? ", -color-overlay-1;" : ";")
-                    + "-fx-background-insets: 0, 0 0 0 3" + (hover ? ", 0 0 0 3;" : ";");
+                    + "-fx-background-insets: 0 0 0 2, 0" + (hover ? ", 0 0 0 2;" : ";");
         }
         return hover ? "-fx-background-color: -color-overlay-1;" : "-fx-background-color: transparent;";
     }
