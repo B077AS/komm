@@ -139,9 +139,40 @@ public final class VoiceE2ee implements AutoCloseable {
         return skipEmpty(keys.createDecryptor());
     }
 
-    /** For a video receiver; {@code keyFrameRequest} is typically {@code receiver::requestKeyFrame}. */
+    /**
+     * For a video receiver; {@code keyFrameRequest} is typically {@code receiver::requestKeyFrame}.
+     *
+     * <p>H.264 / H.265 frames pass through untouched. Nobody encrypts those (SFrame can't be
+     * carried by their packetizers, and an encrypting publisher keeps them out of its codec
+     * list), so one that arrives is a share its publisher chose to send unencrypted, and
+     * decrypting it would just drop every frame. Everything else, audio included, still has to
+     * authenticate.
+     */
     public RTCEncodedFrameTransformer createDecryptor(Runnable keyFrameRequest) {
-        return skipEmpty(keys.createDecryptor(keyFrameRequest));
+        RTCEncodedFrameTransformer inner = skipEmpty(keys.createDecryptor(keyFrameRequest));
+        return new RTCEncodedFrameTransformer() {
+            @Override
+            public void transform(RTCEncodedFrame frame) {
+                if (cannotCarrySframe(frame.getMimeType())) return;
+                inner.transform(frame);
+            }
+
+            @Override
+            public boolean allowsPlaintextObservers() {
+                return inner.allowsPlaintextObservers();
+            }
+        };
+    }
+
+    /**
+     * H.264 / H.265, given as a codec name ({@code H264}) or a MIME type ({@code video/H264}):
+     * their packetizers split frames at Annex-B start codes, which ciphertext contains anywhere,
+     * so SFrame can't be used.
+     */
+    public static boolean cannotCarrySframe(String codec) {
+        if (codec == null) return false;
+        String name = codec.substring(codec.indexOf('/') + 1);
+        return "H264".equalsIgnoreCase(name) || "H265".equalsIgnoreCase(name);
     }
 
     /**

@@ -408,9 +408,11 @@ public class ScreenShareModal extends HBox {
         codecHint.getStyleClass().addAll(Styles.TEXT_MUTED, Styles.TEXT_SMALL);
         codecHint.setWrapText(true);
         codecHint.setMaxWidth(440);
-        // End-to-end encrypted call: H.264 can't carry SFrame, so it isn't offered at all.
+        // End-to-end encrypted call: H.264 can't carry SFrame, so Auto never picks it there. It is
+        // still offered — marked "not encrypted", with a warning while it's selected — for those
+        // who want the GPU encoder more than encryption of the screen share's video.
         final boolean e2ee = isEncryptedCall();
-        for (VideoCodecChoice c : VideoCodecChoice.available(e2ee)) {
+        for (VideoCodecChoice c : VideoCodecChoice.available()) {
             ToggleButton btn = new ToggleButton(c.label(e2ee));
             btn.setToggleGroup(codecGroup);
             btn.setFocusTraversable(false);
@@ -420,7 +422,7 @@ public class ScreenShareModal extends HBox {
                 if (is) {
                     selectedCodec = c;
                     UserSettings.getInstance().setScreenShareCodec(c);
-                    codecHint.setText(codecHint(c, e2ee));
+                    updateCodecHint(codecHint, c, e2ee);
                 }
             });
             codecRow.getChildren().add(btn);
@@ -433,7 +435,7 @@ public class ScreenShareModal extends HBox {
         codecGroup.selectedToggleProperty().addListener((obs, old, nv) -> {
             if (nv == null) old.setSelected(true);
         });
-        codecHint.setText(codecHint(selectedCodec, e2ee));
+        updateCodecHint(codecHint, selectedCodec, e2ee);
 
         root.getChildren().addAll(resLabel, resRow, fpsLabel, fpsRow, codecLabel, codecRow, codecHint);
         return root;
@@ -444,6 +446,14 @@ public class ScreenShareModal extends HBox {
         return client != null && client.isE2eeActive();
     }
 
+    /** Sets the hint under the encoder buttons; a choice that leaves the call's encryption is shown as a warning. */
+    private static void updateCodecHint(Label hint, VideoCodecChoice choice, boolean e2ee) {
+        hint.setText(codecHint(choice, e2ee));
+        boolean warn = choice.sendsUnencrypted(e2ee);
+        hint.getStyleClass().removeAll(Styles.TEXT_MUTED, Styles.WARNING);
+        hint.getStyleClass().add(warn ? Styles.WARNING : Styles.TEXT_MUTED);
+    }
+
     private static String codecHint(VideoCodecChoice choice, boolean e2ee) {
         VideoCodecChoice c = choice.resolve(e2ee);
         String base = c.isHardwareEncoded()
@@ -452,8 +462,12 @@ public class ScreenShareModal extends HBox {
         if (choice == VideoCodecChoice.AUTO) {
             base = (c.isHardwareEncoded() ? "Uses your GPU. " : "No supported GPU encoder found, uses the CPU. ") + base;
         }
-        if (e2ee && VideoCodecChoice.H264.isHardwareEncoded()) {
-            base += " H.264 isn't available because this call is end-to-end encrypted.";
+        if (choice.sendsUnencrypted(e2ee)) {
+            return "This call is end-to-end encrypted, but H.264 can't be: your shared screen's video will be sent "
+                    + "WITHOUT end-to-end encryption, so the server host can see it. Your voice, camera and the "
+                    + "share's audio stay encrypted.";
+        } else if (e2ee && VideoCodecChoice.H264.isHardwareEncoded()) {
+            base += " H.264 (GPU) is available too, but it can't be end-to-end encrypted.";
         }
         return base;
     }
@@ -760,12 +774,21 @@ public class ScreenShareModal extends HBox {
         }
     }
 
+    /** Stores what this share is started with, so the next share's dialog comes up with the same quality and encoder. */
+    private void rememberQualitySettings() {
+        UserSettings s = UserSettings.getInstance();
+        s.setScreenShareResolution(selectedResolution);
+        s.setScreenShareFps(selectedFps);
+        s.setScreenShareCodec(selectedCodec);
+    }
+
     private void handleStartSharing() {
         if (WAYLAND) {
             // No card selection on Wayland — the xdg-desktop-portal dialog picks the
             // source once capture starts, and the PipeWire capturer ignores the id.
             startButton.setDisable(true);
             thumbPool.shutdownNow();
+            rememberQualitySettings();
             SourceSelection selection = SourceSelection.builder()
                     .sourceId(0)
                     .isWindow(false)
@@ -830,6 +853,7 @@ public class ScreenShareModal extends HBox {
     }
 
     private void doStartSharing(SourceCard card) {
+        rememberQualitySettings();
         SourceSelection selection = SourceSelection.builder()
                 .sourceId(card.getSourceId())
                 .isWindow(card.isWindow())

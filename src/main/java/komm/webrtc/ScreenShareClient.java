@@ -88,8 +88,14 @@ public class ScreenShareClient {
     private final PeerConnectionFactory factory;
     private final RTCPeerConnection publisherPc;
     private final LiveKitSignalingClient livekitSignaling;
-    /** Non-null when the call is end-to-end encrypted: every published sender gets its encryptor. */
+    /**
+     * Non-null when the call is end-to-end encrypted: every published sender gets its encryptor,
+     * except a H.264 share the user chose explicitly (H.264 can't carry SFrame, see
+     * {@link #isEncryptedShare(VideoCodecChoice)}).
+     */
     private final VoiceE2ee e2ee;
+    /** Whether the current {@link #sender} has an encryptor (so retiring it has to detach it). */
+    private boolean senderEncrypted;
 
     private VideoDesktopSource desktopSource;
     private VideoTrack videoTrack;
@@ -216,12 +222,16 @@ public class ScreenShareClient {
             }
             // addTrack creates the sender. Encryption, codec preference and bitrate settings are
             // applied before the offer goes out, so the first negotiation already uses them
-            // (and no frame of this sender is ever sent unencrypted).
+            // (and no frame of an encrypted sender is ever sent unencrypted).
             sender = publisherPc.addTrack(track, List.of("screen-stream"));
             senderCodec = codec;
-            if (e2ee != null) {
+            senderEncrypted = isEncryptedShare(codec);
+            if (senderEncrypted) {
                 RTCRtpSender s = sender;
                 s.setTransform(e2ee.createEncryptor(s::generateKeyFrame));
+            } else if (e2ee != null) {
+                log.warn("[ScreenShare] {} can't be end-to-end encrypted — this share's video is sent unencrypted "
+                        + "(the call's voice and share audio stay encrypted)", codec.getDisplayName());
             }
             applyCodecPreferences();
             applyBitrateSettings();
@@ -495,6 +505,7 @@ public class ScreenShareClient {
      */
     private void triggerRenegotiationWithAddTrack(String cid) {
         final VideoCodecChoice publishedCodec = codec;
+        final boolean encryptedTrack = senderEncrypted;
         if (publisherPc == null) return;
 
         publisherPc.createOffer(new RTCOfferOptions(), new CreateSessionDescriptionObserver() {
@@ -522,7 +533,8 @@ public class ScreenShareClient {
                                 "screen_share",
                                 LivekitModels.TrackSource.SCREEN_SHARE,
                                 q.maxW, q.maxH, targetBitrateBps(q),
-                                publishedCodec.getLivekitName()
+                                publishedCodec.getLivekitName(),
+                                encryptedTrack
                         );
                     }
 
@@ -582,6 +594,7 @@ public class ScreenShareClient {
     private void applyCodecPreferences() {
         VideoCodecChoice c = codec;
         if (sender == null || c == null || c.getSdpName() == null) return;
+        final boolean encrypted = senderEncrypted;
         try {
             List<RTCRtpCodecCapability> all = factory.getRtpSenderCapabilities(MediaType.VIDEO).getCodecs();
             List<RTCRtpCodecCapability> ordered = new ArrayList<>(all.size());
@@ -591,14 +604,14 @@ public class ScreenShareClient {
             if (ordered.isEmpty()) {
                 log.warn("[ScreenShare] {} is not supported by this build — keeping the default codec order",
                         c.getDisplayName());
-                // An encrypted call still has to keep H.264/H.265 out, so carry on with the rest.
-                if (e2ee == null) return;
+                // An encrypted share still has to keep H.264/H.265 out, so carry on with the rest.
+                if (!encrypted) return;
             }
             for (RTCRtpCodecCapability cap : all) {
                 if (c.getSdpName().equalsIgnoreCase(cap.getName())) continue;
-                // Encrypted call: never let negotiation fall back to a codec SFrame can't carry
+                // Encrypted share: never let negotiation fall back to a codec SFrame can't carry
                 // (the encryptor would drop all its frames). RTX / RED / FEC entries stay.
-                if (e2ee != null && isUnencryptableVideoCodec(cap.getName())) continue;
+                if (encrypted && VoiceE2ee.cannotCarrySframe(cap.getName())) continue;
                 ordered.add(cap);
             }
             boolean applied = withTransceiverOf(sender, t -> t.setCodecPreferences(ordered));
@@ -608,9 +621,14 @@ public class ScreenShareClient {
         }
     }
 
-    /** H.264 / H.265: their packetizers split frames at start codes, so SFrame can't be used. */
-    private static boolean isUnencryptableVideoCodec(String name) {
-        return "H264".equalsIgnoreCase(name) || "H265".equalsIgnoreCase(name);
+    /**
+     * Whether a share published with {@code c} gets end-to-end encrypted: the call is encrypted
+     * and the codec can carry SFrame. H.264 can't, so choosing it explicitly in an encrypted call
+     * is the one way a share's video leaves unencrypted (the choice is the user's opt-in; Auto
+     * never resolves to it there).
+     */
+    private boolean isEncryptedShare(VideoCodecChoice c) {
+        return e2ee != null && c.supportsE2ee();
     }
 
     /**
@@ -681,9 +699,10 @@ public class ScreenShareClient {
         RTCRtpSender s = sender;
         sender = null;
         if (s == null) return;
-        if (e2ee != null) {
+        if (senderEncrypted) {
             try { s.setTransform(null); } catch (Throwable ignored) {}
         }
+        senderEncrypted = false;
         try { publisherPc.removeTrack(s); } catch (Throwable ignored) {}
         try { s.dispose(); } catch (Throwable ignored) {} // addTrack() senders are not owned by the PC
     }

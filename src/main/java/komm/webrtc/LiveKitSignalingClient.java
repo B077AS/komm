@@ -210,9 +210,14 @@ public class LiveKitSignalingClient extends Endpoint {
      * bitrate to budget subscriber bandwidth. Publishing a video track without
      * layers leaves the SFU guessing and makes it far more aggressive about
      * pausing the stream under any perceived congestion.
+     *
+     * @param encryptTrack whether this track's frames are SFrame-encrypted. Decided per track,
+     *                     not by {@link #encrypted}: a H.264 share in an encrypted call is sent
+     *                     unencrypted (H.264 can't carry SFrame) and must be declared as such.
      */
     public void sendAddVideoTrackRequest(String cid, String name, LivekitModels.TrackSource source,
-                                         int width, int height, int maxBitrateBps, String codec) {
+                                         int width, int height, int maxBitrateBps, String codec,
+                                         boolean encryptTrack) {
         livekit.LivekitRtc.AddTrackRequest.Builder add = livekit.LivekitRtc.AddTrackRequest.newBuilder()
                 .setCid(cid)
                 .setName(name)
@@ -225,7 +230,7 @@ public class LiveKitSignalingClient extends Endpoint {
                         .setWidth(width)
                         .setHeight(height)
                         .setBitrate(maxBitrateBps));
-        if (encrypted) add.setEncryption(LivekitModels.Encryption.Type.CUSTOM);
+        if (encryptTrack) add.setEncryption(LivekitModels.Encryption.Type.CUSTOM);
         // Declares the publishing codec the same way LiveKit's own SDKs do, so the SFU
         // negotiates exactly that codec for this track (it otherwise falls back to the
         // offer's order, which the transceiver's codec preferences already set too).

@@ -138,7 +138,7 @@ public class CreateInstallationModal extends VBox {
         HBox portsRow = new HBox(10);
         portsRow.setAlignment(Pos.BOTTOM_CENTER);
         portsRow.getChildren().addAll(
-                buildPortBox("API Port", "TCP", "8080", apiPortField),
+                buildPortBox("API Port", "TCP", "8090", apiPortField),
                 buildPortBox("TCP Port", "TCP", "7881", tcpPortField),
                 buildPortBox("Media Port", "UDP", "7882", mediaPortField)
         );
